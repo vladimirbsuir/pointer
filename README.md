@@ -1,5 +1,10 @@
-# Diploma: AI-Powered Agentic Development Environment
+# Pointer
 
-An agent-first desktop development environment built with Tauri and a Spring Boot backend.
+An agent-first desktop development environment: describe a task, and an AI agent plans and carries it out in your project while you direct, review and approve.
 
-Project rules: [AGENTS.md](AGENTS.md). Documentation: [docs/](docs/).
+Built with Tauri and React on the desktop and a Spring Boot backend that orchestrates agents over any OpenAI-compatible model, including local ones.
+
+- [Vision and scope](docs/00-vision.md)
+- [Requirements](docs/01-requirements.md)
+- [Architecture decisions](docs/adr/README.md)
+- [Project rules for contributors and agents](AGENTS.md)

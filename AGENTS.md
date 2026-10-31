@@ -4,7 +4,7 @@ Rules for any AI agent or human contributor working in this repository.
 
 ## Project
 
-An agent-first desktop development environment (in the spirit of Claude Code Desktop and Antigravity).
+**Pointer** is an agent-first desktop development environment (in the spirit of Claude Code Desktop and Antigravity).
 The agent loop runs on a cloud backend; the desktop client executes tools (file system, terminal, git) on the user's machine.
 
 | Directory  | Contents                                             |
@@ -27,10 +27,12 @@ The agent loop runs on a cloud backend; the desktop client executes tools (file 
 - A commit message is a single subject line only: no body, no footers, no trailers (including `Co-Authored-By`).
 - Format: `<type>(<scope>): <description>`, for example `feat(backend): add session repository`.
 - Types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore`, `style`, `revert`.
-- Scopes: `backend`, `desktop`, `docs`, `infra`, `repo`. Omit the scope only for changes that span the whole repository.
+- Scopes: `backend`, `desktop`, `infra`, `repo`. Omit the scope for `docs` commits that only touch `docs/`, and for changes that span the whole repository.
 - Description: English, imperative mood, lowercase, no trailing period, whole line at most 72 characters.
 
 ## Documentation
 
 - All documentation is written in English and lives in `docs/`.
-- Architectural decisions are recorded as ADRs in `docs/adr/`.
+- Start with [docs/00-vision.md](docs/00-vision.md) and [docs/01-requirements.md](docs/01-requirements.md).
+- Architectural decisions are recorded as ADRs in `docs/adr/`. Read the relevant ADRs before changing architecture, and add a new ADR when a decision changes.
+- Keep requirement ids (`AUTH-1`, `TOOL-7`, ...) stable so code, tasks and docs can refer to them.
