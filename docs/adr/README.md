@@ -13,3 +13,4 @@ File name: `NNNN-short-title.md`. Status: `Proposed`, `Accepted`, `Superseded by
 | [0004](0004-desktop-stack.md) | Desktop stack: Tauri, React, TypeScript | Accepted |
 | [0005](0005-backend-stack.md) | Backend stack: Java 25, Spring Boot 4, PostgreSQL | Accepted |
 | [0006](0006-authentication.md) | Authentication: email and password plus GitHub OAuth | Accepted |
+| [0007](0007-communication-model.md) | Communication model: REST commands, WebSocket owned by the Rust core | Accepted |
