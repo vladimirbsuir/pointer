@@ -3,11 +3,90 @@
     "name": "Pointer",
     "tagline": "Agent-first development environment"
   },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "or": "or"
+  },
+  "auth": {
+    "signInTab": "Sign in",
+    "registerTab": "Create account",
+    "email": "Email",
+    "password": "Password",
+    "displayName": "Name",
+    "signIn": "Sign in",
+    "register": "Create account",
+    "continueWithGitHub": "Continue with GitHub",
+    "waitingForGitHub": "Complete sign-in in your browser…",
+    "passwordHint": "At least 8 characters",
+    "loading": "Signing you in…",
+    "unavailableTitle": "Cannot reach Pointer servers",
+    "unavailableDescription": "Check your connection and try again."
+  },
+  "shell": {
+    "projects": "Projects",
+    "noProjects": "No projects yet",
+    "openFolder": "Open folder",
+    "welcome": "Welcome, {{name}}",
+    "welcomeDescription": "Open a project folder to start working with an agent.",
+    "settings": "Settings",
+    "signOut": "Sign out"
+  },
   "settings": {
-    "language": "Language"
+    "title": "Settings",
+    "account": "Account",
+    "appearance": "Appearance",
+    "displayName": "Name",
+    "email": "Email",
+    "github": "GitHub",
+    "githubLinked": "Linked as @{{login}}",
+    "githubNotLinked": "Not linked",
+    "linkGitHub": "Link GitHub",
+    "password": "Password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "changePassword": "Change password",
+    "setPassword": "Set password",
+    "setPasswordDescription": "Add a password to sign in with your email as well as GitHub.",
+    "passwordMismatch": "Passwords do not match",
+    "passwordChanged": "Password updated. Other devices were signed out.",
+    "profileSaved": "Profile saved",
+    "githubLinkedToast": "GitHub account linked",
+    "language": "Language",
+    "theme": "Theme"
+  },
+  "themes": {
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
   },
   "languages": {
     "en": "English",
     "ru": "Русский"
+  },
+  "errors": {
+    "unknown": "Something went wrong. Please try again.",
+    "network_error": "Cannot reach Pointer servers. Check your connection.",
+    "invalid_credentials": "Email or password is incorrect.",
+    "email_taken": "An account with this email already exists.",
+    "validation_failed": "Some fields are invalid. Check them and try again.",
+    "account_exists": "An account with your GitHub email already exists. Sign in with your password and link GitHub in settings.",
+    "account_disabled": "This account is disabled.",
+    "github_email_unverified": "Your GitHub account has no verified primary email.",
+    "github_not_configured": "GitHub sign-in is not configured on the server.",
+    "github_timeout": "GitHub sign-in timed out. Try again.",
+    "github_denied": "GitHub sign-in was cancelled.",
+    "github_state_mismatch": "GitHub sign-in could not be verified. Try again.",
+    "github_code_rejected": "GitHub rejected the sign-in. Try again.",
+    "github_unavailable": "GitHub is not responding. Try again later.",
+    "identity_in_use": "This GitHub account is linked to another Pointer account.",
+    "identity_already_linked": "This GitHub account is already linked.",
+    "provider_already_linked": "Another GitHub account is already linked.",
+    "invalid_current_password": "Current password is incorrect.",
+    "browser_open_failed": "Could not open the browser.",
+    "credential_store_error": "Could not access Windows Credential Manager.",
+    "signed_out": "You were signed out. Sign in again."
   }
 }

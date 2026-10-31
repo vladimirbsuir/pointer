@@ -3,11 +3,90 @@
     "name": "Pointer",
     "tagline": "Среда разработки, построенная вокруг агентов"
   },
+  "common": {
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "retry": "Повторить",
+    "or": "или"
+  },
+  "auth": {
+    "signInTab": "Вход",
+    "registerTab": "Регистрация",
+    "email": "Email",
+    "password": "Пароль",
+    "displayName": "Имя",
+    "signIn": "Войти",
+    "register": "Создать аккаунт",
+    "continueWithGitHub": "Продолжить с GitHub",
+    "waitingForGitHub": "Завершите вход в браузере…",
+    "passwordHint": "Не менее 8 символов",
+    "loading": "Выполняем вход…",
+    "unavailableTitle": "Нет связи с серверами Pointer",
+    "unavailableDescription": "Проверьте подключение и попробуйте снова."
+  },
+  "shell": {
+    "projects": "Проекты",
+    "noProjects": "Проектов пока нет",
+    "openFolder": "Открыть папку",
+    "welcome": "Добро пожаловать, {{name}}",
+    "welcomeDescription": "Откройте папку проекта, чтобы начать работу с агентом.",
+    "settings": "Настройки",
+    "signOut": "Выйти"
+  },
   "settings": {
-    "language": "Язык"
+    "title": "Настройки",
+    "account": "Аккаунт",
+    "appearance": "Внешний вид",
+    "displayName": "Имя",
+    "email": "Email",
+    "github": "GitHub",
+    "githubLinked": "Привязан как @{{login}}",
+    "githubNotLinked": "Не привязан",
+    "linkGitHub": "Привязать GitHub",
+    "password": "Пароль",
+    "currentPassword": "Текущий пароль",
+    "newPassword": "Новый пароль",
+    "confirmPassword": "Повторите новый пароль",
+    "changePassword": "Сменить пароль",
+    "setPassword": "Задать пароль",
+    "setPasswordDescription": "Задайте пароль, чтобы входить по email, а не только через GitHub.",
+    "passwordMismatch": "Пароли не совпадают",
+    "passwordChanged": "Пароль обновлён. На других устройствах выполнен выход.",
+    "profileSaved": "Профиль сохранён",
+    "githubLinkedToast": "Аккаунт GitHub привязан",
+    "language": "Язык",
+    "theme": "Тема"
+  },
+  "themes": {
+    "system": "Системная",
+    "light": "Светлая",
+    "dark": "Тёмная"
   },
   "languages": {
     "en": "English",
     "ru": "Русский"
+  },
+  "errors": {
+    "unknown": "Что-то пошло не так. Попробуйте снова.",
+    "network_error": "Нет связи с серверами Pointer. Проверьте подключение.",
+    "invalid_credentials": "Неверный email или пароль.",
+    "email_taken": "Аккаунт с таким email уже существует.",
+    "validation_failed": "Некоторые поля заполнены неверно. Проверьте их и попробуйте снова.",
+    "account_exists": "Аккаунт с email вашего GitHub уже существует. Войдите по паролю и привяжите GitHub в настройках.",
+    "account_disabled": "Аккаунт отключён.",
+    "github_email_unverified": "У аккаунта GitHub нет подтверждённого основного email.",
+    "github_not_configured": "Вход через GitHub не настроен на сервере.",
+    "github_timeout": "Время входа через GitHub истекло. Попробуйте снова.",
+    "github_denied": "Вход через GitHub отменён.",
+    "github_state_mismatch": "Не удалось проверить вход через GitHub. Попробуйте снова.",
+    "github_code_rejected": "GitHub отклонил вход. Попробуйте снова.",
+    "github_unavailable": "GitHub не отвечает. Попробуйте позже.",
+    "identity_in_use": "Этот аккаунт GitHub привязан к другому аккаунту Pointer.",
+    "identity_already_linked": "Этот аккаунт GitHub уже привязан.",
+    "provider_already_linked": "Уже привязан другой аккаунт GitHub.",
+    "invalid_current_password": "Текущий пароль неверен.",
+    "browser_open_failed": "Не удалось открыть браузер.",
+    "credential_store_error": "Нет доступа к диспетчеру учётных данных Windows.",
+    "signed_out": "Вы вышли из аккаунта. Войдите снова."
   }
 }
