@@ -87,6 +87,40 @@ class AgentFlowTests extends IntegrationTest {
     }
 
     @Test
+    void titleGenerationDoesNotOverwriteFinishedTurnStatus() throws Exception {
+        var setup = setUp(false);
+        llm.enqueueText("First answer");
+        llm.enqueueText("Slow title");
+        llm.enqueueText("Second answer");
+
+        try (var ws = GatewayTestClient.connect(port, setup.auth.accessToken(), setup.deviceId, List.of("viewer"))) {
+            ws.subscribe(setup.sessionId, 0);
+            send(setup, "First", null);
+            ws.await(
+                    message -> eventKind(message).equals("session.updated")
+                            && message.path("payload")
+                                    .path("event")
+                                    .path("title")
+                                    .asString()
+                                    .equals("Slow title"),
+                    TIMEOUT);
+
+            assertThat(sessionStatus(setup)).isEqualTo("idle");
+            var second = send(setup, "Second", null)
+                    .expectBody(SessionDtos.SendMessageResponse.class)
+                    .returnResult()
+                    .getResponseBody();
+            assertThat(second.queued()).isFalse();
+            ws.await(
+                    message -> ws.events().stream()
+                                    .filter(event -> eventKind(event).equals("turn.completed"))
+                                    .count()
+                            == 2,
+                    TIMEOUT);
+        }
+    }
+
+    @Test
     void lateSubscriberReceivesFullHistoryInOrder() throws Exception {
         var setup = setUp(false);
         llm.enqueueText("Answer");

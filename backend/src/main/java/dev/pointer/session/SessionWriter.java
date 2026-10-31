@@ -231,7 +231,7 @@ public class SessionWriter {
 
     private AgentSession lockOwned(UUID userId, UUID sessionId) {
         var session = sessionService.owned(userId, sessionId);
-        entityManager.lock(session, LockModeType.PESSIMISTIC_WRITE);
+        entityManager.refresh(session, LockModeType.PESSIMISTIC_WRITE);
         return session;
     }
 
