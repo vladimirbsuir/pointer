@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.pointer.IntegrationTest;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -137,6 +140,31 @@ class PasswordAuthTests extends IntegrationTest {
                 .isEqualTo("refresh_token_reused");
 
         refresh(refreshed.refreshToken()).expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void concurrentRefreshWithSameTokenSucceedsAtMostOnce() throws Exception {
+        var auth = register(uniqueEmail());
+        var start = new CountDownLatch(1);
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var attempts = IntStream.range(0, 4)
+                    .mapToObj(i -> executor.submit(() -> {
+                        start.await();
+                        return refresh(auth.refreshToken())
+                                .returnResult(String.class)
+                                .getStatus()
+                                .value();
+                    }))
+                    .toList();
+            start.countDown();
+            var successes = 0;
+            for (var attempt : attempts) {
+                if (attempt.get() == 200) {
+                    successes++;
+                }
+            }
+            assertThat(successes).isLessThanOrEqualTo(1);
+        }
     }
 
     @Test

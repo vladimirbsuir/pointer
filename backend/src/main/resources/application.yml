@@ -45,6 +45,7 @@ pointer:
     api-url: https://api.github.com
 
 springdoc:
+  default-produces-media-type: application/json
   api-docs:
     path: /v3/api-docs
   swagger-ui:
