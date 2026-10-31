@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: pointer-backend
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${POINTER_DB_URL:jdbc:postgresql://localhost:5432/pointer}
+    username: ${POINTER_DB_USER:pointer}
+    password: ${POINTER_DB_PASSWORD:pointer}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    locations: classpath:db/migration
+  docker:
+    compose:
+      file: ../infra/docker-compose.yml
+      lifecycle-management: start-only
+
+server:
+  port: ${POINTER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui
