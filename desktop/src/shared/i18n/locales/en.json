@@ -1,0 +1,13 @@
+{
+  "app": {
+    "name": "Pointer",
+    "tagline": "Agent-first development environment"
+  },
+  "settings": {
+    "language": "Language"
+  },
+  "languages": {
+    "en": "English",
+    "ru": "Русский"
+  }
+}

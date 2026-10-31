@@ -1,0 +1,13 @@
+{
+  "app": {
+    "name": "Pointer",
+    "tagline": "Среда разработки, построенная вокруг агентов"
+  },
+  "settings": {
+    "language": "Язык"
+  },
+  "languages": {
+    "en": "English",
+    "ru": "Русский"
+  }
+}
