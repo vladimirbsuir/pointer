@@ -6,5 +6,7 @@ Built with Tauri and React on the desktop and a Spring Boot backend that orchest
 
 - [Vision and scope](docs/00-vision.md)
 - [Requirements](docs/01-requirements.md)
+- [Architecture](docs/02-architecture.md)
+- [Client-server protocol](docs/03-protocol.md)
 - [Architecture decisions](docs/adr/README.md)
 - [Project rules for contributors and agents](AGENTS.md)
