@@ -128,3 +128,98 @@
     @apply font-sans;
   }
 }
+
+.markdown {
+  @apply leading-relaxed break-words;
+}
+.markdown > * + * {
+  @apply mt-3;
+}
+.markdown h1 {
+  @apply text-xl font-semibold;
+}
+.markdown h2 {
+  @apply text-lg font-semibold;
+}
+.markdown h3 {
+  @apply text-base font-semibold;
+}
+.markdown ul {
+  @apply list-disc pl-6;
+}
+.markdown ol {
+  @apply list-decimal pl-6;
+}
+.markdown li + li {
+  @apply mt-1;
+}
+.markdown a {
+  @apply text-primary underline underline-offset-2;
+}
+.markdown blockquote {
+  @apply border-l-2 pl-3 text-muted-foreground;
+}
+.markdown :not(pre) > code {
+  @apply rounded bg-muted px-1 py-0.5 font-mono text-[0.85em];
+}
+.markdown pre {
+  @apply overflow-x-auto rounded-lg border bg-muted/50 p-3 font-mono text-[0.8rem] leading-normal;
+}
+.markdown table {
+  @apply w-full border-collapse text-left;
+}
+.markdown th,
+.markdown td {
+  @apply border px-2 py-1;
+}
+
+:root {
+  --code-keyword: oklch(0.5 0.2 300);
+  --code-string: oklch(0.5 0.15 150);
+  --code-number: oklch(0.55 0.15 50);
+  --code-comment: oklch(0.6 0 0);
+  --code-title: oklch(0.5 0.17 250);
+  --code-type: oklch(0.55 0.13 200);
+}
+
+.dark {
+  --code-keyword: oklch(0.75 0.15 300);
+  --code-string: oklch(0.78 0.13 150);
+  --code-number: oklch(0.8 0.12 60);
+  --code-comment: oklch(0.6 0 0);
+  --code-title: oklch(0.78 0.12 250);
+  --code-type: oklch(0.8 0.1 200);
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-literal {
+  color: var(--code-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-attr,
+.hljs-symbol {
+  color: var(--code-string);
+}
+.hljs-number,
+.hljs-meta {
+  color: var(--code-number);
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.hljs-title,
+.hljs-section,
+.hljs-function {
+  color: var(--code-title);
+}
+.hljs-type,
+.hljs-class,
+.hljs-variable,
+.hljs-property {
+  color: var(--code-type);
+}

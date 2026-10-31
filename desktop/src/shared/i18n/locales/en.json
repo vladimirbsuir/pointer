@@ -29,9 +29,15 @@
     "noProjects": "No projects yet",
     "openFolder": "Open folder",
     "welcome": "Welcome, {{name}}",
-    "welcomeDescription": "Open a project folder to start working with an agent.",
+    "welcomeDescription": "Add a project folder and start a session to work with an agent.",
     "settings": "Settings",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "addProject": "Add project",
+    "newSession": "New session",
+    "notLinked": "Folder is not linked on this device",
+    "linkFolder": "Link folder",
+    "connected": "Connected",
+    "disconnected": "Reconnecting…"
   },
   "settings": {
     "title": "Settings",
@@ -55,7 +61,8 @@
     "profileSaved": "Profile saved",
     "githubLinkedToast": "GitHub account linked",
     "language": "Language",
-    "theme": "Theme"
+    "theme": "Theme",
+    "providers": "Providers"
   },
   "themes": {
     "system": "System",
@@ -87,6 +94,54 @@
     "invalid_current_password": "Current password is incorrect.",
     "browser_open_failed": "Could not open the browser.",
     "credential_store_error": "Could not access Windows Credential Manager.",
-    "signed_out": "You were signed out. Sign in again."
+    "signed_out": "You were signed out. Sign in again.",
+    "provider_unauthorized": "The provider rejected the API key.",
+    "provider_error": "The provider returned an error.",
+    "provider_unreachable": "Cannot reach the provider. Check the base URL.",
+    "local_provider_offline": "The local model is reachable only while Pointer is open on that computer.",
+    "model_required": "Choose a model before sending a message.",
+    "model_not_found": "The model no longer exists.",
+    "folder_not_found": "The folder does not exist.",
+    "session_not_found": "The session no longer exists."
+  },
+  "chat": {
+    "empty": "Describe a task or ask a question to get started.",
+    "thinking": "Thinking…",
+    "turnFailed": "The agent stopped with an error",
+    "reasoning": "Reasoning",
+    "reasoningLive": "Reasoning…",
+    "stopped": "Stopped",
+    "chooseModel": "Choose model",
+    "noModels": "No models. Add a provider in Settings.",
+    "addProviderFirst": "Add a model provider in Settings to start",
+    "chooseModelFirst": "Choose a model to start",
+    "placeholder": "Ask Pointer… (Enter to send, Shift+Enter for a new line)",
+    "mode": "Mode",
+    "stop": "Stop",
+    "send": "Send",
+    "contextUsage": "{{tokens}} of {{window}} context tokens used",
+    "tokens": "{{count}} tokens"
+  },
+  "modes": {
+    "ask": "Ask",
+    "plan": "Plan",
+    "agent": "Agent"
+  },
+  "providers": {
+    "empty": "No providers yet. Add one to start working with models.",
+    "custom": "Custom",
+    "name": "Name",
+    "baseUrl": "Base URL",
+    "apiKey": "API key",
+    "local": "Runs on this computer (requests go through the desktop app)",
+    "add": "Add provider",
+    "localBadge": "local",
+    "test": "Test connection",
+    "testOk": "Connected, {{count}} models available",
+    "refresh": "Refresh models",
+    "delete": "Delete provider",
+    "noModels": "No models. Refresh or check the base URL.",
+    "makeDefault": "Make default",
+    "isDefault": "Default model"
   }
 }

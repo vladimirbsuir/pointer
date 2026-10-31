@@ -6,6 +6,61 @@ export type Me = Required<Omit<Schemas["MeResponse"], "github">> & {
   github: Required<Schemas["GitHubAccount"]> | null;
 };
 
+export type Model = Required<
+  Omit<Schemas["ModelResponse"], "contextWindow" | "maxOutputTokens">
+> & {
+  contextWindow: number | null;
+  maxOutputTokens: number | null;
+};
+
+export type Provider = Required<Omit<Schemas["ProviderResponse"], "models" | "apiKeyHint">> & {
+  apiKeyHint: string | null;
+  models: Model[];
+};
+
+export type Project = Required<Omit<Schemas["ProjectResponse"], "archivedAt">> & {
+  archivedAt: string | null;
+};
+
+export type SessionStatus =
+  "idle" | "running" | "waiting_for_approval" | "waiting_for_executor" | "error";
+
+export type SessionMode = "ask" | "plan" | "agent";
+
+export type Session = Required<
+  Omit<
+    Schemas["SessionResponse"],
+    "modelId" | "executorDeviceId" | "archivedAt" | "status" | "mode"
+  >
+> & {
+  modelId: string | null;
+  executorDeviceId: string | null;
+  archivedAt: string | null;
+  status: SessionStatus;
+  mode: SessionMode;
+};
+
+export type ItemType =
+  "user_message" | "assistant_message" | "reasoning" | "tool_call" | "plan" | "compaction_summary";
+
+export type Item = {
+  id: string;
+  type: ItemType;
+  turnId: string | null;
+  status: "in_progress" | "completed" | "failed" | "cancelled";
+  createdAt: string;
+  completedAt: string | null;
+  text?: string;
+  [key: string]: unknown;
+};
+
+export type SessionEvent = {
+  sessionId: string;
+  seq: number;
+  occurredAt: string;
+  event: { kind: string; [key: string]: unknown };
+};
+
 export type AppError = {
   code: string;
   message: string;

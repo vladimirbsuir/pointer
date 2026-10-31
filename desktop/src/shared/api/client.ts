@@ -27,3 +27,13 @@ export function problemToError(problem: unknown, status: number): AppError {
   const body = (problem ?? {}) as { code?: string; detail?: string };
   return { code: body.code ?? `http_${status}`, message: body.detail ?? "", status };
 }
+
+export async function unwrap<T>(
+  promise: Promise<{ data?: T; error?: unknown; response: Response }>,
+): Promise<T> {
+  const { data, error, response } = await promise;
+  if (!response.ok) {
+    throw problemToError(error, response.status);
+  }
+  return data as T;
+}

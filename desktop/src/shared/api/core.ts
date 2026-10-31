@@ -19,4 +19,11 @@ export const core = {
   linkGitHub: () => call<Me>("auth_link_github"),
   accessToken: () => call<string>("auth_access_token"),
   signOut: () => call<void>("auth_sign_out"),
+  subscribe: (sessionId: string, afterSeq: number) =>
+    call<void>("realtime_subscribe", { sessionId, afterSeq }),
+  unsubscribe: (sessionId: string) => call<void>("realtime_unsubscribe", { sessionId }),
+  realtimeStatus: () => call<boolean>("realtime_status"),
+  localProjects: () => call<Record<string, string>>("projects_local"),
+  linkProject: (projectId: string, path: string) => call<void>("project_link", { projectId, path }),
+  unlinkProject: (projectId: string) => call<void>("project_unlink", { projectId }),
 };

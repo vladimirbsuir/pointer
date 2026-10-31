@@ -1,5 +1,7 @@
 import { create } from "zustand";
+import { useWorkspace } from "@/features/workspace/workspace-store";
 import { core } from "@/shared/api/core";
+import { queryClient } from "@/shared/api/queries";
 import { toAppError, type AppError, type Me } from "@/shared/api/types";
 import i18n, { changeLanguage, languages, type Language } from "@/shared/i18n";
 
@@ -66,6 +68,8 @@ export const useAuthStore = create<AuthState>((set) => {
 
     signOut: async () => {
       await core.signOut();
+      queryClient.clear();
+      useWorkspace.setState({ activeProjectId: null, activeSessionId: null });
       set({ status: "signedOut", user: null, error: null });
     },
 

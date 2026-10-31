@@ -3,7 +3,9 @@ import { useTranslation } from "react-i18next";
 import { AuthScreen } from "@/features/auth/AuthScreen";
 import { useAuthStore } from "@/features/auth/auth-store";
 import { AppShell } from "@/features/shell/AppShell";
+import { queryClient } from "@/shared/api/queries";
 import { useApplyTheme } from "@/shared/lib/theme";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Button } from "@/shared/ui/button";
 import { Toaster } from "@/shared/ui/sonner";
 
@@ -17,13 +19,13 @@ export function App() {
   }, [restore]);
 
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       {status === "loading" && <LoadingScreen />}
       {status === "unavailable" && <UnavailableScreen onRetry={() => void restore()} />}
       {status === "signedOut" && <AuthScreen />}
       {status === "signedIn" && <AppShell />}
       <Toaster position="bottom-right" />
-    </>
+    </QueryClientProvider>
   );
 }
 
