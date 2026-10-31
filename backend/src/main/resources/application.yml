@@ -31,6 +31,7 @@ management:
         include: health,info
 
 pointer:
+  encryption-key: ${POINTER_ENCRYPTION_KEY:bG9jYWwtZGV2ZWxvcG1lbnQta2V5LTAxMjM0NTY3ODk=}
   auth:
     jwt-secret: ${POINTER_JWT_SECRET:local-development-secret-not-for-production-use}
     issuer: ${POINTER_JWT_ISSUER:pointer}

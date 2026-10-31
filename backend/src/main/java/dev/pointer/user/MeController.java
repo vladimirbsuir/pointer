@@ -4,6 +4,7 @@ import dev.pointer.common.security.AuthPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -13,9 +14,22 @@ import org.springframework.web.bind.annotation.RestController;
 class MeController {
 
     private final UserService userService;
+    private final SettingsService settingsService;
 
-    MeController(UserService userService) {
+    MeController(UserService userService, SettingsService settingsService) {
         this.userService = userService;
+        this.settingsService = settingsService;
+    }
+
+    @GetMapping("/settings")
+    SettingsService.SettingsResponse settings(AuthPrincipal principal) {
+        return settingsService.get(principal.userId());
+    }
+
+    @PutMapping("/settings")
+    SettingsService.SettingsResponse updateSettings(
+            AuthPrincipal principal, @Valid @RequestBody SettingsService.UpdateSettingsRequest request) {
+        return settingsService.update(principal.userId(), request);
     }
 
     @GetMapping

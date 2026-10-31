@@ -18,6 +18,7 @@ public class UserSettings {
     private UUID userId;
 
     private String globalInstructions;
+    private UUID defaultModelId;
 
     @JdbcTypeCode(SqlTypes.JSON)
     private Map<String, Object> preferences;
@@ -41,7 +42,21 @@ public class UserSettings {
         return globalInstructions;
     }
 
+    public UUID getDefaultModelId() {
+        return defaultModelId;
+    }
+
     public Map<String, Object> getPreferences() {
         return Map.copyOf(preferences);
+    }
+
+    void changeGlobalInstructions(String globalInstructions, Instant now) {
+        this.globalInstructions = globalInstructions;
+        this.updatedAt = now;
+    }
+
+    void changeDefaultModel(UUID defaultModelId, Instant now) {
+        this.defaultModelId = defaultModelId;
+        this.updatedAt = now;
     }
 }

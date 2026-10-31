@@ -33,6 +33,10 @@ public class ApiException extends RuntimeException {
         return new ApiException(HttpStatus.CONFLICT, code, message);
     }
 
+    public static ApiException badGateway(String code, String message) {
+        return new ApiException(HttpStatus.BAD_GATEWAY, code, message);
+    }
+
     public static ApiException unavailable(String code, String message) {
         return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, code, message);
     }
