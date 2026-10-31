@@ -12,3 +12,34 @@ Built with Tauri and React on the desktop and a Spring Boot backend that orchest
 - [Roadmap](docs/05-roadmap.md)
 - [Architecture decisions](docs/adr/README.md)
 - [Project rules for contributors and agents](AGENTS.md)
+
+## Development
+
+Prerequisites: JDK 25, Node.js 24 with pnpm, Rust stable, Docker Desktop.
+
+### Backend
+
+```bash
+cd backend
+./gradlew bootRun
+```
+
+PostgreSQL from `infra/docker-compose.yml` starts automatically. The API runs on `http://localhost:8080`, Swagger UI on `/swagger-ui`.
+
+```bash
+./gradlew spotlessApply build
+```
+
+Formats the code and runs all tests (Testcontainers, Docker required).
+
+### Desktop
+
+```bash
+cd desktop
+pnpm install
+pnpm tauri dev
+```
+
+Checks: `pnpm format:check`, `pnpm lint`, `pnpm build`, and in `src-tauri`: `cargo fmt --check`, `cargo clippy -- -D warnings`.
+
+With the backend running, `pnpm api:generate` regenerates TypeScript types from the OpenAPI document.
