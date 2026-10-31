@@ -38,6 +38,8 @@ pointer:
     access-token-ttl: 15m
     refresh-token-ttl: 30d
     allowed-origins: ${POINTER_ALLOWED_ORIGINS:http://localhost:1420,http://tauri.localhost,tauri://localhost}
+  gateway:
+    allow-query-token: ${POINTER_GATEWAY_ALLOW_QUERY_TOKEN:false}
   github:
     client-id: ${POINTER_GITHUB_CLIENT_ID:}
     client-secret: ${POINTER_GITHUB_CLIENT_SECRET:}
