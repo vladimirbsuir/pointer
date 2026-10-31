@@ -1,6 +1,8 @@
 spring:
   application:
     name: pointer-backend
+  config:
+    import: optional:file:.env[.properties]
   threads:
     virtual:
       enabled: true
@@ -27,6 +29,20 @@ management:
     web:
       exposure:
         include: health,info
+
+pointer:
+  auth:
+    jwt-secret: ${POINTER_JWT_SECRET:local-development-secret-not-for-production-use}
+    issuer: ${POINTER_JWT_ISSUER:pointer}
+    access-token-ttl: 15m
+    refresh-token-ttl: 30d
+    allowed-origins: ${POINTER_ALLOWED_ORIGINS:http://localhost:1420,http://tauri.localhost,tauri://localhost}
+  github:
+    client-id: ${POINTER_GITHUB_CLIENT_ID:}
+    client-secret: ${POINTER_GITHUB_CLIENT_SECRET:}
+    authorize-url: https://github.com/login/oauth/authorize
+    token-url: https://github.com/login/oauth/access_token
+    api-url: https://api.github.com
 
 springdoc:
   api-docs:

@@ -47,7 +47,7 @@ erDiagram
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | PK |
-| `email` | citext | Unique, nullable for GitHub-only accounts without a public email |
+| `email` | citext | Unique, required; GitHub accounts use the verified primary email ([ADR 0008](adr/0008-github-sign-in-loopback-redirect.md)) |
 | `password_hash` | text | Nullable for accounts without a password |
 | `display_name` | text | |
 | `locale` | text | `en`, `ru`; default `en` |

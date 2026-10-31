@@ -52,7 +52,7 @@ flowchart TB
 | Container | Responsibility |
 |---|---|
 | UI | All screens. Calls REST for commands and queries. Receives realtime session events from the core. |
-| Core | Owns the refresh token and the WebSocket connection. Executes tool calls, relays local LLM requests, stores the device's project-path mapping, shows notifications, handles deep links. |
+| Core | Owns the refresh token and the WebSocket connection. Executes tool calls, relays local LLM requests, stores the device's project-path mapping, shows notifications, completes GitHub sign-in through a loopback redirect. |
 | Backend | Accounts, providers, projects, sessions, the agent loop, context assembly, the tool registry, permission policies, execution dispatch, persistence. |
 | PostgreSQL | Durable state: users, providers, projects, sessions, conversation items, events, file changes, policies. Later embeddings. |
 
@@ -231,7 +231,7 @@ classDiagram
 
 | Module | Responsibility |
 |---|---|
-| `auth` | Refresh token in Windows Credential Manager, access token refresh, GitHub OAuth deep link handling. |
+| `auth` | Refresh token in Windows Credential Manager, access token refresh, GitHub OAuth through a loopback listener ([ADR 0008](adr/0008-github-sign-in-loopback-redirect.md)). |
 | `connection` | WebSocket client: handshake, heartbeat, reconnect with backoff, per-session `seq` tracking, routing of incoming messages. |
 | `executor` | Implementations of executor operations. Path guard limiting access to the project root. |
 | `process` | Running commands in PowerShell, streaming output, killing the whole process tree on cancel (Windows job objects). |

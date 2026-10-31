@@ -12,5 +12,6 @@ File name: `NNNN-short-title.md`. Status: `Proposed`, `Accepted`, `Superseded by
 | [0003](0003-local-models-via-client-relay.md) | Local models through a client relay | Accepted |
 | [0004](0004-desktop-stack.md) | Desktop stack: Tauri, React, TypeScript | Accepted |
 | [0005](0005-backend-stack.md) | Backend stack: Java 25, Spring Boot 4, PostgreSQL | Accepted |
-| [0006](0006-authentication.md) | Authentication: email and password plus GitHub OAuth | Accepted |
+| [0006](0006-authentication.md) | Authentication: email and password plus GitHub OAuth | Accepted, deep link part superseded by 0008 |
 | [0007](0007-communication-model.md) | Communication model: REST commands, WebSocket owned by the Rust core | Accepted |
+| [0008](0008-github-sign-in-loopback-redirect.md) | GitHub sign-in through a loopback redirect | Accepted |

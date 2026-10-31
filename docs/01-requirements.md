@@ -27,7 +27,7 @@ Priority levels:
 |---|---|---|
 | AUTH-1 | The user can register with email and password. | MVP |
 | AUTH-2 | The user can sign in with email and password. | MVP |
-| AUTH-3 | The user can sign in with GitHub OAuth. Desktop sign-in opens the system browser and returns to the app through a deep link. | MVP |
+| AUTH-3 | The user can sign in with GitHub OAuth. Desktop sign-in opens the system browser and returns to the app through a loopback redirect. | MVP |
 | AUTH-4 | The user can link a GitHub account to an existing email account and vice versa. | MVP |
 | AUTH-5 | The client stays signed in across restarts using a refresh token stored in the OS credential store. | MVP |
 | AUTH-6 | The user can sign out, which revokes the refresh token. | MVP |

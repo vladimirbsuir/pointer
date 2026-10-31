@@ -1,6 +1,6 @@
 # 0006. Authentication: email and password plus GitHub OAuth
 
-Status: Accepted
+Status: Accepted. The deep link return path is superseded by [0008](0008-github-sign-in-loopback-redirect.md).
 
 ## Context
 

@@ -54,7 +54,7 @@ Done when a fresh clone builds and tests with one command per part and CI is gre
 ### M1 Accounts
 
 - Registration, sign-in, refresh rotation, sign-out, password change (AUTH-1, 2, 5, 6, 7).
-- GitHub OAuth with PKCE and the `pointer://` deep link, account linking (AUTH-3, 4).
+- GitHub OAuth with PKCE and a loopback redirect, account linking (AUTH-3, 4).
 - Desktop: sign-in screens, refresh token in Windows Credential Manager, device registration.
 - Settings screen skeleton with language and theme switching (UI-1, UI-2).
 
