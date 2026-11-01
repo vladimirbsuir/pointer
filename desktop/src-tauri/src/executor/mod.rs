@@ -3,6 +3,9 @@ mod files;
 mod paths;
 mod search;
 
+pub use files::read_attachment;
+pub use search::suggest_files;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

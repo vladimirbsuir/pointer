@@ -12,6 +12,8 @@ use crate::error::{AppError, AppResult};
 use crate::projects::ProjectMap;
 use crate::realtime::Realtime;
 
+const MAX_FILE_SUGGESTIONS: usize = 30;
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
@@ -102,6 +104,43 @@ pub fn realtime_unsubscribe(realtime: State<'_, Realtime>, session_id: String) {
 #[tauri::command]
 pub fn realtime_status(realtime: State<'_, Realtime>) -> bool {
     realtime.is_connected()
+}
+
+#[tauri::command]
+pub async fn project_files(
+    projects: State<'_, ProjectMap>,
+    project_id: String,
+    query: String,
+) -> AppResult<Vec<String>> {
+    let root = linked_root(&projects, &project_id)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::executor::suggest_files(&root, &query, MAX_FILE_SUGGESTIONS)
+    })
+    .await
+    .map_err(|error| AppError::new("internal_error", error.to_string()))?
+    .map_err(|error| AppError::new(error.code, error.message))
+}
+
+#[tauri::command]
+pub async fn project_read_file(
+    projects: State<'_, ProjectMap>,
+    project_id: String,
+    path: String,
+) -> AppResult<String> {
+    let root = linked_root(&projects, &project_id)?;
+    tauri::async_runtime::spawn_blocking(move || crate::executor::read_attachment(&root, &path))
+        .await
+        .map_err(|error| AppError::new("internal_error", error.to_string()))?
+        .map_err(|error| AppError::new(error.code, error.message))
+}
+
+fn linked_root(projects: &ProjectMap, project_id: &str) -> AppResult<std::path::PathBuf> {
+    projects.path(project_id).ok_or_else(|| {
+        AppError::new(
+            "project_not_linked",
+            "Link the project to a folder on this computer first",
+        )
+    })
 }
 
 #[tauri::command]

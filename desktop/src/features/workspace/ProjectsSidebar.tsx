@@ -18,6 +18,7 @@ import { toAppError, type Project, type Session } from "@/shared/api/types";
 import { errorMessage } from "@/shared/i18n/errors";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
+import { createSession } from "./create-session";
 import { useWorkspace } from "./workspace-store";
 
 function folderName(path: string) {
@@ -98,17 +99,10 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
   const [expanded, setExpanded] = useState(true);
   const { data: sessions } = useSessions(project.id);
 
-  const createSession = async () => {
+  const startSession = async () => {
     try {
-      const session = (await unwrap(
-        api().POST("/api/v1/projects/{projectId}/sessions", {
-          params: { path: { projectId: project.id } },
-          body: {},
-        }),
-      )) as Session;
-      await queryClient.invalidateQueries({ queryKey: queryKeys.sessions(project.id) });
+      await createSession(project.id, queryClient);
       setExpanded(true);
-      useWorkspace.getState().openSession(project.id, session.id);
     } catch (error) {
       toast.error(errorMessage(t, toAppError(error)));
     }
@@ -157,7 +151,7 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
           variant="ghost"
           size="icon-xs"
           className="opacity-0 group-hover:opacity-100"
-          onClick={() => void createSession()}
+          onClick={() => void startSession()}
           aria-label={t("shell.newSession")}
         >
           <PlusIcon />
@@ -171,7 +165,7 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
           {sessions?.length === 0 && (
             <button
               type="button"
-              onClick={() => void createSession()}
+              onClick={() => void startSession()}
               className="px-2 py-1 text-left text-xs text-muted-foreground hover:text-foreground"
             >
               {t("shell.newSession")}

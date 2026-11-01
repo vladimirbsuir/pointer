@@ -12,6 +12,13 @@ import { onRealtimeMessage } from "@/shared/realtime/realtime";
 
 type TurnError = { code: string; message: string };
 
+export type Usage = {
+  contextTokens: number;
+  contextWindow: number | null;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+};
+
 export type ConversationState = {
   session: Session | null;
   items: Item[];
@@ -19,7 +26,8 @@ export type ConversationState = {
   loading: boolean;
   loadError: AppError | null;
   turnError: TurnError | null;
-  usage: { contextTokens: number; contextWindow: number | null } | null;
+  usage: Usage | null;
+  changesVersion: number;
 };
 
 type Action =
@@ -40,6 +48,7 @@ const initialState: ConversationState = {
   loadError: null,
   turnError: null,
   usage: null,
+  changesVersion: 0,
 };
 
 function upsert(items: Item[], item: Item): Item[] {
@@ -98,8 +107,13 @@ function applyEvent(state: ConversationState, { seq, event }: SessionEvent): Con
         usage: {
           contextTokens: Number(event.contextTokens ?? 0),
           contextWindow: (event.contextWindow as number | null) ?? null,
+          totalInputTokens: Number(event.totalInputTokens ?? 0),
+          totalOutputTokens: Number(event.totalOutputTokens ?? 0),
         },
       };
+    case "file.changed":
+    case "file.reverted":
+      return { ...next, changesVersion: state.changesVersion + 1 };
     default:
       return next;
   }
@@ -117,7 +131,12 @@ function reducer(state: ConversationState, action: Action): ConversationState {
         items: action.items,
         lastSeq: action.session.lastSeq,
         usage: action.session.contextTokens
-          ? { contextTokens: action.session.contextTokens, contextWindow: null }
+          ? {
+              contextTokens: action.session.contextTokens,
+              contextWindow: null,
+              totalInputTokens: action.session.totalInputTokens,
+              totalOutputTokens: action.session.totalOutputTokens,
+            }
           : null,
       };
     case "failed":

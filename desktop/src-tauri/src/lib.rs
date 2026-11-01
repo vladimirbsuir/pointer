@@ -21,6 +21,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             let device = DeviceInfo::load_or_create(&data_dir)?;
@@ -50,6 +51,8 @@ pub fn run() {
             commands::projects_local,
             commands::project_link,
             commands::project_unlink,
+            commands::project_files,
+            commands::project_read_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Pointer");

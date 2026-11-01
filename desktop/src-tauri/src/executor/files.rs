@@ -11,6 +11,7 @@ const DEFAULT_READ_LINES: usize = 2000;
 const MAX_READ_BYTES: usize = 256 * 1024;
 const MAX_LIST_ENTRIES: usize = 1000;
 const MAX_RULES_BYTES: usize = 50 * 1024;
+const MAX_ATTACHMENT_BYTES: u64 = 200 * 1024;
 const RULES_FILES: [&str; 2] = ["AGENTS.md", "CLAUDE.md"];
 
 pub fn list_directory(root: &Path, request: &Request) -> Result<ExecOutcome, ExecError> {
@@ -140,7 +141,11 @@ pub fn restore_file(root: &Path, request: &Request) -> Result<ExecOutcome, ExecE
         None
     };
     let expected = request.args.get("expectedContent").and_then(Value::as_str);
-    let force = request.args.get("force").and_then(Value::as_bool).unwrap_or(false);
+    let force = request
+        .args
+        .get("force")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     if !force && current.as_deref() != expected {
         return Err(ExecError::failed(
             "file_modified",
@@ -234,6 +239,20 @@ fn apply_change(
         "linesRemoved": removed,
     }));
     Ok(outcome)
+}
+
+pub fn read_attachment(root: &Path, requested: &str) -> Result<String, ExecError> {
+    let path = resolve(root, requested)?;
+    let size = fs::metadata(&path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
+    if size > MAX_ATTACHMENT_BYTES {
+        return Err(ExecError::failed(
+            "file_too_large",
+            "The file is too large to attach",
+        ));
+    }
+    read_text(&path)
 }
 
 fn read_text(path: &Path) -> Result<String, ExecError> {

@@ -1,6 +1,6 @@
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC } from "@tauri-apps/api/mocks";
-import { executeInBrowser } from "./browser-executor";
+import { executeInBrowser, readFileInBrowser, suggestFilesInBrowser } from "./browser-executor";
 
 const apiUrl = import.meta.env.VITE_POINTER_API_URL ?? "http://localhost:8080";
 const refreshKey = "pointer.dev.refreshToken";
@@ -225,6 +225,10 @@ export function installBrowserCore() {
           saveLocalProjects(projects);
           return null;
         }
+        case "project_files":
+          return suggestFilesInBrowser(String(args.query ?? "")).slice(0, 30);
+        case "project_read_file":
+          return readFileInBrowser(String(args.path));
         case "plugin:dialog|open":
           return window.prompt("Folder path", "C:\\Projects\\demo");
         default:

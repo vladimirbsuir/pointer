@@ -26,4 +26,8 @@ export const core = {
   localProjects: () => call<Record<string, string>>("projects_local"),
   linkProject: (projectId: string, path: string) => call<void>("project_link", { projectId, path }),
   unlinkProject: (projectId: string) => call<void>("project_unlink", { projectId }),
+  projectFiles: (projectId: string, query: string) =>
+    call<string[]>("project_files", { projectId, query }),
+  readProjectFile: (projectId: string, path: string) =>
+    call<string>("project_read_file", { projectId, path }),
 };

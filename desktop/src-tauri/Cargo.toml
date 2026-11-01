@@ -33,6 +33,7 @@ ignore = "0.4.34"
 globset = "0.4.21"
 regex = "1.13.1"
 similar = "3.2.1"
+tauri-plugin-notification = "2"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }

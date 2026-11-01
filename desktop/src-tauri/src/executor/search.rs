@@ -12,6 +12,7 @@ use super::{ExecError, ExecOutcome, Request};
 const MAX_GLOB_RESULTS: usize = 500;
 const DEFAULT_GREP_RESULTS: usize = 100;
 const MAX_LINE_CHARS: usize = 300;
+const MAX_SUGGESTION_SCAN: usize = 20_000;
 const MAX_GREP_FILE_BYTES: u64 = 2 * 1024 * 1024;
 
 pub fn glob(root: &Path, request: &Request) -> Result<ExecOutcome, ExecError> {
@@ -87,6 +88,47 @@ pub fn grep(root: &Path, request: &Request) -> Result<ExecOutcome, ExecError> {
     ))
 }
 
+pub fn suggest_files(root: &Path, query: &str, limit: usize) -> Result<Vec<String>, ExecError> {
+    let base = resolve(root, ".")?;
+    let query = query.to_lowercase().replace('\\', "/");
+    let mut ranked: Vec<(u8, usize, String)> = files(&base)
+        .take(MAX_SUGGESTION_SCAN)
+        .filter_map(|path| {
+            let relative = relative(root, &path);
+            suggestion_rank(&relative.to_lowercase(), &query)
+                .map(|rank| (rank, relative.len(), relative))
+        })
+        .collect();
+    ranked.sort();
+    Ok(ranked
+        .into_iter()
+        .take(limit)
+        .map(|(_, _, path)| path)
+        .collect())
+}
+
+fn suggestion_rank(path: &str, query: &str) -> Option<u8> {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    if query.is_empty() || name.starts_with(query) {
+        Some(0)
+    } else if name.contains(query) {
+        Some(1)
+    } else if path.contains(query) {
+        Some(2)
+    } else if is_subsequence(path, query) {
+        Some(3)
+    } else {
+        None
+    }
+}
+
+fn is_subsequence(text: &str, query: &str) -> bool {
+    let mut remaining = text.chars();
+    query
+        .chars()
+        .all(|wanted| remaining.any(|candidate| candidate == wanted))
+}
+
 fn files(base: &Path) -> impl Iterator<Item = std::path::PathBuf> {
     WalkBuilder::new(base)
         .hidden(false)
@@ -148,6 +190,19 @@ mod tests {
             outcome.result["paths"],
             json!(["src/main.rs", "src/nested/lib.rs"])
         );
+    }
+
+    #[test]
+    fn suggestions_prefer_file_name_matches() {
+        let root = project();
+
+        let suggestions = suggest_files(root.path(), "lib", 10).unwrap();
+
+        assert_eq!(
+            suggestions.first().map(String::as_str),
+            Some("src/nested/lib.rs")
+        );
+        assert!(suggest_files(root.path(), "zzz", 10).unwrap().is_empty());
     }
 
     #[test]

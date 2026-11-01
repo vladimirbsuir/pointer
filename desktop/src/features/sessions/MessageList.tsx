@@ -1,8 +1,17 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { BrainIcon, ChevronRightIcon, CircleAlertIcon, FileTextIcon } from "lucide-react";
+import {
+  BrainIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  CircleAlertIcon,
+  ClockIcon,
+  FileTextIcon,
+  FoldVerticalIcon,
+} from "lucide-react";
 import type { Item } from "@/shared/api/types";
 import { Markdown } from "./Markdown";
+import { PlanCard } from "./PlanCard";
 import { ToolCallCard } from "./ToolCallCard";
 
 type MessageListProps = {
@@ -19,7 +28,14 @@ export function MessageList({ sessionId, items, running, turnError }: MessageLis
   const container = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const visible = items.filter((item) =>
-    ["user_message", "assistant_message", "reasoning", "tool_call"].includes(item.type),
+    [
+      "user_message",
+      "assistant_message",
+      "reasoning",
+      "tool_call",
+      "plan",
+      "compaction_summary",
+    ].includes(item.type),
   );
   const lastText = visible.at(-1)?.text?.length ?? 0;
 
@@ -54,7 +70,7 @@ export function MessageList({ sessionId, items, running, turnError }: MessageLis
           <p className="text-center text-sm text-muted-foreground">{t("chat.empty")}</p>
         )}
         {visible.map((item) => (
-          <MessageItem key={item.id} item={item} sessionId={sessionId} />
+          <MessageItem key={item.id} item={item} sessionId={sessionId} running={running} />
         ))}
         {waitingForFirstToken && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -76,12 +92,44 @@ export function MessageList({ sessionId, items, running, turnError }: MessageLis
   );
 }
 
-function MessageItem({ item, sessionId }: { item: Item; sessionId: string }) {
+type MessageItemProps = { item: Item; sessionId: string; running: boolean };
+
+function MessageItem({ item, sessionId, running }: MessageItemProps) {
   const { t } = useTranslation();
   const text = item.text ?? "";
 
   if (item.type === "tool_call") {
     return <ToolCallCard item={item} sessionId={sessionId} />;
+  }
+
+  if (item.type === "plan") {
+    return <PlanCard item={item} sessionId={sessionId} running={running} />;
+  }
+
+  if (item.type === "compaction_summary") {
+    return (
+      <details className="group rounded-lg border border-dashed px-3 py-2 text-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-muted-foreground select-none">
+          <FoldVerticalIcon className="size-3.5" />
+          {item.status === "in_progress"
+            ? t("chat.compacting")
+            : t("chat.compacted", { count: Number(item.replacedItemCount ?? 0) })}
+          <ChevronRightIcon className="ml-auto size-3.5 transition-transform group-open:rotate-90" />
+        </summary>
+        <div className="mt-2 border-t pt-2">
+          <Markdown text={text} />
+        </div>
+      </details>
+    );
+  }
+
+  if (item.type === "user_message" && item.planItemId) {
+    return (
+      <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+        <CheckIcon className="size-3.5" />
+        {t("chat.planApprovedMessage")}
+      </div>
+    );
   }
 
   if (item.type === "user_message") {
@@ -100,6 +148,12 @@ function MessageItem({ item, sessionId }: { item: Item; sessionId: string }) {
         <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-sm whitespace-pre-wrap">
           {text}
         </div>
+        {item.turnId === null && (
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <ClockIcon className="size-3" />
+            {t("chat.queued")}
+          </span>
+        )}
       </div>
     );
   }

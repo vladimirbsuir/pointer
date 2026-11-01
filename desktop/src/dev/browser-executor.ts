@@ -77,6 +77,19 @@ function change(path: string, after: string, dryRun: boolean): Result {
   ]);
 }
 
+export function suggestFilesInBrowser(query: string) {
+  const needle = query.toLowerCase();
+  return [...files.keys()].filter((path) => path.toLowerCase().includes(needle)).sort();
+}
+
+export function readFileInBrowser(path: string) {
+  const content = files.get(normalize(path));
+  if (content === undefined) {
+    throw { code: "file_not_found", message: "The file does not exist" };
+  }
+  return content;
+}
+
 export function executeInBrowser(
   operation: string,
   args: Record<string, unknown>,
@@ -156,6 +169,19 @@ export function executeInBrowser(
         ? before.split(oldText).join(String(args.newText ?? ""))
         : before.replace(oldText, String(args.newText ?? ""));
       return change(path, after, dryRun);
+    }
+    case "pointer.restore_file": {
+      const path = normalize(args.path);
+      const current = files.get(path) ?? null;
+      if (!args.force && current !== (args.expectedContent ?? null)) {
+        return failed("file_modified", "The file changed after the agent edited it");
+      }
+      if (args.content === null || args.content === undefined) {
+        files.delete(path);
+      } else {
+        files.set(path, String(args.content));
+      }
+      return ok({ restored: true });
     }
     case "run_command":
       return ok({

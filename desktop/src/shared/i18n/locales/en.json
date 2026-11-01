@@ -63,7 +63,12 @@
     "language": "Language",
     "theme": "Theme",
     "providers": "Providers",
-    "permissions": "Permissions"
+    "permissions": "Permissions",
+    "instructions": "Instructions",
+    "instructionsDescription": "Applied to every session in every project, in addition to the project's AGENTS.md or CLAUDE.md.",
+    "instructionsPlaceholder": "For example: answer in Russian, prefer small commits, use pnpm.",
+    "instructionsSaved": "Instructions saved",
+    "shortcuts": "Keyboard shortcuts"
   },
   "themes": {
     "system": "System",
@@ -103,7 +108,19 @@
     "model_required": "Choose a model before sending a message.",
     "model_not_found": "The model no longer exists.",
     "folder_not_found": "The folder does not exist.",
-    "session_not_found": "The session no longer exists."
+    "session_not_found": "The session no longer exists.",
+    "session_busy": "Wait until the agent finishes the current turn.",
+    "plan_not_pending": "This plan was already approved or replaced.",
+    "plan_not_found": "The plan no longer exists.",
+    "file_modified": "The file changed after the agent edited it.",
+    "nothing_to_revert": "All changes to this file are already reverted.",
+    "revert_unavailable": "The file is too large to restore.",
+    "executor_offline": "Open the project on the computer that ran the agent to revert files.",
+    "project_not_linked": "Link the project to a folder on this computer first.",
+    "file_too_large": "The file is too large to attach.",
+    "file_not_found": "The file does not exist.",
+    "binary_file": "Binary files cannot be attached.",
+    "compaction_failed": "The model could not summarize the conversation."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",
@@ -116,15 +133,26 @@
     "noModels": "No models. Add a provider in Settings.",
     "addProviderFirst": "Add a model provider in Settings to start",
     "chooseModelFirst": "Choose a model to start",
-    "placeholder": "Ask Pointer… (Enter to send, Shift+Enter for a new line)",
+    "placeholder": "Ask Pointer… (@ to attach a file, Shift+Tab to switch mode)",
     "mode": "Mode",
     "stop": "Stop",
     "send": "Send",
-    "contextUsage": "{{tokens}} of {{window}} context tokens used",
+    "contextUsage": "Context: {{tokens}} of {{window}} tokens",
     "tokens": "{{count}} tokens",
     "autoApprove": "Auto-approve",
     "autoApproveHint": "Run edits and commands without asking. Deny rules still apply.",
-    "waitingForExecutor": "Waiting for the device that runs this session. Open Pointer on that computer and make sure the project folder is linked."
+    "waitingForExecutor": "Waiting for the device that runs this session. Open Pointer on that computer and make sure the project folder is linked.",
+    "contextUsageUnknown": "Context: {{tokens}} tokens",
+    "sessionUsage": "Session total: {{input}} input, {{output}} output tokens",
+    "compact": "Compact conversation",
+    "compactHint": "Replace the history with a summary to free up context",
+    "compacting": "Summarizing the conversation…",
+    "compacted": "Conversation summarized ({{count}} items replaced)",
+    "queued": "Queued, delivered at the next step",
+    "noFiles": "No matching files",
+    "attachFailed": "Could not attach {{path}}",
+    "changes": "Changes",
+    "planApprovedMessage": "Plan approved. Implementing…"
   },
   "modes": {
     "ask": "Ask",
@@ -182,5 +210,39 @@
       "ask": "Ask",
       "deny": "Deny"
     }
+  },
+  "shortcuts": {
+    "newSession": "New session in the current project",
+    "stop": "Stop the agent",
+    "cycleMode": "Switch mode",
+    "settings": "Open settings",
+    "mention": "Attach a file",
+    "send": "Send message"
+  },
+  "plan": {
+    "title": "Plan",
+    "approve": "Approve and run",
+    "pending": "Waiting for approval",
+    "approved": "Approved",
+    "rejected": "Replaced",
+    "hint": "Reply to ask for changes."
+  },
+  "changes": {
+    "title": "Changed files",
+    "empty": "The agent has not changed any files in this session.",
+    "revert": "Revert",
+    "reverted": "Reverted",
+    "revertConfirm": "Revert all agent changes to {{path}}?",
+    "revertForce": "{{path}} changed after the agent edited it. Overwrite your changes and revert anyway?",
+    "revertedToast": "{{path}} reverted",
+    "unavailable": "The file is too large to show.",
+    "created": "new",
+    "deleted": "deleted",
+    "close": "Close"
+  },
+  "notifications": {
+    "finished": "Agent finished",
+    "failed": "Agent stopped with an error",
+    "approval": "Approval needed"
   }
 }

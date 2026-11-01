@@ -68,6 +68,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/plans/{itemId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["approvePlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/messages": {
         parameters: {
             query?: never;
@@ -78,6 +94,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["send"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{sessionId}/compact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["compact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{sessionId}/changes/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revert"];
         delete?: never;
         options?: never;
         head?: never;
@@ -436,6 +484,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_3"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{sessionId}/changes/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["diff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/github/authorize-url": {
         parameters: {
             query?: never;
@@ -492,6 +572,13 @@ export interface components {
             currentPassword?: string;
             newPassword: string;
         };
+        SendMessageResponse: {
+            /** Format: uuid */
+            itemId?: string;
+            /** Format: uuid */
+            turnId?: string;
+            queued?: boolean;
+        };
         Attachment: {
             kind?: string;
             path?: string;
@@ -504,12 +591,22 @@ export interface components {
             /** Format: uuid */
             modelId?: string;
         };
-        SendMessageResponse: {
-            /** Format: uuid */
-            itemId?: string;
-            /** Format: uuid */
-            turnId?: string;
-            queued?: boolean;
+        RevertRequest: {
+            path: string;
+            force?: boolean;
+        };
+        ChangedFile: {
+            path?: string;
+            changeKind?: string;
+            /** Format: int32 */
+            linesAdded?: number;
+            /** Format: int32 */
+            linesRemoved?: number;
+            /** Format: int32 */
+            changeCount?: number;
+            reverted?: boolean;
+            /** Format: date-time */
+            lastChangedAt?: string;
         };
         ResolveApprovalRequest: {
             decision?: string;
@@ -720,6 +817,14 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        FileDiff: {
+            path?: string;
+            changeKind?: string;
+            before?: string;
+            after?: string;
+            unavailable?: boolean;
+            reverted?: boolean;
+        };
         AuthorizeUrlResponse: {
             url?: string;
         };
@@ -890,6 +995,29 @@ export interface operations {
             };
         };
     };
+    approvePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendMessageResponse"];
+                };
+            };
+        };
+    };
     send: {
         parameters: {
             query?: never;
@@ -914,6 +1042,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SendMessageResponse"];
+                };
+            };
+        };
+    };
+    compact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevertRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangedFile"];
                 };
             };
         };
@@ -1627,6 +1801,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionEventResponse"][];
+                };
+            };
+        };
+    };
+    list_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangedFile"][];
+                };
+            };
+        };
+    };
+    diff: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDiff"];
                 };
             };
         };
