@@ -1,6 +1,10 @@
 package dev.pointer.agent;
 
 import dev.pointer.common.error.ApiException;
+import dev.pointer.execution.ExecutionListener;
+import dev.pointer.execution.ExecutionRequest;
+import dev.pointer.execution.ExecutionService;
+import dev.pointer.project.ProjectService;
 import dev.pointer.provider.ProviderService;
 import dev.pointer.provider.ResolvedModel;
 import dev.pointer.provider.llm.Cancellation;
@@ -16,13 +20,16 @@ import dev.pointer.session.SessionEventBus;
 import dev.pointer.session.SessionService;
 import dev.pointer.session.SessionWriter;
 import dev.pointer.session.Turn;
+import dev.pointer.tool.ToolRegistry;
 import dev.pointer.user.SettingsService;
 import jakarta.annotation.PreDestroy;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -38,6 +45,9 @@ public class AgentRunner implements LiveItemSnapshots {
 
     private static final Logger log = LoggerFactory.getLogger(AgentRunner.class);
     private static final int MAX_TITLE_LENGTH = 80;
+    private static final int MAX_STEPS = 50;
+    private static final String PROJECT_CONTEXT_OPERATION = "pointer.project_context";
+    private static final Duration PROJECT_CONTEXT_TIMEOUT = Duration.ofSeconds(10);
     private static final String TITLE_PROMPT = """
             Write a concise title of at most six words for a conversation that starts with the user message below.
             Use the language of the message. Reply with the title only, without quotes or punctuation at the end.""";
@@ -49,6 +59,10 @@ public class AgentRunner implements LiveItemSnapshots {
     private final OpenAiCompatibleClient client;
     private final ContextAssembler contextAssembler;
     private final SessionEventBus bus;
+    private final ToolCallHandler toolCalls;
+    private final ToolRegistry toolRegistry;
+    private final ProjectService projectService;
+    private final ExecutionService execution;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<UUID, RunningTurn> running = new ConcurrentHashMap<>();
 
@@ -59,7 +73,11 @@ public class AgentRunner implements LiveItemSnapshots {
             SettingsService settingsService,
             OpenAiCompatibleClient client,
             ContextAssembler contextAssembler,
-            SessionEventBus bus) {
+            SessionEventBus bus,
+            ToolCallHandler toolCalls,
+            ToolRegistry toolRegistry,
+            ProjectService projectService,
+            ExecutionService execution) {
         this.writer = writer;
         this.sessionService = sessionService;
         this.providerService = providerService;
@@ -67,6 +85,10 @@ public class AgentRunner implements LiveItemSnapshots {
         this.client = client;
         this.contextAssembler = contextAssembler;
         this.bus = bus;
+        this.toolCalls = toolCalls;
+        this.toolRegistry = toolRegistry;
+        this.projectService = projectService;
+        this.execution = execution;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -121,24 +143,64 @@ public class AgentRunner implements LiveItemSnapshots {
         try {
             var context = writer.turnContext(userId, sessionId, turnId);
             var model = providerService.resolve(userId, context.modelId(), context.executorDeviceId());
-            var messages = contextAssembler.build(
-                    context.mode(), settingsService.get(userId).globalInstructions(), writer.conversation(sessionId));
-            var listener = new TurnListener(userId, sessionId, turnId, turn);
-            client.stream(model.endpoint(), ChatRequest.of(model.modelKey(), messages), listener, turn.cancellation);
-            var status = turn.cancellation.isCancelled() ? Item.CANCELLED : Item.COMPLETED;
-            listener.completeAll(status);
-            if (listener.usage != null) {
-                writer.recordUsage(
-                        userId,
-                        sessionId,
-                        turnId,
-                        listener.usage.promptTokens(),
-                        listener.usage.completionTokens(),
-                        model.contextWindow());
+            var scope = new ToolCallHandler.TurnScope(
+                    userId,
+                    sessionId,
+                    context.projectId(),
+                    context.executorDeviceId(),
+                    turnId,
+                    context.mode(),
+                    turn.cancellation);
+            var tools = model.supportsTools()
+                    ? toolDefinitions(userId, context.projectId(), context.mode())
+                    : List.<ChatRequest.ToolDefinition>of();
+            var project = projectContext(scope);
+            var globalInstructions = settingsService.get(userId).globalInstructions();
+            String reason = null;
+            List<ChatMessage> firstMessages = null;
+            for (var step = 0; reason == null; step++) {
+                var messages = contextAssembler.build(
+                        context.mode(), globalInstructions, project, writer.conversation(sessionId));
+                if (firstMessages == null) {
+                    firstMessages = messages;
+                }
+                var listener = new TurnListener(userId, sessionId, turnId, step, turn);
+                client.stream(
+                        model.endpoint(),
+                        new ChatRequest(model.modelKey(), messages, tools, null),
+                        listener,
+                        turn.cancellation);
+                listener.completeAll(turn.cancellation.isCancelled() ? Item.CANCELLED : Item.COMPLETED);
+                if (listener.usage != null) {
+                    writer.recordUsage(
+                            userId,
+                            sessionId,
+                            turnId,
+                            listener.usage.promptTokens(),
+                            listener.usage.completionTokens(),
+                            model.contextWindow());
+                }
+                if (turn.cancellation.isCancelled()) {
+                    reason = Turn.CANCELLED;
+                } else if (listener.toolCalls.isEmpty()) {
+                    reason = Turn.COMPLETED;
+                } else {
+                    for (var call : listener.toolCalls.values()) {
+                        if (turn.cancellation.isCancelled()) {
+                            break;
+                        }
+                        toolCalls.handle(scope, step, call.id(), call.name(), call.arguments.toString());
+                    }
+                    if (turn.cancellation.isCancelled()) {
+                        reason = Turn.CANCELLED;
+                    } else if (step + 1 >= MAX_STEPS) {
+                        reason = Turn.STEP_LIMIT;
+                    }
+                }
             }
-            var reason = turn.cancellation.isCancelled() ? Turn.CANCELLED : Turn.COMPLETED;
-            if (context.needsTitle() && Turn.COMPLETED.equals(reason)) {
-                executor.submit(() -> generateTitle(userId, sessionId, model, messages));
+            if (context.needsTitle() && !Turn.CANCELLED.equals(reason)) {
+                var titleMessages = firstMessages;
+                executor.submit(() -> generateTitle(userId, sessionId, model, titleMessages));
             }
             return writer.finishTurn(userId, sessionId, turnId, reason, null);
         } catch (LlmException exception) {
@@ -151,6 +213,41 @@ public class AgentRunner implements LiveItemSnapshots {
         } finally {
             running.remove(sessionId, turn);
         }
+    }
+
+    private List<ChatRequest.ToolDefinition> toolDefinitions(UUID userId, UUID projectId, String mode) {
+        return toolRegistry.available(userId, projectId).stream()
+                .filter(tool -> tool.availableIn(mode))
+                .map(tool -> new ChatRequest.ToolDefinition(
+                        tool.getName(), tool.getDescription(), tool.getParametersSchema()))
+                .toList();
+    }
+
+    private ContextAssembler.ProjectContext projectContext(ToolCallHandler.TurnScope scope) {
+        var name = projectService.owned(scope.userId(), scope.projectId()).getName();
+        if (!execution.canExecute(scope.deviceId(), scope.projectId())) {
+            return new ContextAssembler.ProjectContext(name, null, null, null);
+        }
+        var result = execution.execute(
+                new ExecutionRequest(
+                        scope.sessionId(),
+                        scope.projectId(),
+                        scope.deviceId(),
+                        PROJECT_CONTEXT_OPERATION,
+                        Map.of(),
+                        false,
+                        PROJECT_CONTEXT_TIMEOUT),
+                new ExecutionListener() {},
+                scope.cancellation());
+        if (!result.succeeded()) {
+            return new ContextAssembler.ProjectContext(name, null, null, null);
+        }
+        var branch = result.result().get("gitBranch") instanceof String value ? value : null;
+        if (result.result().get("rulesFile") instanceof Map<?, ?> rules) {
+            return new ContextAssembler.ProjectContext(
+                    name, branch, String.valueOf(rules.get("name")), String.valueOf(rules.get("content")));
+        }
+        return new ContextAssembler.ProjectContext(name, branch, null, null);
     }
 
     private Optional<UUID> fail(
@@ -211,16 +308,31 @@ public class AgentRunner implements LiveItemSnapshots {
         private final UUID userId;
         private final UUID sessionId;
         private final UUID turnId;
+        private final int step;
         private final RunningTurn turn;
+        private final Map<Integer, PendingToolCall> toolCalls = new TreeMap<>();
         private UUID assistantItemId;
         private UUID reasoningItemId;
         private Usage usage;
 
-        TurnListener(UUID userId, UUID sessionId, UUID turnId, RunningTurn turn) {
+        TurnListener(UUID userId, UUID sessionId, UUID turnId, int step, RunningTurn turn) {
             this.userId = userId;
             this.sessionId = sessionId;
             this.turnId = turnId;
+            this.step = step;
             this.turn = turn;
+        }
+
+        @Override
+        public void onToolCallDelta(int index, String id, String name, String argumentsDelta) {
+            var call = toolCalls.computeIfAbsent(index, ignored -> new PendingToolCall());
+            if (id != null) {
+                call.id = id;
+            }
+            if (name != null) {
+                call.name = name;
+            }
+            call.arguments.append(argumentsDelta);
         }
 
         @Override
@@ -257,7 +369,7 @@ public class AgentRunner implements LiveItemSnapshots {
         }
 
         private UUID open(String type) {
-            var view = writer.createItem(userId, sessionId, turnId, type, Map.of("text", ""));
+            var view = writer.createItem(userId, sessionId, turnId, type, Map.of("text", "", "step", step));
             var itemId = (UUID) view.get("id");
             turn.items.put(itemId, new LiveItem(view));
             return itemId;
@@ -266,6 +378,20 @@ public class AgentRunner implements LiveItemSnapshots {
         private void append(UUID itemId, String delta) {
             turn.items.get(itemId).text.append(delta);
             bus.publishDelta(userId, sessionId, itemId, "text", delta);
+        }
+    }
+
+    private static final class PendingToolCall {
+        String id;
+        String name;
+        final StringBuilder arguments = new StringBuilder();
+
+        String id() {
+            return id == null ? "call_" + UUID.randomUUID() : id;
+        }
+
+        String name() {
+            return name == null ? "" : name;
         }
     }
 

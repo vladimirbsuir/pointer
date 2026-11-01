@@ -22,9 +22,21 @@ import org.springframework.web.bind.annotation.RestController;
 class SessionController {
 
     private final SessionService service;
+    private final ApprovalService approvals;
 
-    SessionController(SessionService service) {
+    SessionController(SessionService service, ApprovalService approvals) {
         this.service = service;
+        this.approvals = approvals;
+    }
+
+    @PostMapping("/sessions/{sessionId}/approvals/{approvalId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void resolveApproval(
+            AuthPrincipal principal,
+            @PathVariable UUID sessionId,
+            @PathVariable UUID approvalId,
+            @Valid @RequestBody ApprovalService.ResolveApprovalRequest request) {
+        approvals.resolve(principal.userId(), sessionId, approvalId, request);
     }
 
     @GetMapping("/projects/{projectId}/sessions")

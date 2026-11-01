@@ -1,0 +1,42 @@
+package dev.pointer.gateway;
+
+import dev.pointer.execution.DeviceChannel;
+import java.util.Map;
+import java.util.UUID;
+import org.springframework.stereotype.Component;
+
+@Component
+class GatewayDeviceChannel implements DeviceChannel {
+
+    static final String EXECUTOR = "executor";
+
+    private final ConnectionRegistry registry;
+
+    GatewayDeviceChannel(ConnectionRegistry registry) {
+        this.registry = registry;
+    }
+
+    @Override
+    public boolean canExecute(UUID deviceId, UUID projectId) {
+        return registry.device(deviceId)
+                .filter(connection -> connection.hasCapability(EXECUTOR))
+                .filter(connection -> connection.projects().contains(projectId))
+                .isPresent();
+    }
+
+    @Override
+    public boolean isConnected(UUID deviceId) {
+        return registry.device(deviceId).isPresent();
+    }
+
+    @Override
+    public void sendRequest(UUID deviceId, Map<String, Object> payload) {
+        registry.device(deviceId).ifPresent(connection -> connection.send("exec.request", null, payload));
+    }
+
+    @Override
+    public void sendCancel(UUID deviceId, UUID callId) {
+        registry.device(deviceId)
+                .ifPresent(connection -> connection.send("exec.cancel", null, Map.of("callId", callId)));
+    }
+}

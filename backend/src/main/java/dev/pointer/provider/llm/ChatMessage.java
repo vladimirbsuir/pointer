@@ -24,4 +24,12 @@ public record ChatMessage(Role role, String content, List<ToolCall> toolCalls, S
     public static ChatMessage assistant(String content) {
         return new ChatMessage(Role.ASSISTANT, content, List.of(), null);
     }
+
+    public static ChatMessage assistant(String content, List<ToolCall> toolCalls) {
+        return new ChatMessage(Role.ASSISTANT, content, toolCalls, null);
+    }
+
+    public static ChatMessage toolResult(String toolCallId, String content) {
+        return new ChatMessage(Role.TOOL, content, List.of(), toolCallId);
+    }
 }

@@ -136,7 +136,8 @@ public class OpenAiCompatibleClient {
     private Map<String, Object> message(ChatMessage message) {
         var result = new HashMap<String, Object>();
         result.put("role", message.role().name().toLowerCase(Locale.ROOT));
-        result.put("content", message.content() == null ? "" : message.content());
+        var content = message.content() == null ? "" : message.content();
+        result.put("content", content.isEmpty() && !message.toolCalls().isEmpty() ? null : content);
         if (!message.toolCalls().isEmpty()) {
             result.put(
                     "tool_calls",

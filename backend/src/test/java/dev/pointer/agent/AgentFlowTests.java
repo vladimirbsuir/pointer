@@ -3,11 +3,7 @@ package dev.pointer.agent;
 import static dev.pointer.testing.GatewayTestClient.eventKind;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.pointer.IntegrationTest;
-import dev.pointer.auth.AuthResponse;
-import dev.pointer.provider.ProviderDtos;
 import dev.pointer.session.SessionDtos;
-import dev.pointer.testing.FakeOpenAiServer;
 import dev.pointer.testing.GatewayTestClient;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -15,32 +11,16 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Base64;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.test.web.servlet.client.RestTestClient;
 import tools.jackson.databind.JsonNode;
 
-class AgentFlowTests extends IntegrationTest {
-
-    private static final Duration TIMEOUT = Duration.ofSeconds(10);
-
-    @Value("${local.server.port}")
-    private int port;
-
-    private final FakeOpenAiServer llm = new FakeOpenAiServer();
-
-    @AfterEach
-    void stopServer() {
-        llm.close();
-    }
+class AgentFlowTests extends AgentIntegrationTest {
 
     @Test
     void messageStreamsAnswerThroughGatewayAndGeneratesTitle() throws Exception {
@@ -48,8 +28,9 @@ class AgentFlowTests extends IntegrationTest {
         llm.enqueueText("Hel", "lo!");
         llm.enqueueText("Greeting");
 
-        try (var ws = GatewayTestClient.connect(port, setup.auth.accessToken(), setup.deviceId, List.of("viewer"))) {
-            ws.subscribe(setup.sessionId, 0);
+        try (var ws =
+                GatewayTestClient.connect(port, setup.auth().accessToken(), setup.deviceId(), List.of("viewer"))) {
+            ws.subscribe(setup.sessionId(), 0);
             ws.await(message -> GatewayTestClient.type(message).equals("session.subscribed"), TIMEOUT);
 
             send(setup, "Say hello", null).expectStatus().isEqualTo(HttpStatus.ACCEPTED);
@@ -93,8 +74,9 @@ class AgentFlowTests extends IntegrationTest {
         llm.enqueueText("Slow title");
         llm.enqueueText("Second answer");
 
-        try (var ws = GatewayTestClient.connect(port, setup.auth.accessToken(), setup.deviceId, List.of("viewer"))) {
-            ws.subscribe(setup.sessionId, 0);
+        try (var ws =
+                GatewayTestClient.connect(port, setup.auth().accessToken(), setup.deviceId(), List.of("viewer"))) {
+            ws.subscribe(setup.sessionId(), 0);
             send(setup, "First", null);
             ws.await(
                     message -> eventKind(message).equals("session.updated")
@@ -125,16 +107,17 @@ class AgentFlowTests extends IntegrationTest {
         var setup = setUp(false);
         llm.enqueueText("Answer");
 
-        try (var first = GatewayTestClient.connect(port, setup.auth.accessToken(), setup.deviceId, List.of("viewer"))) {
-            first.subscribe(setup.sessionId, 0);
+        try (var first =
+                GatewayTestClient.connect(port, setup.auth().accessToken(), setup.deviceId(), List.of("viewer"))) {
+            first.subscribe(setup.sessionId(), 0);
             send(setup, "Question", null);
             first.awaitEvent("turn.completed", TIMEOUT);
         }
 
         var otherDevice = UUID.randomUUID();
-        var otherAuth = login(setup.email, PASSWORD, otherDevice);
+        var otherAuth = login(setup.email(), PASSWORD, otherDevice);
         try (var late = GatewayTestClient.connect(port, otherAuth.accessToken(), otherDevice, List.of("viewer"))) {
-            late.subscribe(setup.sessionId, 0);
+            late.subscribe(setup.sessionId(), 0);
             late.awaitEvent("turn.completed", TIMEOUT);
             var events = late.events();
             assertContiguous(events);
@@ -153,14 +136,15 @@ class AgentFlowTests extends IntegrationTest {
         }
         llm.enqueueStream(Duration.ofMillis(50), lines);
 
-        try (var ws = GatewayTestClient.connect(port, setup.auth.accessToken(), setup.deviceId, List.of("viewer"))) {
-            ws.subscribe(setup.sessionId, 0);
+        try (var ws =
+                GatewayTestClient.connect(port, setup.auth().accessToken(), setup.deviceId(), List.of("viewer"))) {
+            ws.subscribe(setup.sessionId(), 0);
             send(setup, "Write a long text", null);
             ws.await(message -> GatewayTestClient.type(message).equals("session.delta"), TIMEOUT);
 
             client.post()
-                    .uri("/api/v1/sessions/{id}/cancel", setup.sessionId)
-                    .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth))
+                    .uri("/api/v1/sessions/{id}/cancel", setup.sessionId())
+                    .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
                     .exchange()
                     .expectStatus()
                     .isEqualTo(HttpStatus.ACCEPTED);
@@ -177,8 +161,9 @@ class AgentFlowTests extends IntegrationTest {
         var setup = setUp(false);
         llm.enqueueError(400, "{\"error\":{\"message\":\"context length exceeded\"}}");
 
-        try (var ws = GatewayTestClient.connect(port, setup.auth.accessToken(), setup.deviceId, List.of("viewer"))) {
-            ws.subscribe(setup.sessionId, 0);
+        try (var ws =
+                GatewayTestClient.connect(port, setup.auth().accessToken(), setup.deviceId(), List.of("viewer"))) {
+            ws.subscribe(setup.sessionId(), 0);
             send(setup, "Hi", null);
 
             var completed =
@@ -201,8 +186,9 @@ class AgentFlowTests extends IntegrationTest {
         llm.enqueueText("Title");
         llm.enqueueText("second answer");
 
-        try (var ws = GatewayTestClient.connect(port, setup.auth.accessToken(), setup.deviceId, List.of("viewer"))) {
-            ws.subscribe(setup.sessionId, 0);
+        try (var ws =
+                GatewayTestClient.connect(port, setup.auth().accessToken(), setup.deviceId(), List.of("viewer"))) {
+            ws.subscribe(setup.sessionId(), 0);
             send(setup, "First", null);
             ws.await(message -> GatewayTestClient.type(message).equals("session.delta"), TIMEOUT);
 
@@ -247,14 +233,14 @@ class AgentFlowTests extends IntegrationTest {
         var http = HttpClient.newHttpClient();
         var executor = Executors.newVirtualThreadPerTaskExecutor();
 
-        try (var ws =
-                GatewayTestClient.connect(port, setup.auth.accessToken(), setup.deviceId, List.of("viewer", "relay"))) {
+        try (var ws = GatewayTestClient.connect(
+                port, setup.auth().accessToken(), setup.deviceId(), List.of("viewer", "relay"))) {
             ws.onMessage(message -> {
                 if (GatewayTestClient.type(message).equals("relay.request")) {
                     executor.submit(() -> relay(ws, http, message.path("payload")));
                 }
             });
-            ws.subscribe(setup.sessionId, 0);
+            ws.subscribe(setup.sessionId(), 0);
             send(setup, "Hi local", null);
 
             var completed = ws.awaitEvent("turn.completed", TIMEOUT);
@@ -273,8 +259,9 @@ class AgentFlowTests extends IntegrationTest {
     void localProviderWithoutConnectedDeviceFailsClearly() throws Exception {
         var setup = setUp(true);
 
-        try (var ws = GatewayTestClient.connect(port, setup.auth.accessToken(), setup.deviceId, List.of("viewer"))) {
-            ws.subscribe(setup.sessionId, 0);
+        try (var ws =
+                GatewayTestClient.connect(port, setup.auth().accessToken(), setup.deviceId(), List.of("viewer"))) {
+            ws.subscribe(setup.sessionId(), 0);
             send(setup, "Hi", null);
 
             var completed =
@@ -290,7 +277,7 @@ class AgentFlowTests extends IntegrationTest {
         var stranger = register(uniqueEmail(), strangerDevice);
 
         try (var ws = GatewayTestClient.connect(port, stranger.accessToken(), strangerDevice, List.of("viewer"))) {
-            ws.subscribe(setup.sessionId, 0);
+            ws.subscribe(setup.sessionId(), 0);
             var error = ws.await(message -> GatewayTestClient.type(message).equals("error"), TIMEOUT);
             assertThat(error.path("payload").path("code").asString()).isEqualTo("session_not_found");
         }
@@ -300,7 +287,7 @@ class AgentFlowTests extends IntegrationTest {
     void helloWithAnotherDeviceIdIsRejected() throws Exception {
         var setup = setUp(false);
 
-        try (var ws = GatewayTestClient.connectRaw(port, setup.auth.accessToken())) {
+        try (var ws = GatewayTestClient.connectRaw(port, setup.auth().accessToken())) {
             ws.send(
                     "hello",
                     Map.of(
@@ -357,70 +344,4 @@ class AgentFlowTests extends IntegrationTest {
             assertThat(seqs.get(i)).isEqualTo(seqs.get(i - 1) + 1);
         }
     }
-
-    private RestTestClient.ResponseSpec send(Setup setup, String text, String idempotencyKey) {
-        var request = client.post()
-                .uri("/api/v1/sessions/{id}/messages", setup.sessionId)
-                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth));
-        if (idempotencyKey != null) {
-            request = request.header("Idempotency-Key", idempotencyKey);
-        }
-        return request.body(Map.of("text", text)).exchange();
-    }
-
-    private String sessionStatus(Setup setup) {
-        return client.get()
-                .uri("/api/v1/sessions/{id}", setup.sessionId)
-                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth))
-                .exchange()
-                .expectBody(SessionDtos.SessionResponse.class)
-                .returnResult()
-                .getResponseBody()
-                .status();
-    }
-
-    private Setup setUp(boolean local) {
-        var email = uniqueEmail();
-        var deviceId = UUID.randomUUID();
-        var auth = register(email, deviceId);
-        var providerBody = new HashMap<String, Object>(Map.of("name", "Fake", "baseUrl", llm.baseUrl()));
-        providerBody.put("isLocal", local);
-        var provider = client.post()
-                .uri("/api/v1/providers")
-                .header(HttpHeaders.AUTHORIZATION, bearer(auth))
-                .body(providerBody)
-                .exchange()
-                .expectBody(ProviderDtos.ProviderResponse.class)
-                .returnResult()
-                .getResponseBody();
-        var model = client.post()
-                .uri("/api/v1/providers/{id}/models", provider.id())
-                .header(HttpHeaders.AUTHORIZATION, bearer(auth))
-                .body(Map.of("modelKey", "fake-model", "contextWindow", 8000))
-                .exchange()
-                .expectBody(ProviderDtos.ModelResponse.class)
-                .returnResult()
-                .getResponseBody();
-        var project = client.post()
-                .uri("/api/v1/projects")
-                .header(HttpHeaders.AUTHORIZATION, bearer(auth))
-                .body(Map.of("name", "demo"))
-                .exchange()
-                .expectBody(JsonNode.class)
-                .returnResult()
-                .getResponseBody();
-        var session = client.post()
-                .uri("/api/v1/projects/{id}/sessions", project.path("id").asString())
-                .header(HttpHeaders.AUTHORIZATION, bearer(auth))
-                .body(Map.of("modelId", model.id().toString()))
-                .exchange()
-                .expectStatus()
-                .isEqualTo(HttpStatus.CREATED)
-                .expectBody(SessionDtos.SessionResponse.class)
-                .returnResult()
-                .getResponseBody();
-        return new Setup(email, deviceId, auth, session.id());
-    }
-
-    private record Setup(String email, UUID deviceId, AuthResponse auth, UUID sessionId) {}
 }

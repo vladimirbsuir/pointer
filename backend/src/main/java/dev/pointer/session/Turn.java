@@ -19,6 +19,7 @@ public class Turn extends BaseEntity {
     public static final String CANCELLED = "cancelled";
     public static final String FAILED = "failed";
     public static final String INTERRUPTED = "interrupted";
+    public static final String STEP_LIMIT = "step_limit";
 
     private UUID sessionId;
     private int number;

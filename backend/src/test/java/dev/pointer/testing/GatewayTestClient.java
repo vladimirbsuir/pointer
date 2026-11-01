@@ -53,6 +53,12 @@ public final class GatewayTestClient implements AutoCloseable {
 
     public static GatewayTestClient connect(int port, String accessToken, UUID deviceId, List<String> capabilities)
             throws Exception {
+        return connect(port, accessToken, deviceId, capabilities, List.of());
+    }
+
+    public static GatewayTestClient connect(
+            int port, String accessToken, UUID deviceId, List<String> capabilities, List<String> projects)
+            throws Exception {
         var client = new GatewayTestClient(port, accessToken);
         client.send(
                 "hello",
@@ -68,7 +74,7 @@ public final class GatewayTestClient implements AutoCloseable {
                         "capabilities",
                         capabilities,
                         "projects",
-                        List.of()));
+                        projects));
         client.await(message -> type(message).equals("welcome"), Duration.ofSeconds(5));
         return client;
     }

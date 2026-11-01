@@ -102,6 +102,23 @@ public class SessionWriter {
     }
 
     @Transactional
+    public Map<String, Object> updateItem(UUID userId, UUID sessionId, UUID itemId, Map<String, Object> updates) {
+        var item = items.findById(itemId)
+                .filter(found -> found.getSessionId().equals(sessionId))
+                .orElseThrow(() -> ApiException.notFound("item_not_found", "Item does not exist"));
+        item.update(updates);
+        items.save(item);
+        var view = item.toView();
+        eventLog.append(userId, sessionId, "item.updated", Map.of("item", view));
+        return view;
+    }
+
+    @Transactional
+    public void changeStatus(UUID userId, UUID sessionId, String status) {
+        changeStatus(lockOwned(userId, sessionId), status);
+    }
+
+    @Transactional
     public void recordUsage(
             UUID userId, UUID sessionId, UUID turnId, long promptTokens, long completionTokens, Integer contextWindow) {
         var session = lockOwned(userId, sessionId);

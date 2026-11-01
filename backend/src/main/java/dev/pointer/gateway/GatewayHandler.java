@@ -2,6 +2,7 @@ package dev.pointer.gateway;
 
 import dev.pointer.common.error.ApiException;
 import dev.pointer.common.security.AuthPrincipal;
+import dev.pointer.execution.ExecutionService;
 import dev.pointer.session.LiveItemSnapshots;
 import dev.pointer.session.SessionService;
 import java.time.Clock;
@@ -21,6 +22,7 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -32,12 +34,14 @@ class GatewayHandler extends TextWebSocketHandler {
     static final CloseStatus UNAUTHORIZED = new CloseStatus(4401, "Unauthorized");
     static final CloseStatus UNSUPPORTED_VERSION = new CloseStatus(4426, "Unsupported protocol version");
 
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final Logger log = LoggerFactory.getLogger(GatewayHandler.class);
 
     private final ConnectionRegistry registry;
     private final SessionService sessionService;
     private final LiveItemSnapshots snapshots;
     private final RelayService relay;
+    private final ExecutionService execution;
     private final JwtDecoder jwtDecoder;
     private final JsonMapper json;
     private final Clock clock;
@@ -47,6 +51,7 @@ class GatewayHandler extends TextWebSocketHandler {
             SessionService sessionService,
             LiveItemSnapshots snapshots,
             RelayService relay,
+            ExecutionService execution,
             JwtDecoder jwtDecoder,
             JsonMapper json,
             Clock clock) {
@@ -54,6 +59,7 @@ class GatewayHandler extends TextWebSocketHandler {
         this.sessionService = sessionService;
         this.snapshots = snapshots;
         this.relay = relay;
+        this.execution = execution;
         this.jwtDecoder = jwtDecoder;
         this.json = json;
         this.clock = clock;
@@ -102,6 +108,12 @@ class GatewayHandler extends TextWebSocketHandler {
                 case "device.projects_changed" -> connection.updateProjects(uuids(payload.path("projects")));
                 case "session.subscribe" -> subscribe(connection, id, payload);
                 case "session.unsubscribe" -> connection.unsubscribe(uuid(payload, "sessionId"));
+                case "exec.output" ->
+                    execution.onOutput(
+                            uuid(payload, "callId"),
+                            payload.path("stream").asString("stdout"),
+                            payload.path("data").asString(""));
+                case "exec.result" -> deliverResult(payload);
                 case "relay.response.start" ->
                     relay.onStart(
                             uuid(payload, "relayId"), payload.path("status").asInt());
@@ -159,6 +171,7 @@ class GatewayHandler extends TextWebSocketHandler {
         welcome.put("userId", connection.userId());
         welcome.put("limits", Map.of("maxMessageBytes", 4_194_304, "maxToolOutputBytes", 262_144));
         connection.send("welcome", id, welcome);
+        payload.path("undeliveredResults").forEach(this::deliverResult);
         log.debug("Device {} connected with capabilities {}", deviceId, capabilities);
     }
 
@@ -204,6 +217,11 @@ class GatewayHandler extends TextWebSocketHandler {
                 connection.send("session.snapshot", null, Map.of("sessionId", sessionId, "item", snapshot));
             }
         }
+    }
+
+    private void deliverResult(JsonNode payload) {
+        Map<String, Object> result = json.convertValue(payload, MAP_TYPE);
+        execution.onResult(uuid(payload, "callId"), ExecutionService.parseResult(result));
     }
 
     private static void error(GatewayConnection connection, String replyTo, String code, String message) {

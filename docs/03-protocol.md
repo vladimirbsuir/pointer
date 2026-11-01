@@ -205,9 +205,9 @@ Item status: `in_progress`, `completed`, `failed`, `cancelled`.
 | Type | Specific fields |
 |---|---|
 | `user_message` | `text`, `attachments` (`[{ "kind": "file", "path": "src/App.tsx", "content": "..." }]`), `mode` |
-| `assistant_message` | `text`, `model` |
+| `assistant_message` | `text`, `step` |
 | `reasoning` | `text` (when the provider streams reasoning) |
-| `tool_call` | `toolName`, `arguments`, `toolStatus`, `result`, `error`, `approvalId` |
+| `tool_call` | `step`, `toolName`, `arguments`, `argumentsJson`, `providerCallId`, `toolStatus`, `result`, `error`, `output`, `fileChanges`, `resultText`, `approvalId` |
 | `plan` | `steps` (`[{ "title": "..." }]`), `approval` (`pending`, `approved`, `rejected`) |
 | `compaction_summary` | `text`, `replacedItemCount` |
 
@@ -230,6 +230,7 @@ Item status: `in_progress`, `completed`, `failed`, `cancelled`.
 | `turn.started` | `turnId`, `mode`, `model` | A turn begins. |
 | `turn.completed` | `turnId`, `reason` (`completed`, `cancelled`, `failed`, `step_limit`, `interrupted`), `usage`, `error` | A turn ends. |
 | `item.created` | `turnId`, `item` | An item starts. Streaming deltas for it may follow. |
+| `item.updated` | `item` | An in-progress item changes, for example a tool call moving to `awaiting_approval` or `running`. Carries the full item. |
 | `item.completed` | `item` | An item reaches its final state. Carries the full item. |
 | `approval.requested` | `approvalId`, `itemId`, `preview` | A tool call needs approval. |
 | `approval.resolved` | `approvalId`, `decision` (`approved`, `denied`), `scope` (`once`, `session`), `message` | The user answered. |
@@ -284,7 +285,7 @@ Streaming output of a running operation, currently only `run_command`.
   "result": { },
   "error": null,
   "fileChanges": [
-    { "path": "src/App.tsx", "changeKind": "modified", "before": "...", "after": "..." }
+    { "path": "src/App.tsx", "changeKind": "modified", "before": "...", "after": "...", "linesAdded": 3, "linesRemoved": 1 }
   ],
   "durationMs": 12
 }

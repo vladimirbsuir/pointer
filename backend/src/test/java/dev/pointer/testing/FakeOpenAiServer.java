@@ -62,6 +62,14 @@ public final class FakeOpenAiServer implements AutoCloseable {
         return enqueueStream(Duration.ZERO, lines.toArray(String[]::new));
     }
 
+    public FakeOpenAiServer enqueueToolCall(String callId, String toolName, String argumentsJson) {
+        var call = "{\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":" + quote(callId)
+                + ",\"type\":\"function\",\"function\":{\"name\":" + quote(toolName) + ",\"arguments\":"
+                + quote(argumentsJson) + "}}]}}]}";
+        return enqueueStream(
+                Duration.ZERO, call, "{\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}", "[DONE]");
+    }
+
     public FakeOpenAiServer enqueueError(int status, String body) {
         queued.add(new Response(status, Duration.ZERO, List.of(body)));
         return this;
