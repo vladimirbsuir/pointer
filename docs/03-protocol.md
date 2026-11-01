@@ -26,7 +26,7 @@ REST endpoints are listed in section 9 for orientation; their exact schemas come
 
 ### 1.2 Reconnect
 
-Exponential backoff starting at 1 second, doubling up to 30 seconds, with ±20% jitter. Reset after a connection stays up for 60 seconds.
+Exponential backoff starting at 1 second, doubling up to 30 seconds, with В±20% jitter. Reset after a connection stays up for 60 seconds.
 
 ## 2. Envelope
 
@@ -68,7 +68,7 @@ Sent by either side in response to a message that cannot be processed.
 
 The first message after connecting must be `hello` from the client. The server answers with `welcome` or closes the connection.
 
-### 3.1 `hello` (client → server)
+### 3.1 `hello` (client в†’ server)
 
 ```json
 {
@@ -89,7 +89,7 @@ The first message after connecting must be `hello` from the client. The server a
 | `projects` | Projects mapped to a local path on this device. The device can execute only for these. |
 | `undeliveredResults` | `exec.result` payloads finished while disconnected (see 6.4). |
 
-### 3.2 `welcome` (server → client)
+### 3.2 `welcome` (server в†’ client)
 
 ```json
 {
@@ -100,7 +100,7 @@ The first message after connecting must be `hello` from the client. The server a
 }
 ```
 
-### 3.3 `device.projects_changed` (client → server)
+### 3.3 `device.projects_changed` (client в†’ server)
 
 Sent when the user maps or unmaps a project on the device.
 
@@ -108,7 +108,7 @@ Sent when the user maps or unmaps a project on the device.
 { "projects": ["prj_01JC...", "prj_01JD..."] }
 ```
 
-### 3.4 `auth.refresh` (client → server)
+### 3.4 `auth.refresh` (client в†’ server)
 
 Sent with a new access token before the current one expires. The server answers with `auth.refreshed` or closes with `4401`.
 
@@ -118,7 +118,7 @@ Sent with a new access token before the current one expires. The server answers 
 
 ## 4. Session subscriptions
 
-### 4.1 `session.subscribe` (client → server)
+### 4.1 `session.subscribe` (client в†’ server)
 
 ```json
 { "sessionId": "ses_01JC...", "afterSeq": 41 }
@@ -127,19 +127,19 @@ Sent with a new access token before the current one expires. The server answers 
 The server replies with `session.subscribed`, then replays every stored event with `seq > afterSeq` in order, then sends `session.snapshot` for items still in progress, then streams live messages.
 `afterSeq: 0` replays the whole log. The UI normally loads history through REST and subscribes with the last `seq` it has.
 
-### 4.2 `session.subscribed` (server → client)
+### 4.2 `session.subscribed` (server в†’ client)
 
 ```json
 { "sessionId": "ses_01JC...", "lastSeq": 57, "status": "running" }
 ```
 
-### 4.3 `session.unsubscribe` (client → server)
+### 4.3 `session.unsubscribe` (client в†’ server)
 
 ```json
 { "sessionId": "ses_01JC..." }
 ```
 
-### 4.4 `session.event` (server → client)
+### 4.4 `session.event` (server в†’ client)
 
 A stored event of the session log.
 
@@ -154,7 +154,7 @@ A stored event of the session log.
 
 `seq` increases by exactly 1 per session. A client that sees a gap re-subscribes with its last contiguous `seq`.
 
-### 4.5 `session.delta` (server → client)
+### 4.5 `session.delta` (server в†’ client)
 
 A transient streaming fragment. Not stored, has no `seq`.
 
@@ -164,7 +164,7 @@ A transient streaming fragment. Not stored, has no `seq`.
 
 `field` is `text` for assistant messages and reasoning, `arguments` for tool-call arguments, `output` for streaming command output.
 
-### 4.6 `session.snapshot` (server → client)
+### 4.6 `session.snapshot` (server в†’ client)
 
 The accumulated state of an in-progress item, sent after replay so a reconnecting client can continue applying deltas.
 
@@ -172,7 +172,7 @@ The accumulated state of an in-progress item, sent after replay so a reconnectin
 { "sessionId": "ses_01JC...", "item": { } }
 ```
 
-### 4.7 `sessions.changed` (server → client)
+### 4.7 `sessions.changed` (server в†’ client)
 
 Sent to every viewer connection of the user when a session is created, renamed, archived, deleted or changes status, so session lists stay current without subscribing to each session.
 
@@ -207,7 +207,7 @@ Item status: `in_progress`, `completed`, `failed`, `cancelled`.
 | `user_message` | `text`, `attachments` (`[{ "kind": "file", "path": "src/App.tsx", "content": "..." }]`), `mode` |
 | `assistant_message` | `text`, `step` |
 | `reasoning` | `text` (when the provider streams reasoning) |
-| `tool_call` | `step`, `toolName`, `arguments`, `argumentsJson`, `providerCallId`, `toolStatus`, `result`, `error`, `output`, `fileChanges`, `resultText`, `approvalId` |
+| `tool_call` | `step`, `toolName`, `arguments`, `argumentsJson`, `providerCallId`, `toolStatus`, `result`, `error`, `output`, `fileChanges`, `resultText`, `approvalId`, `approvalPreview` |
 | `plan` | `steps` (`[{ "title": "..." }]`), `approval` (`pending`, `approved`, `rejected`) |
 | `compaction_summary` | `text`, `replacedItemCount` |
 
@@ -252,7 +252,7 @@ Approval `preview`:
 
 ## 6. Execution
 
-### 6.1 `exec.request` (server → client)
+### 6.1 `exec.request` (server в†’ client)
 
 ```json
 {
@@ -268,7 +268,7 @@ Approval `preview`:
 
 The client rejects with `exec.result` status `rejected` if the project is not mapped on the device, the operation is unknown, or a path resolves outside the project root.
 
-### 6.2 `exec.output` (client → server)
+### 6.2 `exec.output` (client в†’ server)
 
 Streaming output of a running operation, currently only `run_command`.
 
@@ -276,7 +276,7 @@ Streaming output of a running operation, currently only `run_command`.
 { "callId": "cal_01JC...", "stream": "stdout", "data": "added 1 package in 2s\n" }
 ```
 
-### 6.3 `exec.result` (client → server)
+### 6.3 `exec.result` (client в†’ server)
 
 ```json
 {
@@ -301,7 +301,7 @@ Streaming output of a running operation, currently only `run_command`.
 
 For `dryRun: true`, file operations return the diff in `result.preview` and do not touch the disk. `fileChanges` is empty.
 
-### 6.4 `exec.cancel` (server → client)
+### 6.4 `exec.cancel` (server в†’ client)
 
 ```json
 { "callId": "cal_01JC..." }
@@ -348,7 +348,7 @@ Used by the backend itself, never exposed to the model. Names start with `pointe
 
 ## 8. LLM relay
 
-### 8.1 `relay.request` (server → client)
+### 8.1 `relay.request` (server в†’ client)
 
 ```json
 {
@@ -363,7 +363,7 @@ Used by the backend itself, never exposed to the model. Names start with `pointe
 
 The client rejects the request with `relay.error` code `host_not_allowed` unless the host is a loopback address or approved by the user on this device.
 
-### 8.2 Response messages (client → server)
+### 8.2 Response messages (client в†’ server)
 
 | Type | Payload |
 |---|---|
@@ -372,7 +372,7 @@ The client rejects the request with `relay.error` code `host_not_allowed` unless
 | `relay.response.end` | `relayId` |
 | `relay.error` | `relayId`, `code` (`host_not_allowed`, `connection_failed`, `timeout`, `cancelled`), `message` |
 
-### 8.3 `relay.cancel` (server → client)
+### 8.3 `relay.cancel` (server в†’ client)
 
 ```json
 { "relayId": "rly_01JC..." }
