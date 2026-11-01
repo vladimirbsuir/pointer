@@ -85,7 +85,7 @@ pub fn edit_file(root: &Path, request: &Request) -> Result<ExecOutcome, ExecErro
     if old_text.is_empty() {
         return Err(ExecError::failed(
             "invalid_arguments",
-            "oldText must not be empty",
+            "oldText must not be empty. To append, use the last lines of the file as oldText and repeat them at the start of newText.",
         ));
     }
     let (old_text, new_text) = if !before.contains(old_text) && before.contains("\r\n") {
@@ -95,6 +95,17 @@ pub fn edit_file(root: &Path, request: &Request) -> Result<ExecOutcome, ExecErro
         )
     } else {
         (old_text.to_string(), new_text.to_string())
+    };
+    let (old_text, new_text) = if !before.contains(&old_text)
+        && !old_text.trim_end().is_empty()
+        && before.contains(old_text.trim_end())
+    {
+        (
+            old_text.trim_end().to_string(),
+            new_text.trim_end().to_string(),
+        )
+    } else {
+        (old_text, new_text)
     };
     let occurrences = before.matches(&old_text).count();
     if occurrences == 0 {
@@ -324,6 +335,26 @@ mod tests {
         assert_eq!(
             fs::read_to_string(root.path().join("a.txt")).unwrap(),
             "x\r\ny\r\nc\r\n"
+        );
+    }
+
+    #[test]
+    fn edit_tolerates_extra_trailing_newlines_in_old_text() {
+        let root = tempfile::tempdir().unwrap();
+        fs::write(root.path().join("a.py"), "def a():\n    return 1\n").unwrap();
+
+        edit_file(
+            root.path(),
+            &request(
+                json!({"path": "a.py", "oldText": "    return 1\n\n", "newText": "    return 1\n\n\ndef b():\n    return 2\n"}),
+                false,
+            ),
+        )
+        .unwrap();
+
+        assert_eq!(
+            fs::read_to_string(root.path().join("a.py")).unwrap(),
+            "def a():\n    return 1\n\n\ndef b():\n    return 2\n"
         );
     }
 

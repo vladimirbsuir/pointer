@@ -29,7 +29,9 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
     );
   }
 
-  const running = session.status === "running";
+  const running = ["running", "waiting_for_approval", "waiting_for_executor"].includes(
+    session.status,
+  );
   const hasModels = enabledModels(providers).length > 0;
   const disabledReason = !hasModels
     ? t("chat.addProviderFirst")
