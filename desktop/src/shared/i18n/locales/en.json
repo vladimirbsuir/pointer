@@ -142,6 +142,8 @@
     "delete": "Delete provider",
     "noModels": "No models. Refresh or check the base URL.",
     "makeDefault": "Make default",
-    "isDefault": "Default model"
+    "isDefault": "Default model",
+    "modelCount": "{{enabled}} of {{total}} models enabled",
+    "filter": "Filter models"
   }
 }

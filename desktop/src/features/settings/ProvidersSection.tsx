@@ -2,7 +2,14 @@ import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PlusIcon, RefreshCwIcon, StarIcon, Trash2Icon, ZapIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  StarIcon,
+  Trash2Icon,
+  ZapIcon,
+} from "lucide-react";
 import { api, unwrap } from "@/shared/api/client";
 import { queryKeys, useProviders, useSettings } from "@/shared/api/queries";
 import { toAppError, type Provider } from "@/shared/api/types";
@@ -152,6 +159,12 @@ function ProviderCard({ provider }: { provider: Provider }) {
   const queryClient = useQueryClient();
   const { data: settings } = useSettings();
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [filter, setFilter] = useState("");
+  const enabledCount = provider.models.filter((model) => model.enabled).length;
+  const visibleModels = provider.models.filter((model) =>
+    model.displayName.toLowerCase().includes(filter.trim().toLowerCase()),
+  );
   const path = { params: { path: { providerId: provider.id } } };
 
   const run = async (action: () => Promise<unknown>) => {
@@ -187,17 +200,34 @@ function ProviderCard({ provider }: { provider: Provider }) {
 
   return (
     <div className="rounded-lg border">
-      <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-medium">{provider.name}</span>
-            {provider.isLocal && <Badge variant="secondary">{t("providers.localBadge")}</Badge>}
-          </div>
-          <p className="truncate text-xs text-muted-foreground">
-            {provider.baseUrl}
-            {provider.hasApiKey && ` · ••••${provider.apiKeyHint ?? ""}`}
-          </p>
-        </div>
+      <div
+        className={cn("flex items-center justify-between gap-2 px-4 py-3", expanded && "border-b")}
+      >
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-start gap-2 text-left"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
+          <ChevronRightIcon
+            className={cn(
+              "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform",
+              expanded && "rotate-90",
+            )}
+          />
+          <span className="min-w-0">
+            <span className="flex items-center gap-2">
+              <span className="truncate font-medium">{provider.name}</span>
+              {provider.isLocal && <Badge variant="secondary">{t("providers.localBadge")}</Badge>}
+            </span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {provider.baseUrl}
+              {provider.hasApiKey && ` · ••••${provider.apiKeyHint ?? ""}`}
+              {" · "}
+              {t("providers.modelCount", { enabled: enabledCount, total: provider.models.length })}
+            </span>
+          </span>
+        </button>
         <div className="flex shrink-0 gap-1">
           <Button
             variant="ghost"
@@ -234,46 +264,61 @@ function ProviderCard({ provider }: { provider: Provider }) {
           </Button>
         </div>
       </div>
-      <ul className="max-h-56 overflow-y-auto py-1">
-        {provider.models.length === 0 && (
-          <li className="px-4 py-2 text-sm text-muted-foreground">{t("providers.noModels")}</li>
-        )}
-        {provider.models.map((model) => {
-          const isDefault = settings?.defaultModelId === model.id;
-          return (
-            <li key={model.id} className="flex items-center gap-2 px-4 py-1.5 text-sm">
-              <Switch
-                size="sm"
-                checked={model.enabled}
-                onCheckedChange={(enabled) =>
-                  void run(() =>
-                    unwrap(
-                      api().PATCH("/api/v1/providers/{providerId}/models/{modelId}", {
-                        params: { path: { providerId: provider.id, modelId: model.id } },
-                        body: { enabled },
-                      }),
-                    ),
-                  )
-                }
-              />
-              <span
-                className={cn("min-w-0 flex-1 truncate", !model.enabled && "text-muted-foreground")}
-              >
-                {model.displayName}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                disabled={busy || isDefault || !model.enabled}
-                title={isDefault ? t("providers.isDefault") : t("providers.makeDefault")}
-                onClick={() => void setDefault(model.id)}
-              >
-                <StarIcon className={cn(isDefault && "fill-current text-amber-500")} />
-              </Button>
-            </li>
-          );
-        })}
-      </ul>
+      {expanded && provider.models.length > 8 && (
+        <div className="border-b px-4 py-2">
+          <Input
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder={t("providers.filter")}
+            className="h-8"
+          />
+        </div>
+      )}
+      {expanded && (
+        <ul className="max-h-56 overflow-y-auto py-1">
+          {provider.models.length === 0 && (
+            <li className="px-4 py-2 text-sm text-muted-foreground">{t("providers.noModels")}</li>
+          )}
+          {visibleModels.map((model) => {
+            const isDefault = settings?.defaultModelId === model.id;
+            return (
+              <li key={model.id} className="flex items-center gap-2 px-4 py-1.5 text-sm">
+                <Switch
+                  size="sm"
+                  checked={model.enabled}
+                  onCheckedChange={(enabled) =>
+                    void run(() =>
+                      unwrap(
+                        api().PATCH("/api/v1/providers/{providerId}/models/{modelId}", {
+                          params: { path: { providerId: provider.id, modelId: model.id } },
+                          body: { enabled },
+                        }),
+                      ),
+                    )
+                  }
+                />
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate",
+                    !model.enabled && "text-muted-foreground",
+                  )}
+                >
+                  {model.displayName}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  disabled={busy || isDefault || !model.enabled}
+                  title={isDefault ? t("providers.isDefault") : t("providers.makeDefault")}
+                  onClick={() => void setDefault(model.id)}
+                >
+                  <StarIcon className={cn(isDefault && "fill-current text-amber-500")} />
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
