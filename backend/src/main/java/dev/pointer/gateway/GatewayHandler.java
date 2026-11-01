@@ -5,7 +5,9 @@ import dev.pointer.common.security.AuthPrincipal;
 import dev.pointer.execution.ExecutionService;
 import dev.pointer.session.LiveItemSnapshots;
 import dev.pointer.session.SessionService;
+import dev.pointer.tool.McpToolCatalog;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -38,6 +40,7 @@ class GatewayHandler extends TextWebSocketHandler {
     private static final Logger log = LoggerFactory.getLogger(GatewayHandler.class);
 
     private final ConnectionRegistry registry;
+    private final McpToolCatalog mcpTools;
     private final SessionService sessionService;
     private final LiveItemSnapshots snapshots;
     private final RelayService relay;
@@ -54,8 +57,10 @@ class GatewayHandler extends TextWebSocketHandler {
             ExecutionService execution,
             JwtDecoder jwtDecoder,
             JsonMapper json,
+            McpToolCatalog mcpTools,
             Clock clock) {
         this.registry = registry;
+        this.mcpTools = mcpTools;
         this.sessionService = sessionService;
         this.snapshots = snapshots;
         this.relay = relay;
@@ -106,6 +111,7 @@ class GatewayHandler extends TextWebSocketHandler {
                 case "hello" -> hello(connection, id, payload);
                 case "auth.refresh" -> refreshAuth(connection, id, payload);
                 case "device.projects_changed" -> connection.updateProjects(uuids(payload.path("projects")));
+                case "device.tools" -> reportTools(connection, payload);
                 case "session.subscribe" -> subscribe(connection, id, payload);
                 case "session.unsubscribe" -> connection.unsubscribe(uuid(payload, "sessionId"));
                 case "exec.output" ->
@@ -217,6 +223,27 @@ class GatewayHandler extends TextWebSocketHandler {
                 connection.send("session.snapshot", null, Map.of("sessionId", sessionId, "item", snapshot));
             }
         }
+    }
+
+    private void reportTools(GatewayConnection connection, JsonNode payload) {
+        var reported = new ArrayList<McpToolCatalog.ReportedTool>();
+        for (var tool : payload.path("tools")) {
+            var server = tool.path("server").asString("");
+            var name = tool.path("name").asString("");
+            if (server.isBlank() || name.isBlank()) {
+                continue;
+            }
+            Map<String, Object> schema = tool.path("inputSchema").isObject()
+                    ? json.convertValue(tool.path("inputSchema"), MAP_TYPE)
+                    : Map.of("type", "object");
+            reported.add(new McpToolCatalog.ReportedTool(
+                    server,
+                    name,
+                    tool.path("description").asString(""),
+                    schema,
+                    tool.path("readOnly").asBoolean(false)));
+        }
+        mcpTools.report(connection.userId(), connection.deviceId(), reported);
     }
 
     private void deliverResult(JsonNode payload) {

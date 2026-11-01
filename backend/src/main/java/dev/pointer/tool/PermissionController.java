@@ -28,7 +28,7 @@ class PermissionController {
 
     @GetMapping("/tools")
     List<ToolResponse> tools(AuthPrincipal principal) {
-        return registry.available(principal.userId(), null).stream()
+        return registry.available(principal.userId(), null, principal.deviceId()).stream()
                 .map(tool -> new ToolResponse(
                         tool.getName(),
                         tool.getDescription(),

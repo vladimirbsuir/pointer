@@ -212,6 +212,57 @@ class ToolFlowTests extends AgentIntegrationTest {
     }
 
     @Test
+    void mcpToolReportedByDeviceIsOfferedApprovedAndCalled() throws Exception {
+        var setup = setUp(false);
+        llm.enqueueToolCall("call_1", "mcp__echo__echo", "{\"text\":\"hi\"}");
+        llm.enqueueText("Echoed.");
+        var requests = new CopyOnWriteArrayList<JsonNode>();
+
+        try (var device = executor(setup, requests, request -> succeeded(Map.of("content", "echo: hi")))) {
+            device.send(
+                    "device.tools",
+                    Map.of(
+                            "tools",
+                            List.of(Map.of(
+                                    "server", "echo",
+                                    "name", "echo",
+                                    "description", "Echo the text back",
+                                    "inputSchema",
+                                            Map.of(
+                                                    "type",
+                                                    "object",
+                                                    "properties",
+                                                    Map.of("text", Map.of("type", "string"))),
+                                    "readOnly", false))));
+            var deadline = System.nanoTime() + TIMEOUT.toNanos();
+            while (!getJson(setup, "/api/v1/tools").toString().contains("mcp__echo__echo")) {
+                assertThat(System.nanoTime()).isLessThan(deadline);
+                Thread.sleep(50);
+            }
+
+            send(setup, "Echo hi", null);
+            var requested = device.awaitEvent("approval.requested", TIMEOUT)
+                    .path("payload")
+                    .path("event");
+            assertThat(requested.path("preview").path("kind").asString()).isEqualTo("tool");
+            assertThat(requested.path("preview").path("server").asString()).isEqualTo("echo");
+            resolve(setup, requested.path("approvalId").asString(), "approved", "once", null);
+            device.awaitEvent("turn.completed", TIMEOUT);
+            assertThat(completedItem(device, "tool_call").path("toolStatus").asString())
+                    .isEqualTo("succeeded");
+        }
+        assertThat(llm.requests().getFirst()).contains("\"name\":\"mcp__echo__echo\"");
+        var call = requests.stream()
+                .filter(request -> request.path("operation").asString().equals("mcp.call"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(call.path("arguments").path("server").asString()).isEqualTo("echo");
+        assertThat(call.path("arguments").path("tool").asString()).isEqualTo("echo");
+        assertThat(call.path("arguments").path("arguments").path("text").asString())
+                .isEqualTo("hi");
+    }
+
+    @Test
     void deniedToolCallIsReportedToModelWithUserMessage() throws Exception {
         var setup = setUp(false);
         llm.enqueueToolCall("call_1", "run_command", "{\"command\":\"npm publish\"}");

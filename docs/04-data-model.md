@@ -183,7 +183,8 @@ The tool registry (TOOL-8).
 | `operation` | text | Executor operation to invoke |
 | `modes` | text[] | Modes where the tool is available |
 | `default_policy` | text | `allow`, `ask`, `deny` |
-| `source` | text | `builtin`, later `custom` |
+| `source` | text | `builtin`, `mcp` (reported by a device, see [ADR 0010](adr/0010-mcp-servers-on-the-device.md)), later `custom` |
+| `mcp_server`, `mcp_tool` | text | Original server and tool names of an MCP tool, null otherwise |
 | `owner_user_id` | uuid | Null for built-in tools |
 | `project_id` | uuid | Null unless a project-scoped custom tool |
 | `version` | integer | |

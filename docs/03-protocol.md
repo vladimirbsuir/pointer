@@ -108,7 +108,27 @@ Sent when the user maps or unmaps a project on the device.
 { "projects": ["prj_01JC...", "prj_01JD..."] }
 ```
 
-### 3.4 `auth.refresh` (client в†’ server)
+### 3.4 `device.tools` (client → server)
+
+Sent after `welcome` and whenever the tools of the device's MCP servers change ([ADR 0010](adr/0010-mcp-servers-on-the-device.md)). The list replaces the previous one for this device. Server configuration never leaves the device.
+
+```json
+{
+  "tools": [
+    {
+      "server": "github",
+      "name": "search_issues",
+      "description": "Search issues",
+      "inputSchema": { "type": "object", "properties": { "query": { "type": "string" } } },
+      "readOnly": true
+    }
+  ]
+}
+```
+
+The backend exposes each tool to the model as `mcp__<server>__<name>`, in every mode if `readOnly` is set and only in Agent mode otherwise, with the default policy `ask`.
+
+### 3.5 `auth.refresh` (client в†’ server)
 
 Sent with a new access token before the current one expires. The server answers with `auth.refreshed` or closes with `4401`.
 
@@ -259,6 +279,10 @@ Approval `preview`:
 { "kind": "command", "command": "npm install zod", "workingDirectory": "." }
 ```
 
+```json
+{ "kind": "tool", "server": "github", "tool": "create_issue", "arguments": { "title": "..." } }
+```
+
 ## 6. Execution
 
 ### 6.1 `exec.request` (server в†’ client)
@@ -345,6 +369,8 @@ Notes:
 - `edit_file` fails with `text_not_found` if `oldText` does not occur, and with `text_not_unique` if it occurs more than once and `replaceAll` is false.
 - `glob` and `grep` respect `.gitignore` and skip binary files.
 - `run_command` runs in PowerShell with the project root (or `workingDirectory` within it) as the current directory.
+
+MCP tools reach the executor as operation `mcp.call` with `server`, `tool` and `arguments`. The result is `content` (text blocks joined, other blocks as placeholders) and `structuredContent` when the server returns it. A result with `isError` becomes a failure with code `tool_error`.
 
 ### 7.2 Internal operations
 

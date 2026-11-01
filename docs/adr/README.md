@@ -16,3 +16,4 @@ File name: `NNNN-short-title.md`. Status: `Proposed`, `Accepted`, `Superseded by
 | [0007](0007-communication-model.md) | Communication model: REST commands, WebSocket owned by the Rust core | Accepted |
 | [0008](0008-github-sign-in-loopback-redirect.md) | GitHub sign-in through a loopback redirect | Accepted |
 | [0009](0009-context-compaction-and-plan-approval.md) | Context compaction and plan approval | Accepted |
+| [0010](0010-mcp-servers-on-the-device.md) | MCP servers run on the user's device | Accepted |

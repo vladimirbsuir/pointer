@@ -173,7 +173,7 @@ public class AgentRunner implements LiveItemSnapshots {
                 return writer.finishTurn(userId, sessionId, turnId, reason, null);
             }
             var tools = model.supportsTools()
-                    ? toolDefinitions(userId, context.projectId(), context.mode())
+                    ? toolDefinitions(userId, context.projectId(), context.executorDeviceId(), context.mode())
                     : List.<ChatRequest.ToolDefinition>of();
             var contextWindow = model.contextWindow() == null ? DEFAULT_CONTEXT_WINDOW : model.contextWindow();
             long contextTokens = context.contextTokens();
@@ -249,9 +249,9 @@ public class AgentRunner implements LiveItemSnapshots {
         }
     }
 
-    private List<ChatRequest.ToolDefinition> toolDefinitions(UUID userId, UUID projectId, String mode) {
+    private List<ChatRequest.ToolDefinition> toolDefinitions(UUID userId, UUID projectId, UUID deviceId, String mode) {
         var definitions = new ArrayList<ChatRequest.ToolDefinition>();
-        toolRegistry.available(userId, projectId).stream()
+        toolRegistry.available(userId, projectId, deviceId).stream()
                 .filter(tool -> tool.availableIn(mode))
                 .map(tool -> new ChatRequest.ToolDefinition(
                         tool.getName(), tool.getDescription(), tool.getParametersSchema()))

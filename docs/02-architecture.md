@@ -238,6 +238,7 @@ classDiagram
 | `process` | Running commands in PowerShell, streaming output, killing the whole process tree on cancel (Windows job objects). |
 | `relay` | HTTP requests to local LLM runtimes, streaming responses back. Allows only loopback hosts and hosts the user approved on this device. |
 | `projects` | Local mapping `projectId → path`, stored in the app data directory. |
+| `mcp` | MCP client for the servers configured on this device (stdio and streamable HTTP), reporting their tools to the backend and serving `mcp.call` ([ADR 0010](adr/0010-mcp-servers-on-the-device.md)). |
 | `terminal` | Interactive PowerShell sessions in the project folder for the terminal panel (UI-6), through a pseudo console (ConPTY via `portable-pty`). Purely local: terminal input and output never reach the backend. |
 | `bridge` | Tauri commands exposed to the UI and events forwarded to it. |
 

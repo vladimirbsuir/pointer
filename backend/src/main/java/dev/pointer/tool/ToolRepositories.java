@@ -23,6 +23,9 @@ interface ToolRepository extends JpaRepository<ToolDefinition, UUID> {
 
     @Query("select t from ToolDefinition t where t.ownerUserId is null order by t.name")
     List<ToolDefinition> findBuiltin();
+
+    @Query("select t from ToolDefinition t where t.ownerUserId = :userId and t.source = 'mcp'")
+    List<ToolDefinition> findMcp(UUID userId);
 }
 
 @Entity

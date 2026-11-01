@@ -82,7 +82,8 @@ class ToolCallHandler {
             fail(scope, itemId, "invalid_arguments", "Tool arguments are not valid JSON");
             return;
         }
-        var tool = registry.find(scope.userId(), scope.projectId(), toolName).orElse(null);
+        var tool = registry.find(scope.userId(), scope.projectId(), scope.deviceId(), toolName)
+                .orElse(null);
         if (tool == null) {
             fail(scope, itemId, "unknown_tool", "There is no tool named " + toolName);
             return;
@@ -131,7 +132,13 @@ class ToolCallHandler {
 
     private boolean askForApproval(TurnScope scope, UUID itemId, ToolDefinition tool, Map<String, Object> arguments) {
         Map<String, Object> preview;
-        if (ToolDefinition.WRITE.equals(tool.getKind())) {
+        if (tool.isMcp()) {
+            preview = new LinkedHashMap<>();
+            preview.put("kind", "tool");
+            preview.put("server", tool.getMcpServer());
+            preview.put("tool", tool.getMcpTool());
+            preview.put("arguments", arguments);
+        } else if (ToolDefinition.WRITE.equals(tool.getKind())) {
             var dryRun = execution.execute(
                     request(scope, tool, arguments, true), statusListener(scope), scope.cancellation());
             if (!dryRun.succeeded()) {
@@ -265,12 +272,16 @@ class ToolCallHandler {
 
     private ExecutionRequest request(
             TurnScope scope, ToolDefinition tool, Map<String, Object> arguments, boolean dryRun) {
+        var executorArguments = tool.isMcp()
+                ? Map.<String, Object>of(
+                        "server", tool.getMcpServer(), "tool", tool.getMcpTool(), "arguments", arguments)
+                : arguments;
         return new ExecutionRequest(
                 scope.sessionId(),
                 scope.projectId(),
                 scope.deviceId(),
                 tool.getOperation(),
-                arguments,
+                executorArguments,
                 dryRun,
                 timeoutFor(tool, arguments));
     }
@@ -290,6 +301,9 @@ class ToolCallHandler {
     }
 
     private static Duration timeoutFor(ToolDefinition tool, Map<String, Object> arguments) {
+        if (tool.isMcp()) {
+            return DEFAULT_COMMAND_TIMEOUT;
+        }
         if (!ToolDefinition.EXECUTE.equals(tool.getKind())) {
             return DEFAULT_TIMEOUT;
         }
