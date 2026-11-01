@@ -160,6 +160,36 @@ class ExperienceFlowTests extends AgentIntegrationTest {
         }
     }
 
+    @Test
+    void messageQueuedBeforeCancellationIsDeliveredWithNextMessage() throws Exception {
+        var setup = setUp(false);
+        llm.enqueueSilence(Duration.ofSeconds(5));
+
+        try (var ws = viewer(setup)) {
+            send(setup, "First", null);
+            ws.await(
+                    message -> GatewayTestClient.type(message).equals("session.event")
+                            && eventKind(message).equals("turn.started"),
+                    TIMEOUT);
+            send(setup, "Queued note", null);
+            client.post()
+                    .uri("/api/v1/sessions/{id}/cancel", setup.sessionId())
+                    .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                    .exchange()
+                    .expectStatus()
+                    .isAccepted();
+            ws.awaitEvent("turn.completed", TIMEOUT);
+
+            llm.enqueueText("Got both.");
+            send(setup, "Next", null);
+            ws.await(message -> countEvents(ws, "turn.completed") == 2, TIMEOUT);
+        }
+        assertThat(llm.requests().stream().filter(request -> request.contains("\"Next\"")))
+                .singleElement()
+                .asString()
+                .contains("Queued note");
+    }
+
     private GatewayTestClient viewer(Setup setup) throws Exception {
         var ws = GatewayTestClient.connect(port, setup.auth().accessToken(), setup.deviceId(), List.of("viewer"));
         ws.subscribe(setup.sessionId(), 0);

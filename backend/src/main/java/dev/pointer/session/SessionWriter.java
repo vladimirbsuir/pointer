@@ -280,6 +280,8 @@ public class SessionWriter {
 
     private AcceptedMessage startMessageTurn(AgentSession session, Map<String, Object> payload, String idempotencyKey) {
         var turn = openTurn(session, idempotencyKey, Turn.MESSAGE);
+        items.findBySessionIdAndTurnIdIsNullOrderByPosition(session.getId())
+                .forEach(queued -> attach(session, queued, turn.getId()));
         var item = saveItem(session, turn.getId(), Item.USER_MESSAGE, Item.COMPLETED, payload);
         return new AcceptedMessage(item.getId(), turn.getId(), false, true);
     }
