@@ -1,5 +1,6 @@
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC } from "@tauri-apps/api/mocks";
+import { executeInBrowser } from "./browser-executor";
 
 const apiUrl = import.meta.env.VITE_POINTER_API_URL ?? "http://localhost:8080";
 const refreshKey = "pointer.dev.refreshToken";
@@ -108,7 +109,7 @@ function connect() {
       deviceId: deviceId(),
       deviceName: "Browser preview",
       clientVersion: "dev",
-      capabilities: ["viewer"],
+      capabilities: ["viewer", "executor"],
       projects: Object.keys(localProjects()),
     });
   ws.onmessage = (event) => {
@@ -118,6 +119,18 @@ function connect() {
       subscriptions.forEach((afterSeq, sessionId) =>
         send("session.subscribe", { sessionId, afterSeq }),
       );
+      return;
+    }
+    if (message.type === "exec.request") {
+      const request = message.payload;
+      setTimeout(() => {
+        const outcome = executeInBrowser(
+          request.operation,
+          request.arguments ?? {},
+          Boolean(request.dryRun),
+        );
+        send("exec.result", { callId: request.callId, ...outcome });
+      }, 150);
       return;
     }
     if (message.type === "session.event") {

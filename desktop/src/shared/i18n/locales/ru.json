@@ -62,7 +62,8 @@
     "githubLinkedToast": "Аккаунт GitHub привязан",
     "language": "Язык",
     "theme": "Тема",
-    "providers": "Провайдеры"
+    "providers": "Провайдеры",
+    "permissions": "Разрешения"
   },
   "themes": {
     "system": "Системная",
@@ -120,7 +121,10 @@
     "stop": "Остановить",
     "send": "Отправить",
     "contextUsage": "Использовано {{tokens}} из {{window}} токенов контекста",
-    "tokens": "токенов: {{count}}"
+    "tokens": "токенов: {{count}}",
+    "autoApprove": "Автоодобрение",
+    "autoApproveHint": "Выполнять правки и команды без вопросов. Запрещающие правила продолжают действовать.",
+    "waitingForExecutor": "Ждём устройство, на котором выполняется сессия. Откройте Pointer на том компьютере и проверьте, что папка проекта привязана."
   },
   "modes": {
     "ask": "Вопрос",
@@ -145,5 +149,38 @@
     "isDefault": "Модель по умолчанию",
     "modelCount": "включено моделей: {{enabled}} из {{total}}",
     "filter": "Поиск моделей"
+  },
+  "approval": {
+    "title": "Разрешить это действие?",
+    "allowOnce": "Разрешить",
+    "allowSession": "Разрешить в этой сессии",
+    "deny": "Запретить",
+    "denyPlaceholder": "Подскажите агенту, что сделать вместо этого (необязательно)"
+  },
+  "tools": {
+    "read_file": "Чтение {{target}}",
+    "list_directory": "Список {{target}}",
+    "glob": "Поиск файлов {{target}}",
+    "grep": "Поиск {{target}}",
+    "write_file": "Запись {{target}}",
+    "edit_file": "Правка {{target}}",
+    "run_command": "Запуск {{target}}",
+    "other": "Инструмент {{name}}",
+    "lines": "строк: {{count}}",
+    "files": "файлов: {{count}}",
+    "matches": "совпадений: {{count}}",
+    "entries": "элементов: {{count}}",
+    "exitCode": "код {{code}}"
+  },
+  "permissions": {
+    "tools": "Инструменты",
+    "toolsHint": "«Разрешить» — без вопросов, «Спросить» — с подтверждением, «Запретить» — инструмент заблокирован.",
+    "commandRules": "Правила для команд",
+    "commandRulesHint": "Правила для run_command по началу команды. Они важнее настройки инструмента.",
+    "policies": {
+      "allow": "Разрешить",
+      "ask": "Спросить",
+      "deny": "Запретить"
+    }
   }
 }

@@ -4,6 +4,7 @@ import { api, unwrap } from "@/shared/api/client";
 import { enabledModels, useProviders } from "@/shared/api/queries";
 import { toAppError, type Session, type SessionMode } from "@/shared/api/types";
 import { errorMessage } from "@/shared/i18n/errors";
+import { Switch } from "@/shared/ui/switch";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 import { ModelPicker } from "./ModelPicker";
@@ -36,7 +37,11 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
       ? t("chat.chooseModelFirst")
       : null;
 
-  const updateSession = async (body: { modelId?: string; mode?: SessionMode }) => {
+  const updateSession = async (body: {
+    modelId?: string;
+    mode?: SessionMode;
+    autoApprove?: boolean;
+  }) => {
     try {
       const updated = (await unwrap(
         api().PATCH("/api/v1/sessions/{sessionId}", {
@@ -91,13 +96,36 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
               {usageLabel}
             </span>
           )}
+          <label
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            title={t("chat.autoApproveHint")}
+          >
+            <Switch
+              size="sm"
+              checked={session.autoApprove}
+              onCheckedChange={(autoApprove) => void updateSession({ autoApprove })}
+            />
+            {t("chat.autoApprove")}
+          </label>
           <ModelPicker
             value={session.modelId}
             onChange={(modelId) => void updateSession({ modelId })}
           />
         </div>
       </header>
-      <MessageList items={state.items} running={running} turnError={state.turnError} />
+      <MessageList
+        sessionId={sessionId}
+        items={state.items}
+        running={running}
+        turnError={state.turnError}
+      />
+      {session.status === "waiting_for_executor" && (
+        <div className="mx-auto mb-2 w-full max-w-3xl px-6">
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+            {t("chat.waitingForExecutor")}
+          </div>
+        </div>
+      )}
       <Composer
         running={running}
         disabledReason={disabledReason}

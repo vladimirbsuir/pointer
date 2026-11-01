@@ -3,8 +3,10 @@ import { useTranslation } from "react-i18next";
 import { BrainIcon, ChevronRightIcon, CircleAlertIcon, FileTextIcon } from "lucide-react";
 import type { Item } from "@/shared/api/types";
 import { Markdown } from "./Markdown";
+import { ToolCallCard } from "./ToolCallCard";
 
 type MessageListProps = {
+  sessionId: string;
   items: Item[];
   running: boolean;
   turnError: { code: string; message: string } | null;
@@ -12,12 +14,12 @@ type MessageListProps = {
 
 const STICK_TO_BOTTOM_PX = 120;
 
-export function MessageList({ items, running, turnError }: MessageListProps) {
+export function MessageList({ sessionId, items, running, turnError }: MessageListProps) {
   const { t } = useTranslation();
   const container = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const visible = items.filter((item) =>
-    ["user_message", "assistant_message", "reasoning"].includes(item.type),
+    ["user_message", "assistant_message", "reasoning", "tool_call"].includes(item.type),
   );
   const lastText = visible.at(-1)?.text?.length ?? 0;
 
@@ -28,7 +30,14 @@ export function MessageList({ items, running, turnError }: MessageListProps) {
     }
   }, [visible.length, lastText, running, turnError]);
 
-  const waitingForFirstToken = running && visible.at(-1)?.type === "user_message";
+  const last = visible.at(-1);
+  const waitingForFirstToken =
+    running &&
+    last?.status !== "in_progress" &&
+    !(
+      last?.type === "tool_call" &&
+      ["running", "awaiting_approval", "pending"].includes(String(last.toolStatus))
+    );
 
   return (
     <div
@@ -45,7 +54,7 @@ export function MessageList({ items, running, turnError }: MessageListProps) {
           <p className="text-center text-sm text-muted-foreground">{t("chat.empty")}</p>
         )}
         {visible.map((item) => (
-          <MessageItem key={item.id} item={item} />
+          <MessageItem key={item.id} item={item} sessionId={sessionId} />
         ))}
         {waitingForFirstToken && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -67,9 +76,13 @@ export function MessageList({ items, running, turnError }: MessageListProps) {
   );
 }
 
-function MessageItem({ item }: { item: Item }) {
+function MessageItem({ item, sessionId }: { item: Item; sessionId: string }) {
   const { t } = useTranslation();
   const text = item.text ?? "";
+
+  if (item.type === "tool_call") {
+    return <ToolCallCard item={item} sessionId={sessionId} />;
+  }
 
   if (item.type === "user_message") {
     const attachments = (item.attachments as { path: string }[] | undefined) ?? [];

@@ -62,7 +62,8 @@
     "githubLinkedToast": "GitHub account linked",
     "language": "Language",
     "theme": "Theme",
-    "providers": "Providers"
+    "providers": "Providers",
+    "permissions": "Permissions"
   },
   "themes": {
     "system": "System",
@@ -120,7 +121,10 @@
     "stop": "Stop",
     "send": "Send",
     "contextUsage": "{{tokens}} of {{window}} context tokens used",
-    "tokens": "{{count}} tokens"
+    "tokens": "{{count}} tokens",
+    "autoApprove": "Auto-approve",
+    "autoApproveHint": "Run edits and commands without asking. Deny rules still apply.",
+    "waitingForExecutor": "Waiting for the device that runs this session. Open Pointer on that computer and make sure the project folder is linked."
   },
   "modes": {
     "ask": "Ask",
@@ -145,5 +149,38 @@
     "isDefault": "Default model",
     "modelCount": "{{enabled}} of {{total}} models enabled",
     "filter": "Filter models"
+  },
+  "approval": {
+    "title": "Allow this action?",
+    "allowOnce": "Allow",
+    "allowSession": "Allow for this session",
+    "deny": "Deny",
+    "denyPlaceholder": "Tell the agent what to do instead (optional)"
+  },
+  "tools": {
+    "read_file": "Read {{target}}",
+    "list_directory": "List {{target}}",
+    "glob": "Find {{target}}",
+    "grep": "Search {{target}}",
+    "write_file": "Write {{target}}",
+    "edit_file": "Edit {{target}}",
+    "run_command": "Run {{target}}",
+    "other": "Use {{name}}",
+    "lines": "{{count}} lines",
+    "files": "{{count}} files",
+    "matches": "{{count}} matches",
+    "entries": "{{count}} entries",
+    "exitCode": "exit {{code}}"
+  },
+  "permissions": {
+    "tools": "Tools",
+    "toolsHint": "Allow runs without asking, Ask shows an approval, Deny blocks the tool.",
+    "commandRules": "Command rules",
+    "commandRulesHint": "Rules for run_command matched by command prefix. They take precedence over the tool setting.",
+    "policies": {
+      "allow": "Allow",
+      "ask": "Ask",
+      "deny": "Deny"
+    }
   }
 }

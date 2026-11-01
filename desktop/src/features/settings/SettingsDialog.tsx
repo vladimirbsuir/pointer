@@ -18,6 +18,7 @@ import { Input } from "@/shared/ui/input";
 import { Separator } from "@/shared/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { AppearanceSwitcher } from "./AppearanceSwitcher";
+import { PermissionsSection } from "./PermissionsSection";
 import { ProvidersSection } from "./ProvidersSection";
 
 type SettingsDialogProps = {
@@ -52,6 +53,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <TabsList>
             <TabsTrigger value="account">{t("settings.account")}</TabsTrigger>
             <TabsTrigger value="providers">{t("settings.providers")}</TabsTrigger>
+            <TabsTrigger value="permissions">{t("settings.permissions")}</TabsTrigger>
             <TabsTrigger value="appearance">{t("settings.appearance")}</TabsTrigger>
           </TabsList>
           <TabsContent value="account" className="flex flex-col gap-6 pt-4">
@@ -63,6 +65,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           </TabsContent>
           <TabsContent value="providers" className="pt-4">
             <ProvidersSection />
+          </TabsContent>
+          <TabsContent value="permissions" className="pt-4">
+            <PermissionsSection />
           </TabsContent>
           <TabsContent value="appearance" className="pt-4">
             <AppearanceSwitcher onLanguageChange={(language) => void saveLocale(language)} />

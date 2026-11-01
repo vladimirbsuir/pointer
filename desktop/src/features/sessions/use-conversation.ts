@@ -28,6 +28,7 @@ type Action =
   | { type: "failed"; error: AppError }
   | { type: "event"; event: SessionEvent }
   | { type: "delta"; itemId: string; delta: string }
+  | { type: "output"; itemId: string; delta: string }
   | { type: "snapshot"; item: Item }
   | { type: "sessionPatched"; session: Session };
 
@@ -61,6 +62,7 @@ function applyEvent(state: ConversationState, { seq, event }: SessionEvent): Con
   const next = { ...state, lastSeq: seq };
   switch (event.kind) {
     case "item.created":
+    case "item.updated":
     case "item.completed":
       return { ...next, items: upsert(state.items, event.item as Item) };
     case "turn.started":
@@ -83,6 +85,10 @@ function applyEvent(state: ConversationState, { seq, event }: SessionEvent): Con
               title: (event.title as string) ?? next.session.title,
               mode: (event.mode as Session["mode"]) ?? next.session.mode,
               modelId: (event.modelId as string | null) ?? next.session.modelId,
+              autoApprove:
+                typeof event.autoApprove === "boolean"
+                  ? event.autoApprove
+                  : next.session.autoApprove,
             },
           }
         : next;
@@ -125,6 +131,15 @@ function reducer(state: ConversationState, action: Action): ConversationState {
           item.id === action.itemId ? { ...item, text: (item.text ?? "") + action.delta } : item,
         ),
       };
+    case "output":
+      return {
+        ...state,
+        items: state.items.map((item) =>
+          item.id === action.itemId
+            ? { ...item, liveOutput: String(item.liveOutput ?? "") + action.delta }
+            : item,
+        ),
+      };
     case "snapshot":
       return { ...state, items: upsert(state.items, action.item) };
     case "sessionPatched":
@@ -162,6 +177,12 @@ export function useConversation(sessionId: string) {
           } else if (message.type === "session.delta" && payload.field === "text") {
             dispatch({
               type: "delta",
+              itemId: String(payload.itemId),
+              delta: String(payload.delta),
+            });
+          } else if (message.type === "session.delta" && payload.field === "output") {
+            dispatch({
+              type: "output",
               itemId: String(payload.itemId),
               delta: String(payload.delta),
             });

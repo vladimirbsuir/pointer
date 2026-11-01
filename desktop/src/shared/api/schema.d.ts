@@ -4,6 +4,38 @@
  */
 
 export interface paths {
+    "/api/v1/projects/{projectId}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["project"];
+        put: operations["updateProject"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["global"];
+        put: operations["updateGlobal"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/settings": {
         parameters: {
             query?: never;
@@ -62,6 +94,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{sessionId}/approvals/{approvalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolveApproval"];
         delete?: never;
         options?: never;
         head?: never;
@@ -340,6 +388,22 @@ export interface paths {
         patch: operations["update_3"];
         trace?: never;
     };
+    "/api/v1/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["tools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/items": {
         parameters: {
             query?: never;
@@ -392,6 +456,27 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CommandRuleDto: {
+            prefix: string;
+            policy: string;
+        };
+        UpdatePermissionsRequest: {
+            policies?: {
+                [key: string]: string;
+            };
+            commandRules?: components["schemas"]["CommandRuleDto"][];
+        };
+        PermissionsResponse: {
+            tools?: components["schemas"]["ToolPermission"][];
+            commandRules?: components["schemas"]["CommandRuleDto"][];
+        };
+        ToolPermission: {
+            name?: string;
+            kind?: string;
+            description?: string;
+            defaultPolicy?: string;
+            policy?: string;
+        };
         UpdateSettingsRequest: {
             globalInstructions?: string;
             /** Format: uuid */
@@ -425,6 +510,11 @@ export interface components {
             /** Format: uuid */
             turnId?: string;
             queued?: boolean;
+        };
+        ResolveApprovalRequest: {
+            decision?: string;
+            scope?: string;
+            message?: string;
         };
         CreateProviderRequest: {
             name: string;
@@ -612,6 +702,13 @@ export interface components {
             displayName?: string;
             locale?: string;
         };
+        ToolResponse: {
+            name?: string;
+            description?: string;
+            kind?: string;
+            modes?: string[];
+            defaultPolicy?: string;
+        };
         SessionEventResponse: {
             /** Format: uuid */
             sessionId?: string;
@@ -635,6 +732,98 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    project: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionsResponse"];
+                };
+            };
+        };
+    };
+    updateProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePermissionsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionsResponse"];
+                };
+            };
+        };
+    };
+    global: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionsResponse"];
+                };
+            };
+        };
+    };
+    updateGlobal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePermissionsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionsResponse"];
+                };
+            };
+        };
+    };
     settings: {
         parameters: {
             query?: never;
@@ -742,6 +931,31 @@ export interface operations {
         responses: {
             /** @description Accepted */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolveApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+                approvalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1345,6 +1559,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+        };
+    };
+    tools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolResponse"][];
                 };
             };
         };
