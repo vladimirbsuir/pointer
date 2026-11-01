@@ -3,6 +3,7 @@ mod commands;
 mod config;
 mod device;
 mod error;
+mod executor;
 mod projects;
 mod realtime;
 

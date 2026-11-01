@@ -33,6 +33,13 @@ impl ProjectMap {
             .unwrap_or_default()
     }
 
+    pub fn path(&self, project_id: &str) -> Option<PathBuf> {
+        self.paths
+            .lock()
+            .ok()
+            .and_then(|paths| paths.get(project_id).map(PathBuf::from))
+    }
+
     pub fn project_ids(&self) -> Vec<String> {
         self.all().into_keys().collect()
     }

@@ -19,6 +19,7 @@ use uuid::Uuid;
 use crate::auth::session::AuthSession;
 use crate::config::{API_URL, CLIENT_VERSION};
 use crate::device::DeviceInfo;
+use crate::executor::{Emit, Executor};
 use crate::projects::ProjectMap;
 use relay::Relay;
 
@@ -51,6 +52,8 @@ pub struct Realtime {
     subscriptions: Mutex<HashMap<String, i64>>,
     connected: AtomicBool,
     relay: Arc<Relay>,
+    executor: Arc<Executor>,
+    undelivered: Mutex<Vec<Value>>,
 }
 
 impl Realtime {
@@ -106,6 +109,30 @@ impl Realtime {
             "device.projects_changed",
             json!({ "projects": project_ids }),
         );
+    }
+
+    pub fn deliver(&self, message_type: &str, payload: Value) {
+        let outgoing = self
+            .outgoing
+            .lock()
+            .ok()
+            .and_then(|outgoing| outgoing.clone());
+        match outgoing {
+            Some(outgoing) => outgoing.send(message_type, payload),
+            None if message_type == "exec.result" => {
+                if let Ok(mut undelivered) = self.undelivered.lock() {
+                    undelivered.push(payload);
+                }
+            }
+            None => {}
+        }
+    }
+
+    fn take_undelivered(&self) -> Vec<Value> {
+        self.undelivered
+            .lock()
+            .map(|mut undelivered| std::mem::take(&mut *undelivered))
+            .unwrap_or_default()
     }
 
     fn send(&self, message_type: &str, payload: Value) {
@@ -215,9 +242,9 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
             "deviceName": device.name,
             "clientVersion": CLIENT_VERSION,
             "platform": device.platform,
-            "capabilities": ["viewer", "relay"],
+            "capabilities": ["viewer", "relay", "executor"],
             "projects": projects.project_ids(),
-            "undeliveredResults": [],
+            "undeliveredResults": realtime.take_undelivered(),
         }),
     );
 
@@ -272,6 +299,20 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
             "relay.request" => realtime
                 .relay
                 .handle_request(envelope["payload"].clone(), outgoing.clone()),
+            "exec.request" => {
+                let payload = envelope["payload"].clone();
+                let root = payload["projectId"]
+                    .as_str()
+                    .and_then(|project_id| projects.path(project_id));
+                let emit_app = app.clone();
+                let emit: Emit = Arc::new(move |message_type, payload| {
+                    emit_app.state::<Realtime>().deliver(message_type, payload)
+                });
+                realtime.executor.handle(payload, root, emit);
+            }
+            "exec.cancel" => realtime
+                .executor
+                .cancel(envelope["payload"]["callId"].as_str().unwrap_or_default()),
             "relay.cancel" => realtime
                 .relay
                 .cancel(envelope["payload"]["relayId"].as_str().unwrap_or_default()),
