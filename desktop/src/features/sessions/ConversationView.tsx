@@ -23,6 +23,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
   const { state, patchSession } = useConversation(sessionId);
   const { data: providers } = useProviders();
   const [changesOpen, setChangesOpen] = useState(false);
+  const [draft, setDraft] = useState({ key: 0, text: "" });
   const { data: changedFiles } = useChangedFiles(sessionId, state.changesVersion);
   const session = state.session;
   const running = session ? BUSY_STATUSES.includes(session.status) : false;
@@ -173,6 +174,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
           items={state.items}
           running={running}
           turnError={state.turnError}
+          onRewound={(text) => setDraft((current) => ({ key: current.key + 1, text }))}
         />
         {session.status === "waiting_for_executor" && (
           <div className="mx-auto mb-2 w-full max-w-3xl px-6">
@@ -182,6 +184,8 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
           </div>
         )}
         <Composer
+          key={draft.key}
+          initialText={draft.text}
           projectId={session.projectId}
           running={running}
           disabledReason={disabledReason}

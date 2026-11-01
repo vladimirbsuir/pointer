@@ -12,6 +12,7 @@ import {
 import type { Item } from "@/shared/api/types";
 import { Markdown } from "./Markdown";
 import { PlanCard } from "./PlanCard";
+import { RewindControl } from "./RewindControl";
 import { ToolCallCard } from "./ToolCallCard";
 
 type MessageListProps = {
@@ -19,11 +20,12 @@ type MessageListProps = {
   items: Item[];
   running: boolean;
   turnError: { code: string; message: string } | null;
+  onRewound: (text: string) => void;
 };
 
 const STICK_TO_BOTTOM_PX = 120;
 
-export function MessageList({ sessionId, items, running, turnError }: MessageListProps) {
+export function MessageList({ sessionId, items, running, turnError, onRewound }: MessageListProps) {
   const { t } = useTranslation();
   const container = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -70,7 +72,13 @@ export function MessageList({ sessionId, items, running, turnError }: MessageLis
           <p className="text-center text-sm text-muted-foreground">{t("chat.empty")}</p>
         )}
         {visible.map((item) => (
-          <MessageItem key={item.id} item={item} sessionId={sessionId} running={running} />
+          <MessageItem
+            key={item.id}
+            item={item}
+            sessionId={sessionId}
+            running={running}
+            onRewound={onRewound}
+          />
         ))}
         {waitingForFirstToken && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -92,9 +100,14 @@ export function MessageList({ sessionId, items, running, turnError }: MessageLis
   );
 }
 
-type MessageItemProps = { item: Item; sessionId: string; running: boolean };
+type MessageItemProps = {
+  item: Item;
+  sessionId: string;
+  running: boolean;
+  onRewound: (text: string) => void;
+};
 
-function MessageItem({ item, sessionId, running }: MessageItemProps) {
+function MessageItem({ item, sessionId, running, onRewound }: MessageItemProps) {
   const { t } = useTranslation();
   const text = item.text ?? "";
 
@@ -135,7 +148,7 @@ function MessageItem({ item, sessionId, running }: MessageItemProps) {
   if (item.type === "user_message") {
     const attachments = (item.attachments as { path: string }[] | undefined) ?? [];
     return (
-      <div className="flex flex-col items-end gap-1">
+      <div className="group flex flex-col items-end gap-1">
         {attachments.map((attachment) => (
           <span
             key={attachment.path}
@@ -145,8 +158,16 @@ function MessageItem({ item, sessionId, running }: MessageItemProps) {
             {attachment.path}
           </span>
         ))}
-        <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-sm whitespace-pre-wrap">
-          {text}
+        <div className="flex max-w-[85%] items-start gap-1">
+          {item.turnId !== null && (
+            <RewindControl
+              sessionId={sessionId}
+              turnId={item.turnId}
+              disabled={running}
+              onRewound={onRewound}
+            />
+          )}
+          <div className="rounded-2xl bg-muted px-4 py-2.5 text-sm whitespace-pre-wrap">{text}</div>
         </div>
         {item.turnId === null && (
           <span className="flex items-center gap-1 text-xs text-muted-foreground">

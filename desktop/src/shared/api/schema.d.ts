@@ -68,6 +68,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/rewind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["rewind"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/plans/{itemId}/approve": {
         parameters: {
             query?: never;
@@ -572,6 +588,17 @@ export interface components {
             currentPassword?: string;
             newPassword: string;
         };
+        RewindRequest: {
+            /** Format: uuid */
+            turnId: string;
+            restoreFiles?: boolean;
+            force?: boolean;
+        };
+        RewindResponse: {
+            turnIds?: string[];
+            restoredFiles?: string[];
+            text?: string;
+        };
         SendMessageResponse: {
             /** Format: uuid */
             itemId?: string;
@@ -992,6 +1019,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    rewind: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RewindRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RewindResponse"];
+                };
             };
         };
     };

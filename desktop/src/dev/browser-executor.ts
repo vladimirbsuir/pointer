@@ -176,6 +176,9 @@ export function executeInBrowser(
       if (!args.force && current !== (args.expectedContent ?? null)) {
         return failed("file_modified", "The file changed after the agent edited it");
       }
+      if (dryRun) {
+        return ok({ restored: false });
+      }
       if (args.content === null || args.content === undefined) {
         files.delete(path);
       } else {

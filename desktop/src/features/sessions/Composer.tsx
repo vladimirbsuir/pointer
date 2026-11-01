@@ -19,6 +19,7 @@ export type Attachment = { kind: "file"; path: string; content: string };
 type Mention = { start: number; end: number; query: string };
 
 type ComposerProps = {
+  initialText: string;
   projectId: string;
   running: boolean;
   disabledReason: string | null;
@@ -42,6 +43,7 @@ function nextMode(mode: SessionMode): SessionMode {
 }
 
 export function Composer({
+  initialText,
   projectId,
   running,
   disabledReason,
@@ -52,7 +54,7 @@ export function Composer({
 }: ComposerProps) {
   const { t } = useTranslation();
   const textarea = useRef<HTMLTextAreaElement>(null);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [sending, setSending] = useState(false);
   const [attached, setAttached] = useState<string[]>([]);
   const [mention, setMention] = useState<Mention | null>(null);

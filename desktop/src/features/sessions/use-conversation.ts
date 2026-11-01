@@ -111,6 +111,14 @@ function applyEvent(state: ConversationState, { seq, event }: SessionEvent): Con
           totalOutputTokens: Number(event.totalOutputTokens ?? 0),
         },
       };
+    case "session.rewound": {
+      const rewound = new Set((event.turnIds as string[] | undefined) ?? []);
+      return {
+        ...next,
+        turnError: null,
+        items: state.items.filter((item) => item.turnId === null || !rewound.has(item.turnId)),
+      };
+    }
     case "file.changed":
     case "file.reverted":
       return { ...next, changesVersion: state.changesVersion + 1 };

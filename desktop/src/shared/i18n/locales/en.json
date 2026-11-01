@@ -120,7 +120,8 @@
     "file_too_large": "The file is too large to attach.",
     "file_not_found": "The file does not exist.",
     "binary_file": "Binary files cannot be attached.",
-    "compaction_failed": "The model could not summarize the conversation."
+    "compaction_failed": "The model could not summarize the conversation.",
+    "turn_not_found": "That point of the conversation no longer exists."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",
@@ -244,5 +245,15 @@
     "finished": "Agent finished",
     "failed": "Agent stopped with an error",
     "approval": "Approval needed"
+  },
+  "rewind": {
+    "action": "Rewind to this message",
+    "confirm": "Remove this message and everything after it? Its text goes back to the composer.",
+    "conversationOnly": "Conversation only",
+    "withFiles": "Conversation and files",
+    "force": "Some files changed after the agent edited them. Overwrite them and rewind anyway?",
+    "overwrite": "Overwrite and rewind",
+    "done": "Conversation rewound",
+    "doneWithFiles": "Conversation rewound, files restored: {{count}}"
   }
 }
