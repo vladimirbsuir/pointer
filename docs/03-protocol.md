@@ -393,7 +393,7 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 | Auth | `POST /auth/register` (public), `POST /auth/login` (public), `POST /auth/refresh` (public), `POST /auth/logout` (public, takes the refresh token), `GET /auth/github/authorize-url` (public), `POST /auth/github/callback` (public), `POST /auth/github/link`, `PUT /auth/password` |
 | User | `GET /me`, `PATCH /me`, `GET /me/settings`, `PUT /me/settings` |
 | Devices | `GET /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |
-| Providers | `GET /providers`, `POST /providers`, `PATCH /providers/{id}`, `DELETE /providers/{id}`, `POST /providers/{id}/test`, `POST /providers/{id}/models/refresh`, `PUT /providers/{id}/models/{modelId}` |
+| Providers | `GET /providers`, `POST /providers`, `PATCH /providers/{id}`, `DELETE /providers/{id}`, `POST /providers/{id}/test`, `POST /providers/{id}/models/refresh`, `PATCH /providers/{id}/models/{modelId}` |
 | Projects | `GET /projects`, `POST /projects`, `PATCH /projects/{id}`, `DELETE /projects/{id}`, `GET /projects/{id}/settings`, `PUT /projects/{id}/settings` |
 | Sessions | `GET /projects/{id}/sessions`, `POST /projects/{id}/sessions`, `GET /sessions/{id}`, `PATCH /sessions/{id}`, `DELETE /sessions/{id}`, `GET /sessions/{id}/items`, `GET /sessions/{id}/events?afterSeq=` |
 | Turns | `POST /sessions/{id}/messages`, `POST /sessions/{id}/cancel`, `POST /sessions/{id}/compact`, `POST /sessions/{id}/plans/{itemId}/approve` |
