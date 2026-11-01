@@ -40,6 +40,15 @@ export function ApprovalPanel({ sessionId, approvalId, preview }: ApprovalPanelP
       <p className="text-xs font-medium">{t("approval.title")}</p>
       {preview.kind === "diff" ? (
         <DiffView diff={String(preview.unifiedDiff ?? "")} />
+      ) : preview.kind === "tool" ? (
+        <div className="overflow-hidden rounded-md border bg-muted/40 font-mono text-xs">
+          <p className="border-b px-2 py-1 text-muted-foreground">
+            {t("tools.mcp", { server: String(preview.server), tool: String(preview.tool) })}
+          </p>
+          <pre className="max-h-60 overflow-auto p-2">
+            {JSON.stringify(preview.arguments ?? {}, null, 2)}
+          </pre>
+        </div>
       ) : (
         <pre className="overflow-auto rounded-md border bg-muted/40 p-2 font-mono text-xs">
           <span className="text-muted-foreground">

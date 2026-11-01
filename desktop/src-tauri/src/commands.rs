@@ -9,6 +9,7 @@ use crate::auth::oauth::authorize_with_github;
 use crate::auth::session::AuthSession;
 use crate::config::API_URL;
 use crate::error::{AppError, AppResult};
+use crate::mcp::{McpHub, ServerConfig, ServerView};
 use crate::projects::ProjectMap;
 use crate::realtime::Realtime;
 use crate::terminal::{TerminalEvent, Terminals};
@@ -166,6 +167,35 @@ pub fn terminal_resize(
 #[tauri::command]
 pub fn terminal_close(terminals: State<'_, Terminals>, id: String) -> AppResult<()> {
     terminals.close(&id)
+}
+
+#[tauri::command]
+pub fn mcp_servers(mcp: State<'_, std::sync::Arc<McpHub>>) -> Vec<ServerView> {
+    mcp.servers()
+}
+
+#[tauri::command]
+pub fn mcp_save(
+    app: AppHandle,
+    mcp: State<'_, std::sync::Arc<McpHub>>,
+    server: ServerConfig,
+    previous_name: Option<String>,
+) -> AppResult<()> {
+    mcp.save(&app, server, previous_name)
+}
+
+#[tauri::command]
+pub fn mcp_remove(
+    app: AppHandle,
+    mcp: State<'_, std::sync::Arc<McpHub>>,
+    name: String,
+) -> AppResult<()> {
+    mcp.remove(&app, &name)
+}
+
+#[tauri::command]
+pub fn mcp_restart(app: AppHandle, mcp: State<'_, std::sync::Arc<McpHub>>, name: String) {
+    mcp.start(&app, &name);
 }
 
 fn linked_root(projects: &ProjectMap, project_id: &str) -> AppResult<std::path::PathBuf> {

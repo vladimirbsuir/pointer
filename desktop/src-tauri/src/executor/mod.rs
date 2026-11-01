@@ -9,10 +9,12 @@ pub use search::suggest_files;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde_json::{Map, Value, json};
 use tokio::sync::watch;
+
+use crate::mcp::McpHub;
 
 pub struct Request {
     pub operation: String,
@@ -93,7 +95,13 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub fn handle(self: &Arc<Self>, payload: Value, root: Option<PathBuf>, emit: Emit) {
+    pub fn handle(
+        self: &Arc<Self>,
+        payload: Value,
+        root: Option<PathBuf>,
+        mcp: Arc<McpHub>,
+        emit: Emit,
+    ) {
         let call_id = payload["callId"].as_str().unwrap_or_default().to_string();
         let (cancel_sender, cancel) = watch::channel(false);
         if let Ok(mut running) = self.running.lock() {
@@ -112,7 +120,7 @@ impl Executor {
                 timeout_ms: payload["timeoutMs"].as_u64().unwrap_or(30_000),
             };
             let outcome = match root {
-                Some(root) => execute(root, request, &call_id, emit.clone(), cancel).await,
+                Some(root) => execute(root, request, &call_id, &mcp, emit.clone(), cancel).await,
                 None => Err(ExecError::rejected(
                     "project_not_mapped",
                     "The project is not linked to a folder on this device",
@@ -145,9 +153,13 @@ async fn execute(
     root: PathBuf,
     request: Request,
     call_id: &str,
+    mcp: &McpHub,
     emit: Emit,
     mut cancel: watch::Receiver<bool>,
 ) -> Result<ExecOutcome, ExecError> {
+    if request.operation == "mcp.call" {
+        return call_mcp(mcp, &request, cancel).await;
+    }
     if request.operation == "run_command" {
         let call_id = call_id.to_string();
         return command::run_command(
@@ -182,6 +194,68 @@ async fn execute(
         joined = task => joined.unwrap_or_else(|error| Err(ExecError::failed("internal_error", error.to_string()))),
         _ = cancel.wait_for(|cancelled| *cancelled) => Err(ExecError::with_status("cancelled", "cancelled", "Cancelled")),
     }
+}
+
+async fn call_mcp(
+    mcp: &McpHub,
+    request: &Request,
+    mut cancel: watch::Receiver<bool>,
+) -> Result<ExecOutcome, ExecError> {
+    let server = request.required_str("server")?;
+    let tool = request.required_str("tool")?;
+    let arguments = request
+        .args
+        .get("arguments")
+        .filter(|arguments| arguments.is_object())
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    let call = mcp.call(
+        server,
+        tool,
+        arguments,
+        Duration::from_millis(request.timeout_ms),
+    );
+    let result = tokio::select! {
+        result = call => result.map_err(|error| ExecError::failed("mcp_error", error))?,
+        _ = cancel.wait_for(|cancelled| *cancelled) => {
+            return Err(ExecError::with_status("cancelled", "cancelled", "Cancelled"));
+        }
+    };
+    let text = mcp_content_text(&result["content"]);
+    if result["isError"].as_bool() == Some(true) {
+        return Err(ExecError::failed("tool_error", text));
+    }
+    let mut output = json!({ "content": text });
+    if let Some(structured) = result.get("structuredContent") {
+        output["structuredContent"] = structured.clone();
+    }
+    Ok(ExecOutcome::result(output))
+}
+
+fn mcp_content_text(content: &Value) -> String {
+    content
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|block| match block["type"].as_str() {
+            Some("text") => block["text"].as_str().unwrap_or_default().to_string(),
+            Some("resource") => block["resource"]["text"]
+                .as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| {
+                    format!(
+                        "[resource {}]",
+                        block["resource"]["uri"].as_str().unwrap_or_default()
+                    )
+                }),
+            Some("resource_link") => {
+                format!("[resource {}]", block["uri"].as_str().unwrap_or_default())
+            }
+            Some(other) => format!("[{other} content]"),
+            None => String::new(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn result_payload(

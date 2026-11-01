@@ -4,6 +4,7 @@ mod config;
 mod device;
 mod error;
 mod executor;
+mod mcp;
 mod projects;
 mod realtime;
 mod terminal;
@@ -14,6 +15,7 @@ use crate::auth::api::ApiClient;
 use crate::auth::session::AuthSession;
 use crate::auth::token_store::TokenStore;
 use crate::device::DeviceInfo;
+use crate::mcp::McpHub;
 use crate::projects::ProjectMap;
 use crate::realtime::Realtime;
 use crate::terminal::Terminals;
@@ -37,6 +39,9 @@ pub fn run() {
             app.manage(ProjectMap::load(&data_dir)?);
             app.manage(Realtime::default());
             app.manage(Terminals::default());
+            let mcp = McpHub::load(&data_dir);
+            app.manage(mcp.clone());
+            mcp.start_all(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -60,12 +65,17 @@ pub fn run() {
             commands::terminal_write,
             commands::terminal_resize,
             commands::terminal_close,
+            commands::mcp_servers,
+            commands::mcp_save,
+            commands::mcp_remove,
+            commands::mcp_restart,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Pointer")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 app.state::<Terminals>().close_all();
+                app.state::<std::sync::Arc<McpHub>>().shutdown_all();
             }
         });
 }

@@ -11,6 +11,7 @@ import {
   Loader2Icon,
   SearchIcon,
   SquareTerminalIcon,
+  PlugIcon,
   WrenchIcon,
   XIcon,
 } from "lucide-react";
@@ -52,7 +53,8 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
   const call = item as ToolCall;
   const [open, setOpen] = useState(false);
   const toolName = call.toolName ?? "";
-  const Icon = icons[toolName] ?? WrenchIcon;
+  const mcpParts = toolName.startsWith("mcp__") ? toolName.slice(5).split("__") : null;
+  const Icon = icons[toolName] ?? (mcpParts ? PlugIcon : WrenchIcon);
   const status = call.toolStatus ?? "pending";
   const awaitingApproval =
     status === "awaiting_approval" && call.approvalId && call.approvalPreview;
@@ -70,7 +72,9 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
       case "run_command":
         return t("tools.run_command", { target: argument(call, "command") });
       default:
-        return t("tools.other", { name: toolName });
+        return mcpParts
+          ? t("tools.mcp", { server: mcpParts[0], tool: mcpParts.slice(1).join("__") })
+          : t("tools.other", { name: toolName });
     }
   })();
 
@@ -101,7 +105,11 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
     }
   })();
 
-  const output = call.output ?? call.liveOutput ?? (call.result?.output as string | undefined);
+  const output =
+    call.output ??
+    call.liveOutput ??
+    (call.result?.output as string | undefined) ??
+    (call.result?.content as string | undefined);
   const diff = call.approvalPreview?.unifiedDiff as string | undefined;
   const hasDetails = Boolean(output || diff || call.error?.message || call.arguments);
 

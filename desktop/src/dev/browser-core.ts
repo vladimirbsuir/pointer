@@ -150,6 +150,8 @@ function connect() {
   };
 }
 
+const fakeMcpServers: Record<string, unknown>[] = [];
+
 type FakeTerminal = { channelId: number; index: number; line: string };
 
 const fakeTerminals = new Map<string, FakeTerminal>();
@@ -286,6 +288,34 @@ export function installBrowserCore() {
           return null;
         case "terminal_close":
           fakeTerminals.delete(String(args.id));
+          return null;
+        case "mcp_servers":
+          return fakeMcpServers.map((server) => ({
+            ...server,
+            status: server.enabled ? "failed" : "disabled",
+            error: server.enabled ? "MCP servers run only in the desktop app" : null,
+            tools: [],
+          }));
+        case "mcp_save": {
+          const server = args.server as Record<string, unknown>;
+          const index = fakeMcpServers.findIndex(
+            (existing) => existing.name === (args.previousName ?? server.name),
+          );
+          if (index >= 0) {
+            fakeMcpServers[index] = server;
+          } else {
+            fakeMcpServers.push(server);
+          }
+          return null;
+        }
+        case "mcp_remove": {
+          const index = fakeMcpServers.findIndex((existing) => existing.name === args.name);
+          if (index >= 0) {
+            fakeMcpServers.splice(index, 1);
+          }
+          return null;
+        }
+        case "mcp_restart":
           return null;
         case "plugin:dialog|open":
           return window.prompt("Folder path", "C:\\Projects\\demo");

@@ -123,7 +123,10 @@
     "compaction_failed": "The model could not summarize the conversation.",
     "turn_not_found": "That point of the conversation no longer exists.",
     "terminal_error": "The terminal could not be started.",
-    "terminal_not_found": "The terminal is closed."
+    "terminal_not_found": "The terminal is closed.",
+    "invalid_mcp_name": "Use up to 32 Latin letters, digits, dashes or underscores for the name.",
+    "invalid_mcp_target": "Enter a command or an http(s) URL.",
+    "mcp_name_taken": "A server with this name already exists."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",
@@ -201,7 +204,8 @@
     "files": "{{count}} files",
     "matches": "{{count}} matches",
     "entries": "{{count}} entries",
-    "exitCode": "exit {{code}}"
+    "exitCode": "exit {{code}}",
+    "mcp": "{{server}} · {{tool}}"
   },
   "permissions": {
     "tools": "Tools",
@@ -263,5 +267,31 @@
     "title": "Terminal",
     "toggle": "Terminal (Ctrl+`)",
     "exited": "Process exited. Press Enter to restart."
+  },
+  "mcp": {
+    "description": "MCP servers run on this computer and give the agent extra tools. Their settings, including secrets, stay on this device.",
+    "empty": "No MCP servers yet.",
+    "add": "Add MCP server",
+    "edit": "Edit",
+    "remove": "Remove",
+    "restart": "Restart",
+    "name": "Name",
+    "transport": "Transport",
+    "stdio": "Command (stdio)",
+    "http": "URL (HTTP)",
+    "command": "Command",
+    "env": "Environment variables",
+    "envHint": "One KEY=value per line.",
+    "url": "Server URL",
+    "headers": "Headers",
+    "headersHint": "One Name: value per line.",
+    "tools": "Tools ({{count}}): {{names}}",
+    "noTools": "The server has no tools.",
+    "status": {
+      "disabled": "off",
+      "starting": "starting…",
+      "running": "running",
+      "failed": "failed"
+    }
   }
 }

@@ -20,6 +20,7 @@ use crate::auth::session::AuthSession;
 use crate::config::{API_URL, CLIENT_VERSION};
 use crate::device::DeviceInfo;
 use crate::executor::{Emit, Executor};
+use crate::mcp::McpHub;
 use crate::projects::ProjectMap;
 use relay::Relay;
 
@@ -109,6 +110,10 @@ impl Realtime {
             "device.projects_changed",
             json!({ "projects": project_ids }),
         );
+    }
+
+    pub fn report_tools(&self, tools: Value) {
+        self.send("device.tools", json!({ "tools": tools }));
     }
 
     pub fn deliver(&self, message_type: &str, payload: Value) {
@@ -289,6 +294,10 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
             "welcome" => {
                 realtime.set_outgoing(Some(outgoing.clone()));
                 realtime.set_connected(app, true);
+                outgoing.send(
+                    "device.tools",
+                    json!({ "tools": app.state::<Arc<McpHub>>().reported_tools() }),
+                );
                 for (session_id, after_seq) in realtime.subscriptions() {
                     outgoing.send(
                         "session.subscribe",
@@ -308,7 +317,8 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
                 let emit: Emit = Arc::new(move |message_type, payload| {
                     emit_app.state::<Realtime>().deliver(message_type, payload)
                 });
-                realtime.executor.handle(payload, root, emit);
+                let mcp = app.state::<Arc<McpHub>>().inner().clone();
+                realtime.executor.handle(payload, root, mcp, emit);
             }
             "exec.cancel" => realtime
                 .executor

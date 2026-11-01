@@ -12,6 +12,17 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 export type TerminalEvent =
   { kind: "output"; data: string } | { kind: "exit"; code: number | null };
 
+export type McpServerConfig = { name: string; enabled: boolean } & (
+  | { transport: "stdio"; command: string; args: string[]; env: Record<string, string> }
+  | { transport: "http"; url: string; headers: Record<string, string> }
+);
+
+export type McpServer = McpServerConfig & {
+  status: "disabled" | "starting" | "running" | "failed";
+  error: string | null;
+  tools: string[];
+};
+
 export const core = {
   appConfig: () => call<{ apiUrl: string }>("app_config"),
   restore: () => call<Me | null>("auth_restore"),
@@ -43,4 +54,9 @@ export const core = {
   terminalResize: (id: string, cols: number, rows: number) =>
     call<void>("terminal_resize", { id, cols, rows }),
   terminalClose: (id: string) => call<void>("terminal_close", { id }),
+  mcpServers: () => call<McpServer[]>("mcp_servers"),
+  mcpSave: (server: McpServerConfig, previousName: string | null) =>
+    call<void>("mcp_save", { server, previousName }),
+  mcpRemove: (name: string) => call<void>("mcp_remove", { name }),
+  mcpRestart: (name: string) => call<void>("mcp_restart", { name }),
 };
