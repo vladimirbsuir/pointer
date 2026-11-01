@@ -17,7 +17,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class ApprovalService {
@@ -30,6 +32,7 @@ public class ApprovalService {
     private final SessionWriter writer;
     private final EntityManager entityManager;
     private final Clock clock;
+    private final TransactionTemplate transactions;
     private final Map<UUID, CompletableFuture<Decision>> waiting = new ConcurrentHashMap<>();
 
     ApprovalService(
@@ -38,13 +41,15 @@ public class ApprovalService {
             SessionService sessionService,
             SessionWriter writer,
             EntityManager entityManager,
-            Clock clock) {
+            Clock clock,
+            PlatformTransactionManager transactionManager) {
         this.approvals = approvals;
         this.eventLog = eventLog;
         this.sessionService = sessionService;
         this.writer = writer;
         this.entityManager = entityManager;
         this.clock = clock;
+        this.transactions = new TransactionTemplate(transactionManager);
     }
 
     @Transactional
@@ -68,7 +73,7 @@ public class ApprovalService {
                     return future.get(POLL_MILLIS, TimeUnit.MILLISECONDS);
                 } catch (TimeoutException exception) {
                     if (cancellation.isCancelled()) {
-                        cancel(userId, sessionId, approvalId);
+                        transactions.executeWithoutResult(status -> cancel(userId, sessionId, approvalId));
                         return new Decision(Approval.CANCELLED, null, null);
                     }
                 }
@@ -114,8 +119,7 @@ public class ApprovalService {
         });
     }
 
-    @Transactional
-    void cancel(UUID userId, UUID sessionId, UUID approvalId) {
+    private void cancel(UUID userId, UUID sessionId, UUID approvalId) {
         approvals.findById(approvalId).filter(Approval::isPending).ifPresent(approval -> {
             approval.resolve(Approval.CANCELLED, null, null, clock.instant());
             approvals.save(approval);

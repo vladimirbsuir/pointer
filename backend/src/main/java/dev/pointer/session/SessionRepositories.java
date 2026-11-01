@@ -34,6 +34,8 @@ interface ItemRepository extends JpaRepository<Item, UUID> {
 
     List<Item> findByStatus(String status);
 
+    List<Item> findBySessionIdAndTurnIdAndStatus(UUID sessionId, UUID turnId, String status);
+
     @Modifying
     @Query("update Item i set i.turnId = :turnId where i.sessionId = :sessionId and i.turnId is null")
     int attachQueued(UUID sessionId, UUID turnId);

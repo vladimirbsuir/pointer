@@ -140,6 +140,7 @@ public class SessionWriter {
             UUID userId, UUID sessionId, UUID turnId, String reason, Map<String, Object> error) {
         var session = lockOwned(userId, sessionId);
         var turn = turns.findById(turnId).orElseThrow();
+        closeUnfinishedItems(userId, sessionId, turnId, Turn.CANCELLED.equals(reason) ? Item.CANCELLED : Item.FAILED);
         turn.finish(reason, error, clock.instant());
         turns.save(turn);
         var payload = new LinkedHashMap<String, Object>();
@@ -209,6 +210,20 @@ public class SessionWriter {
         busy.forEach(session -> session.changeStatus(SessionStatus.IDLE, now));
         sessions.saveAll(busy);
         return interrupted.size();
+    }
+
+    private void closeUnfinishedItems(UUID userId, UUID sessionId, UUID turnId, String status) {
+        var now = clock.instant();
+        items.findBySessionIdAndTurnIdAndStatus(sessionId, turnId, Item.IN_PROGRESS)
+                .forEach(item -> {
+                    var updates = Item.TOOL_CALL.equals(item.getType())
+                            ? Map.<String, Object>of(
+                                    "toolStatus", Item.CANCELLED.equals(status) ? "cancelled" : "failed")
+                            : Map.<String, Object>of();
+                    item.complete(status, updates, now);
+                    items.save(item);
+                    eventLog.append(userId, sessionId, "item.completed", Map.of("item", item.toView()));
+                });
     }
 
     private Turn openTurn(AgentSession session, String idempotencyKey) {

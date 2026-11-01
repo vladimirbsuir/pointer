@@ -125,7 +125,11 @@ class ToolCallHandler {
         }
         writer.updateItem(scope.userId(), scope.sessionId(), itemId, Map.of("toolStatus", "awaiting_approval"));
         var approvalId = approvals.request(scope.userId(), scope.sessionId(), itemId, preview);
-        writer.updateItem(scope.userId(), scope.sessionId(), itemId, Map.of("approvalId", approvalId, "approvalPreview", preview));
+        writer.updateItem(
+                scope.userId(),
+                scope.sessionId(),
+                itemId,
+                Map.of("approvalId", approvalId, "approvalPreview", preview));
         var decision = approvals.await(scope.userId(), scope.sessionId(), approvalId, scope.cancellation());
         if (decision.cancelled()) {
             writer.completeItem(

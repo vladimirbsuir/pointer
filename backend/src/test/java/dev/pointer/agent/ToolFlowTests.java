@@ -120,6 +120,36 @@ class ToolFlowTests extends AgentIntegrationTest {
     }
 
     @Test
+    void stoppingWhileAwaitingApprovalCancelsApprovalAndToolCall() throws Exception {
+        var setup = setUp(false);
+        llm.enqueueToolCall("call_1", "run_command", "{\"command\":\"npm install\"}");
+
+        try (var device = executor(setup, new CopyOnWriteArrayList<>(), request -> succeeded(Map.of()))) {
+            send(setup, "Install", null);
+            device.awaitEvent("approval.requested", TIMEOUT);
+
+            client.post()
+                    .uri("/api/v1/sessions/{id}/cancel", setup.sessionId())
+                    .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                    .exchange()
+                    .expectStatus()
+                    .isAccepted();
+
+            var completed = device.awaitEvent("turn.completed", TIMEOUT);
+            assertThat(completed.path("payload").path("event").path("reason").asString())
+                    .isEqualTo("cancelled");
+            var resolved = device.awaitEvent("approval.resolved", TIMEOUT)
+                    .path("payload")
+                    .path("event");
+            assertThat(resolved.path("decision").asString()).isEqualTo("cancelled");
+            var toolItem = completedItem(device, "tool_call");
+            assertThat(toolItem.path("status").asString()).isEqualTo("cancelled");
+            assertThat(toolItem.path("toolStatus").asString()).isEqualTo("cancelled");
+        }
+        assertThat(sessionStatus(setup)).isEqualTo("idle");
+    }
+
+    @Test
     void sessionGrantAllowsSameCommandPrefixAgain() throws Exception {
         var setup = setUp(false);
         llm.enqueueToolCall("call_1", "run_command", "{\"command\":\"npm test\"}");
