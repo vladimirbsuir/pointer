@@ -7,7 +7,7 @@ import java.util.Map;
 
 public interface HttpTransport {
 
-    StreamResponse send(Request request) throws IOException;
+    StreamResponse send(Request request, Cancellation cancellation) throws IOException;
 
     record Request(String method, String url, Map<String, String> headers, byte[] body) {}
 

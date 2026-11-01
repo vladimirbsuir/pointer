@@ -1,6 +1,7 @@
 package dev.pointer.gateway;
 
 import dev.pointer.common.Ids;
+import dev.pointer.provider.llm.Cancellation;
 import dev.pointer.provider.llm.HttpTransport;
 import dev.pointer.provider.llm.LlmException;
 import dev.pointer.provider.llm.RelayTransports;
@@ -26,6 +27,7 @@ class RelayService implements RelayTransports {
     static final String RELAY = "relay";
     private static final long START_TIMEOUT_SECONDS = 60;
     private static final long CHUNK_TIMEOUT_SECONDS = 300;
+    private static final long POLL_MILLIS = 250;
 
     private final ConnectionRegistry registry;
     private final Map<UUID, RelayCall> calls = new ConcurrentHashMap<>();
@@ -36,7 +38,7 @@ class RelayService implements RelayTransports {
 
     @Override
     public HttpTransport forUser(UUID userId, UUID preferredDeviceId) {
-        return request -> send(pickConnection(userId, preferredDeviceId), request);
+        return (request, cancellation) -> send(pickConnection(userId, preferredDeviceId), request, cancellation);
     }
 
     void onStart(UUID relayId, int status) {
@@ -83,8 +85,8 @@ class RelayService implements RelayTransports {
                         "local_provider_offline", "Open Pointer on the computer running the local model", 0));
     }
 
-    private HttpTransport.StreamResponse send(GatewayConnection connection, HttpTransport.Request request)
-            throws IOException {
+    private HttpTransport.StreamResponse send(
+            GatewayConnection connection, HttpTransport.Request request, Cancellation cancellation) throws IOException {
         var call = new RelayCall(Ids.newId(), connection);
         calls.put(call.id, call);
         var payload = new LinkedHashMap<String, Object>();
@@ -95,7 +97,7 @@ class RelayService implements RelayTransports {
         payload.put("body", request.body() == null ? null : Base64.getEncoder().encodeToString(request.body()));
         connection.send("relay.request", null, payload);
         try {
-            int status = call.status.get(START_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            int status = awaitStatus(call, cancellation);
             return new HttpTransport.StreamResponse(status, new RelayInputStream(call), () -> release(call));
         } catch (ExecutionException exception) {
             release(call);
@@ -103,10 +105,30 @@ class RelayService implements RelayTransports {
         } catch (TimeoutException exception) {
             release(call);
             throw new IOException("Local model did not respond", exception);
+        } catch (IOException exception) {
+            release(call);
+            throw exception;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             release(call);
             throw new IOException("Relay interrupted", exception);
+        }
+    }
+
+    private static int awaitStatus(RelayCall call, Cancellation cancellation)
+            throws ExecutionException, InterruptedException, TimeoutException, IOException {
+        var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(START_TIMEOUT_SECONDS);
+        while (true) {
+            try {
+                return call.status.get(POLL_MILLIS, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException exception) {
+                if (cancellation.isCancelled()) {
+                    throw new IOException("Request cancelled");
+                }
+                if (System.nanoTime() > deadline) {
+                    throw exception;
+                }
+            }
         }
     }
 

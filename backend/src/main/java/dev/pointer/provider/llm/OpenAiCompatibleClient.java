@@ -29,7 +29,7 @@ public class OpenAiCompatibleClient {
 
     public List<String> listModels(Endpoint endpoint) {
         var request = new HttpTransport.Request("GET", endpoint.url("/models"), headers(endpoint, false), null);
-        try (var response = endpoint.transport().send(request)) {
+        try (var response = endpoint.transport().send(request, new Cancellation())) {
             ensureSuccess(response);
             var root = json.readTree(response.body());
             var models = new ArrayList<String>();
@@ -49,7 +49,7 @@ public class OpenAiCompatibleClient {
         var body = json.writeValueAsBytes(requestBody(chatRequest));
         var request =
                 new HttpTransport.Request("POST", endpoint.url("/chat/completions"), headers(endpoint, true), body);
-        try (var response = endpoint.transport().send(request)) {
+        try (var response = endpoint.transport().send(request, cancellation)) {
             cancellation.attach(response);
             ensureSuccess(response);
             var reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8));

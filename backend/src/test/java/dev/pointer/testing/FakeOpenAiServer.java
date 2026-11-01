@@ -70,6 +70,11 @@ public final class FakeOpenAiServer implements AutoCloseable {
                 Duration.ZERO, call, "{\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}", "[DONE]");
     }
 
+    public FakeOpenAiServer enqueueSilence(Duration silence) {
+        queued.add(new Response(0, silence, List.of()));
+        return this;
+    }
+
     public FakeOpenAiServer enqueueError(int status, String body) {
         queued.add(new Response(status, Duration.ZERO, List.of(body)));
         return this;
@@ -97,6 +102,11 @@ public final class FakeOpenAiServer implements AutoCloseable {
         if (response == null) {
             response = new Response(
                     200, Duration.ZERO, List.of("{\"choices\":[{\"delta\":{\"content\":\"Title\"}}]}", "[DONE]"));
+        }
+        if (response.status() == 0) {
+            sleep(response.delay());
+            exchange.close();
+            return;
         }
         if (response.status() != 200) {
             respond(

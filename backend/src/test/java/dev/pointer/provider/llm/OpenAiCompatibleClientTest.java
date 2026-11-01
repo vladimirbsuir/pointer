@@ -103,6 +103,22 @@ class OpenAiCompatibleClientTest {
         assertThat(listener.text.size()).isLessThan(100);
     }
 
+    @Test
+    void cancellationAbortsRequestWaitingForResponseHeaders() throws Exception {
+        server.enqueueSilence(Duration.ofSeconds(30));
+        var cancellation = new Cancellation();
+
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var started = System.nanoTime();
+            var future = executor.submit(
+                    () -> client.stream(endpoint(null), request(), new RecordingListener(), cancellation));
+            Thread.sleep(300);
+            cancellation.cancel();
+            future.get(3, TimeUnit.SECONDS);
+            assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(3));
+        }
+    }
+
     private Endpoint endpoint(String apiKey) {
         return new Endpoint(server.baseUrl(), apiKey, new DirectHttpTransport());
     }
