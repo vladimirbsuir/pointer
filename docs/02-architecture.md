@@ -238,9 +238,10 @@ classDiagram
 | `process` | Running commands in PowerShell, streaming output, killing the whole process tree on cancel (Windows job objects). |
 | `relay` | HTTP requests to local LLM runtimes, streaming responses back. Allows only loopback hosts and hosts the user approved on this device. |
 | `projects` | Local mapping `projectId → path`, stored in the app data directory. |
+| `terminal` | Interactive PowerShell sessions in the project folder for the terminal panel (UI-6), through a pseudo console (ConPTY via `portable-pty`). Purely local: terminal input and output never reach the backend. |
 | `bridge` | Tauri commands exposed to the UI and events forwarded to it. |
 
-Library choices: `tokio-tungstenite` for the WebSocket, `ignore` and `grep` (the ripgrep crates) for `glob` and `grep` tools, `keyring` for the credential store, `similar` for diffs.
+Library choices: `tokio-tungstenite` for the WebSocket, `ignore` and `grep` (the ripgrep crates) for `glob` and `grep` tools, `keyring` for the credential store, `similar` for diffs, `portable-pty` for the terminal; xterm.js renders it in the UI.
 
 ### 5.2 UI (React)
 

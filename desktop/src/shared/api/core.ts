@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { toAppError, type Me } from "./types";
 
 async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -8,6 +8,9 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
     throw toAppError(error);
   }
 }
+
+export type TerminalEvent =
+  { kind: "output"; data: string } | { kind: "exit"; code: number | null };
 
 export const core = {
   appConfig: () => call<{ apiUrl: string }>("app_config"),
@@ -30,4 +33,14 @@ export const core = {
     call<string[]>("project_files", { projectId, query }),
   readProjectFile: (projectId: string, path: string) =>
     call<string>("project_read_file", { projectId, path }),
+  terminalOpen: (
+    projectId: string,
+    cols: number,
+    rows: number,
+    onEvent: (event: TerminalEvent) => void,
+  ) => call<string>("terminal_open", { projectId, cols, rows, onEvent: new Channel(onEvent) }),
+  terminalWrite: (id: string, data: string) => call<void>("terminal_write", { id, data }),
+  terminalResize: (id: string, cols: number, rows: number) =>
+    call<void>("terminal_resize", { id, cols, rows }),
+  terminalClose: (id: string) => call<void>("terminal_close", { id }),
 };

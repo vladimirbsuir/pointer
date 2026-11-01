@@ -150,6 +150,42 @@ function connect() {
   };
 }
 
+type FakeTerminal = { channelId: number; index: number; line: string };
+
+const fakeTerminals = new Map<string, FakeTerminal>();
+const fakePrompt = "PS C:\\Projects\\demo> ";
+
+function emitTerminal(terminal: FakeTerminal, data: string) {
+  const internals = (
+    window as unknown as {
+      __TAURI_INTERNALS__: { runCallback: (id: number, payload: unknown) => void };
+    }
+  ).__TAURI_INTERNALS__;
+  internals.runCallback(terminal.channelId, {
+    index: terminal.index++,
+    message: { kind: "output", data },
+  });
+}
+
+function writeTerminal(terminal: FakeTerminal, data: string) {
+  for (const char of data) {
+    if (char === "\r") {
+      const command = terminal.line.trim();
+      terminal.line = "";
+      const reply = command ? `(browser preview) simulated: ${command}\r\n` : "";
+      emitTerminal(terminal, `\r\n${reply}${fakePrompt}`);
+    } else if (char === "\x7f") {
+      if (terminal.line) {
+        terminal.line = terminal.line.slice(0, -1);
+        emitTerminal(terminal, "\b \b");
+      }
+    } else if (char >= " ") {
+      terminal.line += char;
+      emitTerminal(terminal, char);
+    }
+  }
+}
+
 export function installBrowserCore() {
   mockIPC(
     async (command, payload) => {
@@ -229,6 +265,28 @@ export function installBrowserCore() {
           return suggestFilesInBrowser(String(args.query ?? "")).slice(0, 30);
         case "project_read_file":
           return readFileInBrowser(String(args.path));
+        case "terminal_open": {
+          const id = crypto.randomUUID();
+          const terminal = { channelId: (args.onEvent as { id: number }).id, index: 0, line: "" };
+          fakeTerminals.set(id, terminal);
+          setTimeout(
+            () => emitTerminal(terminal, `(browser preview) simulated PowerShell\r\n${fakePrompt}`),
+            0,
+          );
+          return id;
+        }
+        case "terminal_write": {
+          const terminal = fakeTerminals.get(String(args.id));
+          if (terminal) {
+            writeTerminal(terminal, String(args.data));
+          }
+          return null;
+        }
+        case "terminal_resize":
+          return null;
+        case "terminal_close":
+          fakeTerminals.delete(String(args.id));
+          return null;
         case "plugin:dialog|open":
           return window.prompt("Folder path", "C:\\Projects\\demo");
         default:

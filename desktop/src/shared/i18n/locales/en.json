@@ -121,7 +121,9 @@
     "file_not_found": "The file does not exist.",
     "binary_file": "Binary files cannot be attached.",
     "compaction_failed": "The model could not summarize the conversation.",
-    "turn_not_found": "That point of the conversation no longer exists."
+    "turn_not_found": "That point of the conversation no longer exists.",
+    "terminal_error": "The terminal could not be started.",
+    "terminal_not_found": "The terminal is closed."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",
@@ -218,7 +220,8 @@
     "cycleMode": "Switch mode",
     "settings": "Open settings",
     "mention": "Attach a file",
-    "send": "Send message"
+    "send": "Send message",
+    "terminal": "Show or hide the terminal"
   },
   "plan": {
     "title": "Plan",
@@ -255,5 +258,10 @@
     "overwrite": "Overwrite and rewind",
     "done": "Conversation rewound",
     "doneWithFiles": "Conversation rewound, files restored: {{count}}"
+  },
+  "terminal": {
+    "title": "Terminal",
+    "toggle": "Terminal (Ctrl+`)",
+    "exited": "Process exited. Press Enter to restart."
   }
 }

@@ -5,6 +5,7 @@ import { LogOutIcon, MessageSquarePlusIcon, SettingsIcon } from "lucide-react";
 import { useAuthStore } from "@/features/auth/auth-store";
 import { ConversationView } from "@/features/sessions/ConversationView";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
+import { TerminalPanel } from "@/features/terminal/TerminalPanel";
 import { ProjectsSidebar } from "@/features/workspace/ProjectsSidebar";
 import { createSession } from "@/features/workspace/create-session";
 import { useWorkspace } from "@/features/workspace/workspace-store";
@@ -51,6 +52,12 @@ export function AppShell() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!event.ctrlKey || event.altKey || event.shiftKey) {
+        return;
+      }
+      if (event.code === "Backquote") {
+        event.preventDefault();
+        const workspace = useWorkspace.getState();
+        workspace.setTerminalOpen(!workspace.terminalOpen);
         return;
       }
       if (event.key === ",") {
@@ -151,17 +158,20 @@ export function AppShell() {
         </div>
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
-        {activeSessionId ? (
-          <ConversationView key={activeSessionId} sessionId={activeSessionId} />
-        ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-            <MessageSquarePlusIcon className="size-10 text-muted-foreground/60" />
-            <h2 className="text-2xl font-semibold tracking-tight">
-              {t("shell.welcome", { name: user.displayName })}
-            </h2>
-            <p className="max-w-md text-muted-foreground">{t("shell.welcomeDescription")}</p>
-          </div>
-        )}
+        <div className="flex min-h-0 flex-1 flex-col">
+          {activeSessionId ? (
+            <ConversationView key={activeSessionId} sessionId={activeSessionId} />
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+              <MessageSquarePlusIcon className="size-10 text-muted-foreground/60" />
+              <h2 className="text-2xl font-semibold tracking-tight">
+                {t("shell.welcome", { name: user.displayName })}
+              </h2>
+              <p className="max-w-md text-muted-foreground">{t("shell.welcomeDescription")}</p>
+            </div>
+          )}
+        </div>
+        <TerminalPanel />
       </main>
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>

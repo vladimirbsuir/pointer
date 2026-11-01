@@ -6,6 +6,7 @@ mod error;
 mod executor;
 mod projects;
 mod realtime;
+mod terminal;
 
 use tauri::Manager;
 
@@ -15,6 +16,7 @@ use crate::auth::token_store::TokenStore;
 use crate::device::DeviceInfo;
 use crate::projects::ProjectMap;
 use crate::realtime::Realtime;
+use crate::terminal::Terminals;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -34,6 +36,7 @@ pub fn run() {
             app.manage(device);
             app.manage(ProjectMap::load(&data_dir)?);
             app.manage(Realtime::default());
+            app.manage(Terminals::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -53,7 +56,16 @@ pub fn run() {
             commands::project_unlink,
             commands::project_files,
             commands::project_read_file,
+            commands::terminal_open,
+            commands::terminal_write,
+            commands::terminal_resize,
+            commands::terminal_close,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Pointer");
+        .build(tauri::generate_context!())
+        .expect("error while building Pointer")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                app.state::<Terminals>().close_all();
+            }
+        });
 }

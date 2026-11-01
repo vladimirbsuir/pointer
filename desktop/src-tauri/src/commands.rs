@@ -11,6 +11,7 @@ use crate::config::API_URL;
 use crate::error::{AppError, AppResult};
 use crate::projects::ProjectMap;
 use crate::realtime::Realtime;
+use crate::terminal::{TerminalEvent, Terminals};
 
 const MAX_FILE_SUGGESTIONS: usize = 30;
 
@@ -132,6 +133,39 @@ pub async fn project_read_file(
         .await
         .map_err(|error| AppError::new("internal_error", error.to_string()))?
         .map_err(|error| AppError::new(error.code, error.message))
+}
+
+#[tauri::command]
+pub fn terminal_open(
+    projects: State<'_, ProjectMap>,
+    terminals: State<'_, Terminals>,
+    project_id: String,
+    cols: u16,
+    rows: u16,
+    on_event: tauri::ipc::Channel<TerminalEvent>,
+) -> AppResult<String> {
+    let root = linked_root(&projects, &project_id)?;
+    terminals.open(&root, cols, rows, on_event)
+}
+
+#[tauri::command]
+pub fn terminal_write(terminals: State<'_, Terminals>, id: String, data: String) -> AppResult<()> {
+    terminals.write(&id, &data)
+}
+
+#[tauri::command]
+pub fn terminal_resize(
+    terminals: State<'_, Terminals>,
+    id: String,
+    cols: u16,
+    rows: u16,
+) -> AppResult<()> {
+    terminals.resize(&id, cols, rows)
+}
+
+#[tauri::command]
+pub fn terminal_close(terminals: State<'_, Terminals>, id: String) -> AppResult<()> {
+    terminals.close(&id)
 }
 
 fn linked_root(projects: &ProjectMap, project_id: &str) -> AppResult<std::path::PathBuf> {

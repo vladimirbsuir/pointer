@@ -6,6 +6,7 @@ const shortcuts = [
   { keys: ["Shift", "Tab"], action: "cycleMode" },
   { keys: ["@"], action: "mention" },
   { keys: ["Enter"], action: "send" },
+  { keys: ["Ctrl", "`"], action: "terminal" },
   { keys: ["Ctrl", ","], action: "settings" },
 ] as const;
 

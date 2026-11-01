@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { FileDiffIcon, FoldVerticalIcon } from "lucide-react";
+import { FileDiffIcon, FoldVerticalIcon, SquareTerminalIcon } from "lucide-react";
+import { useWorkspace } from "@/features/workspace/workspace-store";
 import { api, unwrap } from "@/shared/api/client";
 import { enabledModels, useProviders } from "@/shared/api/queries";
 import { toAppError, type Session, type SessionMode } from "@/shared/api/types";
@@ -23,6 +24,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
   const { state, patchSession } = useConversation(sessionId);
   const { data: providers } = useProviders();
   const [changesOpen, setChangesOpen] = useState(false);
+  const terminalOpen = useWorkspace((state) => state.terminalOpen);
   const [draft, setDraft] = useState({ key: 0, text: "" });
   const { data: changedFiles } = useChangedFiles(sessionId, state.changesVersion);
   const session = state.session;
@@ -36,6 +38,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
       if (
         event.key === "Escape" &&
         !event.defaultPrevented &&
+        !(event.target instanceof Element && event.target.closest(".xterm")) &&
         !document.querySelector("[role=dialog]")
       ) {
         void api().POST("/api/v1/sessions/{sessionId}/cancel", {
@@ -138,6 +141,15 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
               aria-label={t("chat.compact")}
             >
               <FoldVerticalIcon />
+            </Button>
+            <Button
+              size="icon-sm"
+              variant={terminalOpen ? "secondary" : "ghost"}
+              onClick={() => useWorkspace.getState().setTerminalOpen(!terminalOpen)}
+              title={t("terminal.toggle")}
+              aria-label={t("terminal.toggle")}
+            >
+              <SquareTerminalIcon />
             </Button>
             <Button
               size="sm"
