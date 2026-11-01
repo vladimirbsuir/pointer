@@ -13,6 +13,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.web.servlet.client.RestTestClient;
 import tools.jackson.databind.JsonNode;
 
 class ToolFlowTests extends AgentIntegrationTest {
@@ -93,6 +95,66 @@ class ToolFlowTests extends AgentIntegrationTest {
                         .filter(request -> request.path("operation").asString().equals("edit_file")))
                 .extracting(request -> request.path("dryRun").asBoolean())
                 .containsExactly(true, false);
+    }
+
+    @Test
+    void changedFileIsListedWithDiffAndCanBeReverted() throws Exception {
+        var setup = withAutoApprove(setUp(false));
+        llm.enqueueToolCall("call_1", "edit_file", "{\"path\":\"a.txt\",\"oldText\":\"one\",\"newText\":\"two\"}");
+        llm.enqueueText("Done.");
+        var requests = new CopyOnWriteArrayList<JsonNode>();
+
+        try (var device = executor(setup, requests, request -> switch (request.path("operation")
+                .asString()) {
+            case "pointer.restore_file" ->
+                request.path("arguments").path("force").asBoolean()
+                        ? succeeded(Map.of("restored", true))
+                        : Map.of("status", "failed", "error", Map.of("code", "file_modified", "message", "changed"));
+            case "edit_file" ->
+                Map.of(
+                        "status", "succeeded",
+                        "result", Map.of("replacements", 1),
+                        "fileChanges",
+                                List.of(Map.of(
+                                        "path", "a.txt",
+                                        "changeKind", "modified",
+                                        "before", "one",
+                                        "after", "two",
+                                        "linesAdded", 1,
+                                        "linesRemoved", 1)));
+            default -> succeeded(Map.of());
+        })) {
+            send(setup, "Change one to two", null);
+            device.awaitEvent("turn.completed", TIMEOUT);
+
+            var files = getJson(setup, "/api/v1/sessions/{id}/changes");
+            assertThat(files.get(0).path("path").asString()).isEqualTo("a.txt");
+            assertThat(files.get(0).path("changeKind").asString()).isEqualTo("modified");
+            assertThat(files.get(0).path("reverted").asBoolean()).isFalse();
+
+            var diff = getJson(setup, "/api/v1/sessions/{id}/changes/file?path=a.txt");
+            assertThat(diff.path("before").asString()).isEqualTo("one");
+            assertThat(diff.path("after").asString()).isEqualTo("two");
+
+            revert(setup, false).expectStatus().isEqualTo(HttpStatus.CONFLICT);
+            var reverted = revert(setup, true)
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(JsonNode.class)
+                    .returnResult()
+                    .getResponseBody();
+            assertThat(reverted.path("reverted").asBoolean()).isTrue();
+            device.awaitEvent("file.reverted", TIMEOUT);
+            revert(setup, true).expectStatus().isEqualTo(HttpStatus.CONFLICT);
+        }
+        var restore = requests.stream()
+                .filter(request -> request.path("operation").asString().equals("pointer.restore_file"))
+                .toList();
+        assertThat(restore).hasSize(2);
+        assertThat(restore.getLast().path("arguments").path("content").asString())
+                .isEqualTo("one");
+        assertThat(restore.getLast().path("arguments").path("expectedContent").asString())
+                .isEqualTo("two");
     }
 
     @Test
@@ -237,6 +299,35 @@ class ToolFlowTests extends AgentIntegrationTest {
             }
         }
         assertThat(sessionStatus(setup)).isEqualTo("idle");
+    }
+
+    private Setup withAutoApprove(Setup setup) {
+        client.patch()
+                .uri("/api/v1/sessions/{id}", setup.sessionId())
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .body(Map.of("autoApprove", true))
+                .exchange()
+                .expectStatus()
+                .isOk();
+        return setup;
+    }
+
+    private JsonNode getJson(Setup setup, String uri) {
+        return client.get()
+                .uri(uri, setup.sessionId())
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .exchange()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
+    }
+
+    private RestTestClient.ResponseSpec revert(Setup setup, boolean force) {
+        return client.post()
+                .uri("/api/v1/sessions/{id}/changes/revert", setup.sessionId())
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .body(Map.of("path", "a.txt", "force", force))
+                .exchange();
     }
 
     private String tokenForDevice(Setup setup, UUID deviceId) {

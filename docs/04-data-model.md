@@ -252,6 +252,7 @@ Index: (`project_id`, `updated_at` desc).
 | `id` | uuid | PK |
 | `session_id` | uuid | FK `sessions` |
 | `number` | integer | 1, 2, 3 within the session |
+| `kind` | text | `message` or `compaction` |
 | `mode` | text | Mode at turn start |
 | `model_id` | uuid | FK `models`, nullable |
 | `status` | text | `running`, `completed`, `cancelled`, `failed`, `step_limit`, `interrupted` |

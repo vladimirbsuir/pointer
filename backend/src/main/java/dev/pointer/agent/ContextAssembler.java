@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -28,10 +29,27 @@ class ContextAssembler {
             "ask",
             "Mode: Ask. Answer questions about the project using read-only tools. Do not change files.",
             "plan",
-            "Mode: Plan. Investigate with read-only tools and produce a clear, numbered implementation plan."
-                    + " Do not change files.",
+            "Mode: Plan. Investigate the project with read-only tools, then present an implementation plan by calling"
+                    + " propose_plan. Do not change files. Ask a short clarifying question instead when the task is"
+                    + " ambiguous.",
             "agent",
             "Mode: Agent. Carry out the user's task end to end: inspect, change files, run commands to verify.");
+
+    private static final String COMPACTION_SYSTEM = """
+            You summarize a conversation between a user and Pointer, an AI software engineering agent.
+            The agent continues the work with only your summary, so it must keep everything needed to proceed.""";
+
+    private static final String COMPACTION_REQUEST = """
+            Summarize the conversation so far for the agent that will continue it. Include:
+            - the user's goals and requests, including exact wording of requirements;
+            - decisions, constraints and preferences;
+            - files inspected or changed, with the important details;
+            - commands run and their outcomes, including errors;
+            - the current state and the remaining work.
+            Keep file paths, identifiers and error messages exact. Use concise Markdown. Reply with the summary only.""";
+
+    private static final int CHARS_PER_TOKEN = 4;
+    private static final int TOKENS_PER_MESSAGE = 4;
 
     private final Clock clock;
 
@@ -44,7 +62,7 @@ class ContextAssembler {
         var messages = new ArrayList<ChatMessage>();
         messages.add(ChatMessage.system(systemPrompt(mode, globalInstructions, project)));
         var group = new StepGroup();
-        for (var item : startingFromLatestSummary(conversation)) {
+        for (var item : activeItems(conversation)) {
             var type = String.valueOf(item.get("type"));
             switch (type) {
                 case Item.USER_MESSAGE -> {
@@ -55,12 +73,38 @@ class ContextAssembler {
                     group.flushInto(messages);
                     messages.add(ChatMessage.user("Summary of the earlier conversation:\n" + text(item)));
                 }
-                case Item.ASSISTANT_MESSAGE, Item.TOOL_CALL -> group.add(item, messages);
+                case Item.ASSISTANT_MESSAGE, Item.TOOL_CALL, Item.PLAN -> group.add(item, messages);
                 default -> {}
             }
         }
         group.flushInto(messages);
         return messages;
+    }
+
+    List<ChatMessage> buildCompaction(List<Map<String, Object>> covered) {
+        var messages = build("agent", null, null, covered);
+        messages.set(0, ChatMessage.system(COMPACTION_SYSTEM));
+        messages.add(ChatMessage.user(COMPACTION_REQUEST));
+        return messages;
+    }
+
+    static List<Map<String, Object>> compactable(List<Map<String, Object>> conversation, UUID currentTurnId) {
+        var covered = activeItems(conversation).stream()
+                .filter(item -> !Objects.equals(item.get("turnId"), currentTurnId))
+                .toList();
+        var hasNewItems = covered.stream().anyMatch(item -> !Item.COMPACTION_SUMMARY.equals(item.get("type")));
+        return hasNewItems ? covered : List.of();
+    }
+
+    static int estimateTokens(List<ChatMessage> messages) {
+        var chars = 0L;
+        for (var message : messages) {
+            chars += message.content() == null ? 0 : message.content().length();
+            for (var call : message.toolCalls()) {
+                chars += call.name().length() + call.arguments().length();
+            }
+        }
+        return (int) (chars / CHARS_PER_TOKEN) + messages.size() * TOKENS_PER_MESSAGE;
     }
 
     private String systemPrompt(String mode, String globalInstructions, ProjectContext project) {
@@ -90,13 +134,26 @@ class ContextAssembler {
         return prompt.toString();
     }
 
-    private static List<Map<String, Object>> startingFromLatestSummary(List<Map<String, Object>> conversation) {
-        for (var index = conversation.size() - 1; index >= 0; index--) {
-            if (Item.COMPACTION_SUMMARY.equals(conversation.get(index).get("type"))) {
-                return conversation.subList(index, conversation.size());
+    static List<Map<String, Object>> activeItems(List<Map<String, Object>> conversation) {
+        var attached =
+                conversation.stream().filter(item -> item.get("turnId") != null).toList();
+        for (var index = attached.size() - 1; index >= 0; index--) {
+            var candidate = attached.get(index);
+            if (Item.COMPACTION_SUMMARY.equals(candidate.get("type"))
+                    && Item.COMPLETED.equals(candidate.get("status"))) {
+                var summaryTurn = candidate.get("turnId");
+                var active = new ArrayList<Map<String, Object>>();
+                active.add(candidate);
+                for (var position = 0; position < attached.size(); position++) {
+                    var item = attached.get(position);
+                    if (position > index || (position < index && summaryTurn.equals(item.get("turnId")))) {
+                        active.add(item);
+                    }
+                }
+                return active;
             }
         }
-        return conversation;
+        return attached;
     }
 
     private static String text(Map<String, Object> item) {

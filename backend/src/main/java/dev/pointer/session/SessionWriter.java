@@ -16,6 +16,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SessionWriter {
 
+    public static final String PLAN_PENDING = "pending";
+    public static final String PLAN_APPROVED = "approved";
+    public static final String PLAN_REJECTED = "rejected";
+    static final String APPROVED_PLAN_MESSAGE = "The plan is approved. Implement it now, step by step.";
+
     private final AgentSessionRepository sessions;
     private final TurnRepository turns;
     private final ItemRepository items;
@@ -67,18 +72,69 @@ public class SessionWriter {
         if (session.getModelId() == null) {
             throw ApiException.badRequest("model_required", "Choose a model before sending a message");
         }
-        var payload = new LinkedHashMap<String, Object>();
-        payload.put("text", request.text());
-        payload.put("attachments", request.attachments() == null ? List.of() : request.attachments());
-        payload.put("mode", session.getMode());
-        if (!SessionStatus.IDLE.equals(session.getStatus()) && !SessionStatus.ERROR.equals(session.getStatus())) {
+        rejectPendingPlans(session);
+        var payload = userMessage(
+                request.text(), request.attachments() == null ? List.of() : request.attachments(), session.getMode());
+        if (!isIdle(session)) {
             var queued = saveItem(session, null, Item.USER_MESSAGE, Item.COMPLETED, payload);
             sessions.save(session);
             return new AcceptedMessage(queued.getId(), null, true, false);
         }
-        var turn = openTurn(session, idempotencyKey);
-        var item = saveItem(session, turn.getId(), Item.USER_MESSAGE, Item.COMPLETED, payload);
-        return new AcceptedMessage(item.getId(), turn.getId(), false, true);
+        return startMessageTurn(session, payload, idempotencyKey);
+    }
+
+    @Transactional
+    public AcceptedMessage approvePlan(UUID userId, UUID sessionId, UUID itemId) {
+        var session = lockOwned(userId, sessionId);
+        var plan = items.findById(itemId)
+                .filter(found -> found.getSessionId().equals(sessionId) && Item.PLAN.equals(found.getType()))
+                .orElseThrow(() -> ApiException.notFound("plan_not_found", "Plan does not exist"));
+        if (!PLAN_PENDING.equals(plan.getPayload().get("approval"))) {
+            throw ApiException.conflict("plan_not_pending", "The plan was already approved or rejected");
+        }
+        if (!isIdle(session)) {
+            throw ApiException.conflict("session_busy", "Wait until the agent finishes the current turn");
+        }
+        updatePayload(session, plan, Map.of("approval", PLAN_APPROVED));
+        session.changeMode("agent", clock.instant());
+        eventLog.append(userId, sessionId, "session.updated", SessionService.settingsPayload(session));
+        var payload = userMessage(APPROVED_PLAN_MESSAGE, List.of(), session.getMode());
+        payload.put("planItemId", itemId);
+        return startMessageTurn(session, payload, null);
+    }
+
+    @Transactional
+    public UUID startCompaction(UUID userId, UUID sessionId) {
+        var session = lockOwned(userId, sessionId);
+        if (!isIdle(session)) {
+            throw ApiException.conflict("session_busy", "Wait until the agent finishes the current turn");
+        }
+        if (session.getModelId() == null) {
+            throw ApiException.badRequest("model_required", "Choose a model before compacting the conversation");
+        }
+        return openTurn(session, null, Turn.COMPACTION).getId();
+    }
+
+    @Transactional
+    public int attachQueued(UUID userId, UUID sessionId, UUID turnId, String mode) {
+        var session = lockOwned(userId, sessionId);
+        var attached = 0;
+        for (var item : items.findBySessionIdAndTurnIdIsNullOrderByPosition(sessionId)) {
+            if (!mode.equals(item.getPayload().get("mode"))) {
+                break;
+            }
+            attach(session, item, turnId);
+            attached++;
+        }
+        return attached;
+    }
+
+    @Transactional
+    public void resetContextTokens(UUID userId, UUID sessionId, int contextTokens, Integer contextWindow) {
+        var session = lockOwned(userId, sessionId);
+        session.recordUsage(contextTokens, 0, 0, clock.instant());
+        sessions.save(session);
+        publishUsage(session, contextWindow);
     }
 
     @Transactional
@@ -127,12 +183,7 @@ public class SessionWriter {
         turns.save(turn);
         session.recordUsage((int) (promptTokens + completionTokens), promptTokens, completionTokens, clock.instant());
         sessions.save(session);
-        var payload = new LinkedHashMap<String, Object>();
-        payload.put("contextTokens", session.getContextTokens());
-        payload.put("contextWindow", contextWindow);
-        payload.put("totalInputTokens", session.getTotalInputTokens());
-        payload.put("totalOutputTokens", session.getTotalOutputTokens());
-        eventLog.append(userId, sessionId, "usage.updated", payload);
+        publishUsage(session, contextWindow);
     }
 
     @Transactional
@@ -149,11 +200,10 @@ public class SessionWriter {
         payload.put("usage", Map.of("inputTokens", turn.getInputTokens(), "outputTokens", turn.getOutputTokens()));
         payload.put("error", error);
         eventLog.append(userId, sessionId, "turn.completed", payload);
-        var hasQueued =
-                !items.findBySessionIdAndTurnIdIsNullOrderByPosition(sessionId).isEmpty();
-        if (Turn.COMPLETED.equals(reason) && hasQueued) {
-            var next = openTurn(session, null);
-            items.attachQueued(sessionId, next.getId());
+        var queued = items.findBySessionIdAndTurnIdIsNullOrderByPosition(sessionId);
+        if (Turn.COMPLETED.equals(reason) && !queued.isEmpty()) {
+            var next = openTurn(session, null, Turn.MESSAGE);
+            queued.forEach(item -> attach(session, item, next.getId()));
             return Optional.of(next.getId());
         }
         changeStatus(session, Turn.FAILED.equals(reason) ? SessionStatus.ERROR : SessionStatus.IDLE);
@@ -191,8 +241,10 @@ public class SessionWriter {
                 session.getExecutorDeviceId(),
                 turn.getId(),
                 turn.getNumber(),
+                turn.getKind(),
                 turn.getMode(),
                 turn.getModelId(),
+                session.getContextTokens(),
                 session.isTitleGenerated() && AgentSession.DEFAULT_TITLE.equals(session.getTitle()));
     }
 
@@ -226,12 +278,64 @@ public class SessionWriter {
                 });
     }
 
-    private Turn openTurn(AgentSession session, String idempotencyKey) {
+    private AcceptedMessage startMessageTurn(AgentSession session, Map<String, Object> payload, String idempotencyKey) {
+        var turn = openTurn(session, idempotencyKey, Turn.MESSAGE);
+        var item = saveItem(session, turn.getId(), Item.USER_MESSAGE, Item.COMPLETED, payload);
+        return new AcceptedMessage(item.getId(), turn.getId(), false, true);
+    }
+
+    private static Map<String, Object> userMessage(String text, List<?> attachments, String mode) {
+        var payload = new LinkedHashMap<String, Object>();
+        payload.put("text", text);
+        payload.put("attachments", attachments);
+        payload.put("mode", mode);
+        return payload;
+    }
+
+    private void rejectPendingPlans(AgentSession session) {
+        items.findBySessionIdAndType(session.getId(), Item.PLAN).stream()
+                .filter(plan -> PLAN_PENDING.equals(plan.getPayload().get("approval")))
+                .forEach(plan -> updatePayload(session, plan, Map.of("approval", PLAN_REJECTED)));
+    }
+
+    private void updatePayload(AgentSession session, Item item, Map<String, Object> updates) {
+        item.update(updates);
+        items.save(item);
+        eventLog.append(session.getUserId(), session.getId(), "item.updated", Map.of("item", item.toView()));
+    }
+
+    private void attach(AgentSession session, Item item, UUID turnId) {
+        item.attachToTurn(turnId);
+        items.save(item);
+        eventLog.append(session.getUserId(), session.getId(), "item.updated", Map.of("item", item.toView()));
+    }
+
+    private void publishUsage(AgentSession session, Integer contextWindow) {
+        var payload = new LinkedHashMap<String, Object>();
+        payload.put("contextTokens", session.getContextTokens());
+        payload.put("contextWindow", contextWindow);
+        payload.put("totalInputTokens", session.getTotalInputTokens());
+        payload.put("totalOutputTokens", session.getTotalOutputTokens());
+        eventLog.append(session.getUserId(), session.getId(), "usage.updated", payload);
+    }
+
+    private static boolean isIdle(AgentSession session) {
+        return SessionStatus.IDLE.equals(session.getStatus()) || SessionStatus.ERROR.equals(session.getStatus());
+    }
+
+    private Turn openTurn(AgentSession session, String idempotencyKey, String kind) {
         var number = turns.maxNumber(session.getId()) + 1;
         var turn = turns.saveAndFlush(new Turn(
-                session.getId(), number, session.getMode(), session.getModelId(), idempotencyKey, clock.instant()));
+                session.getId(),
+                number,
+                kind,
+                session.getMode(),
+                session.getModelId(),
+                idempotencyKey,
+                clock.instant()));
         var payload = new LinkedHashMap<String, Object>();
         payload.put("turnId", turn.getId());
+        payload.put("turnKind", kind);
         payload.put("mode", turn.getMode());
         payload.put("modelId", turn.getModelId());
         eventLog.append(session.getUserId(), session.getId(), "turn.started", payload);
@@ -276,7 +380,9 @@ public class SessionWriter {
             UUID executorDeviceId,
             UUID turnId,
             int turnNumber,
+            String kind,
             String mode,
             UUID modelId,
+            int contextTokens,
             boolean needsTitle) {}
 }

@@ -21,8 +21,12 @@ public class Turn extends BaseEntity {
     public static final String INTERRUPTED = "interrupted";
     public static final String STEP_LIMIT = "step_limit";
 
+    public static final String MESSAGE = "message";
+    public static final String COMPACTION = "compaction";
+
     private UUID sessionId;
     private int number;
+    private String kind;
     private String mode;
     private UUID modelId;
     private String status;
@@ -38,10 +42,11 @@ public class Turn extends BaseEntity {
 
     protected Turn() {}
 
-    Turn(UUID sessionId, int number, String mode, UUID modelId, String idempotencyKey, Instant now) {
+    Turn(UUID sessionId, int number, String kind, String mode, UUID modelId, String idempotencyKey, Instant now) {
         super(Ids.newId());
         this.sessionId = sessionId;
         this.number = number;
+        this.kind = kind;
         this.mode = mode;
         this.modelId = modelId;
         this.status = RUNNING;
@@ -55,6 +60,10 @@ public class Turn extends BaseEntity {
 
     public int getNumber() {
         return number;
+    }
+
+    public String getKind() {
+        return kind;
     }
 
     public String getMode() {

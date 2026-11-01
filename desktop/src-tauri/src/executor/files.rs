@@ -140,7 +140,8 @@ pub fn restore_file(root: &Path, request: &Request) -> Result<ExecOutcome, ExecE
         None
     };
     let expected = request.args.get("expectedContent").and_then(Value::as_str);
-    if current.as_deref() != expected {
+    let force = request.args.get("force").and_then(Value::as_bool).unwrap_or(false);
+    if !force && current.as_deref() != expected {
         return Err(ExecError::failed(
             "file_modified",
             "The file changed after the agent edited it",

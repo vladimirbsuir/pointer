@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 interface AgentSessionRepository extends JpaRepository<AgentSession, UUID> {
@@ -32,11 +31,9 @@ interface ItemRepository extends JpaRepository<Item, UUID> {
 
     List<Item> findBySessionIdAndTurnIdIsNullOrderByPosition(UUID sessionId);
 
+    List<Item> findBySessionIdAndType(UUID sessionId, String type);
+
     List<Item> findByStatus(String status);
 
     List<Item> findBySessionIdAndTurnIdAndStatus(UUID sessionId, UUID turnId, String status);
-
-    @Modifying
-    @Query("update Item i set i.turnId = :turnId where i.sessionId = :sessionId and i.turnId is null")
-    int attachQueued(UUID sessionId, UUID turnId);
 }

@@ -1,28 +1,128 @@
 package dev.pointer.review;
 
+import dev.pointer.common.error.ApiException;
+import dev.pointer.execution.ExecutionListener;
+import dev.pointer.execution.ExecutionRequest;
+import dev.pointer.execution.ExecutionService;
+import dev.pointer.provider.llm.Cancellation;
 import dev.pointer.session.SessionEventPublisher;
+import dev.pointer.session.SessionService;
+import dev.pointer.session.SessionStatus;
+import jakarta.validation.constraints.NotBlank;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class FileChangeService {
 
     private static final int MAX_STORED_CHARS = 1_000_000;
+    private static final String RESTORE_OPERATION = "pointer.restore_file";
+    private static final Duration RESTORE_TIMEOUT = Duration.ofSeconds(15);
 
     private final FileChangeRepository changes;
     private final SessionEventPublisher events;
+    private final SessionService sessions;
+    private final ExecutionService execution;
+    private final TransactionTemplate transactions;
     private final Clock clock;
 
-    FileChangeService(FileChangeRepository changes, SessionEventPublisher events, Clock clock) {
+    FileChangeService(
+            FileChangeRepository changes,
+            SessionEventPublisher events,
+            SessionService sessions,
+            ExecutionService execution,
+            TransactionTemplate transactions,
+            Clock clock) {
         this.changes = changes;
         this.events = events;
+        this.sessions = sessions;
+        this.execution = execution;
+        this.transactions = transactions;
         this.clock = clock;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChangedFile> list(UUID userId, UUID sessionId) {
+        sessions.owned(userId, sessionId);
+        var byPath = changes.findBySessionIdOrderByCreatedAt(sessionId).stream()
+                .collect(Collectors.groupingBy(FileChange::getPath, LinkedHashMap::new, Collectors.toList()));
+        return byPath.entrySet().stream()
+                .map(entry -> summarize(entry.getKey(), entry.getValue()))
+                .sorted(Comparator.comparing(ChangedFile::lastChangedAt).reversed())
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public FileDiff diff(UUID userId, UUID sessionId, String path) {
+        sessions.owned(userId, sessionId);
+        var history = history(sessionId, path);
+        var active = activeChanges(history);
+        var relevant = active.isEmpty() ? history : active;
+        var first = relevant.getFirst();
+        var last = relevant.getLast();
+        return new FileDiff(
+                path,
+                netKind(first, last),
+                first.getBeforeContent(),
+                last.getAfterContent(),
+                isUnavailable(first, last),
+                active.isEmpty());
+    }
+
+    public ChangedFile revert(UUID userId, UUID sessionId, String path, boolean force) {
+        var session = sessions.owned(userId, sessionId);
+        if (!SessionStatus.IDLE.equals(session.getStatus()) && !SessionStatus.ERROR.equals(session.getStatus())) {
+            throw ApiException.conflict("session_busy", "Wait until the agent finishes the current turn");
+        }
+        var active = activeChanges(history(sessionId, path));
+        if (active.isEmpty()) {
+            throw ApiException.conflict("nothing_to_revert", "All changes to this file are already reverted");
+        }
+        var first = active.getFirst();
+        var last = active.getLast();
+        if (isUnavailable(first, last)) {
+            throw ApiException.conflict("revert_unavailable", "The file is too large to restore");
+        }
+        if (!execution.canExecute(session.getExecutorDeviceId(), session.getProjectId())) {
+            throw ApiException.conflict("executor_offline", "Open the project on the computer that ran the agent");
+        }
+        var arguments = new LinkedHashMap<String, Object>();
+        arguments.put("path", path);
+        arguments.put("content", "created".equals(first.getChangeKind()) ? null : first.getBeforeContent());
+        arguments.put("expectedContent", last.getAfterContent());
+        arguments.put("force", force);
+        var result = execution.execute(
+                new ExecutionRequest(
+                        sessionId,
+                        session.getProjectId(),
+                        session.getExecutorDeviceId(),
+                        RESTORE_OPERATION,
+                        arguments,
+                        false,
+                        RESTORE_TIMEOUT),
+                new ExecutionListener() {},
+                new Cancellation());
+        if (!result.succeeded()) {
+            var error = result.error() == null ? Map.<String, Object>of() : result.error();
+            var code = String.valueOf(error.getOrDefault("code", "revert_failed"));
+            var message = String.valueOf(error.getOrDefault("message", "The file could not be restored"));
+            throw "file_modified".equals(code)
+                    ? ApiException.conflict(code, message)
+                    : ApiException.badGateway(code, message);
+        }
+        return transactions.execute(status -> markReverted(userId, sessionId, path, active));
     }
 
     @Transactional
@@ -50,6 +150,73 @@ public class FileChangeService {
         }
     }
 
+    private ChangedFile markReverted(UUID userId, UUID sessionId, String path, List<FileChange> reverted) {
+        var now = clock.instant();
+        var ids = new ArrayList<UUID>();
+        for (var change : reverted) {
+            var managed = changes.findById(change.getId()).orElseThrow();
+            managed.markReverted(now);
+            changes.save(managed);
+            ids.add(managed.getId());
+        }
+        events.append(userId, sessionId, "file.reverted", Map.of("changeIds", ids, "path", path));
+        return summarize(path, history(sessionId, path));
+    }
+
+    private List<FileChange> history(UUID sessionId, String path) {
+        var history = changes.findBySessionIdAndPathOrderByCreatedAt(sessionId, path);
+        if (history.isEmpty()) {
+            throw ApiException.notFound("file_change_not_found", "The agent did not change this file in the session");
+        }
+        return history;
+    }
+
+    private static List<FileChange> activeChanges(List<FileChange> history) {
+        return history.stream().filter(change -> !change.isReverted()).toList();
+    }
+
+    private static ChangedFile summarize(String path, List<FileChange> history) {
+        var active = activeChanges(history);
+        var relevant = active.isEmpty() ? history : active;
+        var first = relevant.getFirst();
+        var last = relevant.getLast();
+        return new ChangedFile(
+                path,
+                netKind(first, last),
+                relevant.stream().mapToInt(FileChange::getLinesAdded).sum(),
+                relevant.stream().mapToInt(FileChange::getLinesRemoved).sum(),
+                relevant.size(),
+                active.isEmpty(),
+                history.getLast().getCreatedAt());
+    }
+
+    private static String netKind(FileChange first, FileChange last) {
+        if ("created".equals(first.getChangeKind())) {
+            return "created";
+        }
+        return "deleted".equals(last.getChangeKind()) ? "deleted" : "modified";
+    }
+
+    private static boolean isUnavailable(FileChange first, FileChange last) {
+        var beforeMissing = !"created".equals(first.getChangeKind()) && first.getBeforeContent() == null;
+        var afterMissing = !"deleted".equals(last.getChangeKind()) && last.getAfterContent() == null;
+        return beforeMissing || afterMissing;
+    }
+
+    public record ChangedFile(
+            String path,
+            String changeKind,
+            int linesAdded,
+            int linesRemoved,
+            int changeCount,
+            boolean reverted,
+            Instant lastChangedAt) {}
+
+    public record FileDiff(
+            String path, String changeKind, String before, String after, boolean unavailable, boolean reverted) {}
+
+    public record RevertRequest(@NotBlank String path, Boolean force) {}
+
     private static String limited(Object content) {
         if (content == null) {
             return null;
@@ -63,4 +230,9 @@ public class FileChangeService {
     }
 }
 
-interface FileChangeRepository extends JpaRepository<FileChange, UUID> {}
+interface FileChangeRepository extends JpaRepository<FileChange, UUID> {
+
+    List<FileChange> findBySessionIdOrderByCreatedAt(UUID sessionId);
+
+    List<FileChange> findBySessionIdAndPathOrderByCreatedAt(UUID sessionId, String path);
+}

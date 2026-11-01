@@ -68,4 +68,28 @@ class FileChange extends BaseEntity {
     UUID getItemId() {
         return itemId;
     }
+
+    String getBeforeContent() {
+        return beforeContent;
+    }
+
+    String getAfterContent() {
+        return afterContent;
+    }
+
+    Instant getRevertedAt() {
+        return revertedAt;
+    }
+
+    Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    boolean isReverted() {
+        return revertedAt != null;
+    }
+
+    void markReverted(Instant now) {
+        this.revertedAt = now;
+    }
 }

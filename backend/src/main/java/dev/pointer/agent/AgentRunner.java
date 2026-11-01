@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,6 +47,8 @@ public class AgentRunner implements LiveItemSnapshots {
     private static final Logger log = LoggerFactory.getLogger(AgentRunner.class);
     private static final int MAX_TITLE_LENGTH = 80;
     private static final int MAX_STEPS = 50;
+    private static final int DEFAULT_CONTEXT_WINDOW = 128_000;
+    private static final double AUTO_COMPACT_RATIO = 0.8;
     private static final String PROJECT_CONTEXT_OPERATION = "pointer.project_context";
     private static final Duration PROJECT_CONTEXT_TIMEOUT = Duration.ofSeconds(10);
     private static final String TITLE_PROMPT = """
@@ -108,6 +111,16 @@ public class AgentRunner implements LiveItemSnapshots {
         return new SessionDtos.SendMessageResponse(accepted.itemId(), accepted.turnId(), accepted.queued());
     }
 
+    public SessionDtos.SendMessageResponse approvePlan(UUID userId, UUID sessionId, UUID itemId) {
+        var accepted = writer.approvePlan(userId, sessionId, itemId);
+        launch(userId, sessionId, accepted.turnId());
+        return new SessionDtos.SendMessageResponse(accepted.itemId(), accepted.turnId(), false);
+    }
+
+    public void compact(UUID userId, UUID sessionId) {
+        launch(userId, sessionId, writer.startCompaction(userId, sessionId));
+    }
+
     public void cancel(UUID userId, UUID sessionId) {
         sessionService.owned(userId, sessionId);
         var turn = running.get(sessionId);
@@ -151,48 +164,69 @@ public class AgentRunner implements LiveItemSnapshots {
                     turnId,
                     context.mode(),
                     turn.cancellation);
+            var project = projectContext(scope);
+            var globalInstructions = settingsService.get(userId).globalInstructions();
+            var summarizer = new Summarizer(scope, model, turn, project, globalInstructions);
+            if (Turn.COMPACTION.equals(context.kind())) {
+                summarizer.summarize();
+                var reason = turn.cancellation.isCancelled() ? Turn.CANCELLED : Turn.COMPLETED;
+                return writer.finishTurn(userId, sessionId, turnId, reason, null);
+            }
             var tools = model.supportsTools()
                     ? toolDefinitions(userId, context.projectId(), context.mode())
                     : List.<ChatRequest.ToolDefinition>of();
-            var project = projectContext(scope);
-            var globalInstructions = settingsService.get(userId).globalInstructions();
+            var contextWindow = model.contextWindow() == null ? DEFAULT_CONTEXT_WINDOW : model.contextWindow();
+            long contextTokens = context.contextTokens();
             String reason = null;
             List<ChatMessage> firstMessages = null;
             for (var step = 0; reason == null; step++) {
+                if (step > 0) {
+                    writer.attachQueued(userId, sessionId, turnId, context.mode());
+                }
+                if (contextTokens >= contextWindow * AUTO_COMPACT_RATIO) {
+                    var compacted = summarizer.summarize();
+                    if (compacted.isPresent()) {
+                        contextTokens = compacted.getAsInt();
+                    }
+                    if (turn.cancellation.isCancelled()) {
+                        reason = Turn.CANCELLED;
+                        break;
+                    }
+                }
                 var messages = contextAssembler.build(
                         context.mode(), globalInstructions, project, writer.conversation(sessionId));
                 if (firstMessages == null) {
                     firstMessages = messages;
                 }
-                var listener = new TurnListener(userId, sessionId, turnId, step, turn);
+                var listener = new TurnListener(userId, sessionId, turnId, step, turn, Item.ASSISTANT_MESSAGE);
                 client.stream(
                         model.endpoint(),
                         new ChatRequest(model.modelKey(), messages, tools, null),
                         listener,
                         turn.cancellation);
-                listener.completeAll(turn.cancellation.isCancelled() ? Item.CANCELLED : Item.COMPLETED);
-                if (listener.usage != null) {
-                    writer.recordUsage(
-                            userId,
-                            sessionId,
-                            turnId,
-                            listener.usage.promptTokens(),
-                            listener.usage.completionTokens(),
-                            model.contextWindow());
-                }
+                listener.completeAll(turn.cancellation.isCancelled() ? Item.CANCELLED : Item.COMPLETED, Map.of());
+                contextTokens = recordUsage(scope, model, listener.usage, messages);
                 if (turn.cancellation.isCancelled()) {
                     reason = Turn.CANCELLED;
                 } else if (listener.toolCalls.isEmpty()) {
-                    reason = Turn.COMPLETED;
+                    var delivered = writer.attachQueued(userId, sessionId, turnId, context.mode());
+                    reason = delivered > 0 ? null : Turn.COMPLETED;
                 } else {
+                    var planProposed = false;
                     for (var call : listener.toolCalls.values()) {
                         if (turn.cancellation.isCancelled()) {
                             break;
                         }
-                        toolCalls.handle(scope, step, call.id(), call.name(), call.arguments.toString());
+                        if (PlanTool.NAME.equals(call.name()) && "plan".equals(context.mode())) {
+                            planProposed |= toolCalls.proposePlan(scope, step, call.id(), call.arguments.toString());
+                        } else {
+                            toolCalls.handle(scope, step, call.id(), call.name(), call.arguments.toString());
+                        }
                     }
                     if (turn.cancellation.isCancelled()) {
                         reason = Turn.CANCELLED;
+                    } else if (planProposed) {
+                        reason = Turn.COMPLETED;
                     } else if (step + 1 >= MAX_STEPS) {
                         reason = Turn.STEP_LIMIT;
                     }
@@ -216,11 +250,33 @@ public class AgentRunner implements LiveItemSnapshots {
     }
 
     private List<ChatRequest.ToolDefinition> toolDefinitions(UUID userId, UUID projectId, String mode) {
-        return toolRegistry.available(userId, projectId).stream()
+        var definitions = new ArrayList<ChatRequest.ToolDefinition>();
+        toolRegistry.available(userId, projectId).stream()
                 .filter(tool -> tool.availableIn(mode))
                 .map(tool -> new ChatRequest.ToolDefinition(
                         tool.getName(), tool.getDescription(), tool.getParametersSchema()))
-                .toList();
+                .forEach(definitions::add);
+        if ("plan".equals(mode)) {
+            definitions.add(PlanTool.DEFINITION);
+        }
+        return definitions;
+    }
+
+    private int recordUsage(
+            ToolCallHandler.TurnScope scope, ResolvedModel model, StreamListener.Usage usage, List<ChatMessage> sent) {
+        if (usage != null) {
+            writer.recordUsage(
+                    scope.userId(),
+                    scope.sessionId(),
+                    scope.turnId(),
+                    usage.promptTokens(),
+                    usage.completionTokens(),
+                    model.contextWindow());
+            return (int) (usage.promptTokens() + usage.completionTokens());
+        }
+        var estimate = ContextAssembler.estimateTokens(sent);
+        writer.resetContextTokens(scope.userId(), scope.sessionId(), estimate, model.contextWindow());
+        return estimate;
     }
 
     private ContextAssembler.ProjectContext projectContext(ToolCallHandler.TurnScope scope) {
@@ -303,6 +359,68 @@ public class AgentRunner implements LiveItemSnapshots {
                 : title;
     }
 
+    private final class Summarizer {
+
+        private final ToolCallHandler.TurnScope scope;
+        private final ResolvedModel model;
+        private final RunningTurn turn;
+        private final ContextAssembler.ProjectContext project;
+        private final String globalInstructions;
+
+        Summarizer(
+                ToolCallHandler.TurnScope scope,
+                ResolvedModel model,
+                RunningTurn turn,
+                ContextAssembler.ProjectContext project,
+                String globalInstructions) {
+            this.scope = scope;
+            this.model = model;
+            this.turn = turn;
+            this.project = project;
+            this.globalInstructions = globalInstructions;
+        }
+
+        OptionalInt summarize() {
+            var covered = ContextAssembler.compactable(writer.conversation(scope.sessionId()), scope.turnId());
+            if (covered.isEmpty()) {
+                return OptionalInt.empty();
+            }
+            var replaced = covered.stream()
+                    .filter(item -> !Item.COMPACTION_SUMMARY.equals(item.get("type")))
+                    .count();
+            var listener = new TurnListener(
+                    scope.userId(), scope.sessionId(), scope.turnId(), 0, turn, Item.COMPACTION_SUMMARY);
+            client.stream(
+                    model.endpoint(),
+                    new ChatRequest(model.modelKey(), contextAssembler.buildCompaction(covered), List.of(), null),
+                    listener,
+                    turn.cancellation);
+            if (turn.cancellation.isCancelled()) {
+                listener.completeAll(Item.CANCELLED, Map.of());
+                return OptionalInt.empty();
+            }
+            if (listener.text().isBlank()) {
+                listener.completeAll(Item.FAILED, Map.of());
+                throw new LlmException("compaction_failed", "The model returned an empty summary", 0);
+            }
+            listener.completeAll(Item.COMPLETED, Map.of("replacedItemCount", replaced));
+            if (listener.usage != null) {
+                writer.recordUsage(
+                        scope.userId(),
+                        scope.sessionId(),
+                        scope.turnId(),
+                        listener.usage.promptTokens(),
+                        listener.usage.completionTokens(),
+                        model.contextWindow());
+            }
+            var remaining = contextAssembler.build(
+                    scope.mode(), globalInstructions, project, writer.conversation(scope.sessionId()));
+            var tokens = ContextAssembler.estimateTokens(remaining);
+            writer.resetContextTokens(scope.userId(), scope.sessionId(), tokens, model.contextWindow());
+            return OptionalInt.of(tokens);
+        }
+    }
+
     private final class TurnListener implements StreamListener {
 
         private final UUID userId;
@@ -310,17 +428,19 @@ public class AgentRunner implements LiveItemSnapshots {
         private final UUID turnId;
         private final int step;
         private final RunningTurn turn;
+        private final String textItemType;
         private final Map<Integer, PendingToolCall> toolCalls = new TreeMap<>();
         private UUID assistantItemId;
         private UUID reasoningItemId;
         private Usage usage;
 
-        TurnListener(UUID userId, UUID sessionId, UUID turnId, int step, RunningTurn turn) {
+        TurnListener(UUID userId, UUID sessionId, UUID turnId, int step, RunningTurn turn, String textItemType) {
             this.userId = userId;
             this.sessionId = sessionId;
             this.turnId = turnId;
             this.step = step;
             this.turn = turn;
+            this.textItemType = textItemType;
         }
 
         @Override
@@ -338,13 +458,16 @@ public class AgentRunner implements LiveItemSnapshots {
         @Override
         public void onText(String delta) {
             if (assistantItemId == null) {
-                assistantItemId = open(Item.ASSISTANT_MESSAGE);
+                assistantItemId = open(textItemType);
             }
             append(assistantItemId, delta);
         }
 
         @Override
         public void onReasoning(String delta) {
+            if (!Item.ASSISTANT_MESSAGE.equals(textItemType)) {
+                return;
+            }
             if (reasoningItemId == null) {
                 reasoningItemId = open(Item.REASONING);
             }
@@ -356,14 +479,16 @@ public class AgentRunner implements LiveItemSnapshots {
             this.usage = usage;
         }
 
-        void completeAll(String status) {
+        String text() {
+            var item = assistantItemId == null ? null : turn.items.get(assistantItemId);
+            return item == null ? "" : item.text.toString();
+        }
+
+        void completeAll(String status, Map<String, Object> extra) {
             for (var entry : new ArrayList<>(turn.items.entrySet())) {
-                writer.completeItem(
-                        userId,
-                        sessionId,
-                        entry.getKey(),
-                        status,
-                        Map.of("text", entry.getValue().text.toString()));
+                var updates = new LinkedHashMap<String, Object>(extra);
+                updates.put("text", entry.getValue().text.toString());
+                writer.completeItem(userId, sessionId, entry.getKey(), status, updates);
             }
             turn.items.clear();
         }

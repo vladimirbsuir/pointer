@@ -164,6 +164,7 @@ Built before every model call, in this order:
 
 Token counts use the provider's reported usage when available and an estimate otherwise.
 Compaction replaces older items with a model-generated summary item. Original items stay in the database and in the client history.
+The thresholds and what stays verbatim are described in [ADR 0009](adr/0009-context-compaction-and-plan-approval.md).
 
 ### 4.4 Execution
 

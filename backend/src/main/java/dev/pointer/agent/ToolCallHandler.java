@@ -105,6 +105,30 @@ class ToolCallHandler {
         execute(scope, itemId, tool, arguments);
     }
 
+    boolean proposePlan(TurnScope scope, int step, String providerCallId, String argumentsJson) {
+        var arguments = parseArguments(argumentsJson);
+        var steps = arguments == null ? List.<Map<String, Object>>of() : PlanTool.steps(arguments);
+        var payload = new LinkedHashMap<String, Object>();
+        payload.put("step", step);
+        payload.put("toolName", PlanTool.NAME);
+        payload.put("argumentsJson", argumentsJson == null || argumentsJson.isBlank() ? "{}" : argumentsJson);
+        payload.put("providerCallId", providerCallId);
+        if (steps.isEmpty()) {
+            payload.put("arguments", arguments == null ? Map.of() : arguments);
+            payload.put("toolStatus", "pending");
+            var item = writer.createItem(scope.userId(), scope.sessionId(), scope.turnId(), Item.TOOL_CALL, payload);
+            fail(scope, (UUID) item.get("id"), "invalid_arguments", "A plan needs a summary and at least one step");
+            return false;
+        }
+        payload.put("summary", PlanTool.summary(arguments));
+        payload.put("steps", steps);
+        payload.put("approval", SessionWriter.PLAN_PENDING);
+        payload.put("resultText", PlanTool.RESULT_TEXT);
+        var item = writer.createItem(scope.userId(), scope.sessionId(), scope.turnId(), Item.PLAN, payload);
+        writer.completeItem(scope.userId(), scope.sessionId(), (UUID) item.get("id"), Item.COMPLETED, Map.of());
+        return true;
+    }
+
     private boolean askForApproval(TurnScope scope, UUID itemId, ToolDefinition tool, Map<String, Object> arguments) {
         Map<String, Object> preview;
         if (ToolDefinition.WRITE.equals(tool.getKind())) {

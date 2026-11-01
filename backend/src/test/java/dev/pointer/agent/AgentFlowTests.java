@@ -176,14 +176,13 @@ class AgentFlowTests extends AgentIntegrationTest {
     }
 
     @Test
-    void messageSentDuringTurnIsQueuedAndRunsNext() throws Exception {
+    void messageSentDuringTurnIsDeliveredAtNextStep() throws Exception {
         var setup = setUp(false);
         llm.enqueueStream(
                 Duration.ofMillis(100),
                 "{\"choices\":[{\"delta\":{\"content\":\"first \"}}]}",
                 "{\"choices\":[{\"delta\":{\"content\":\"answer\"}}]}",
                 "[DONE]");
-        llm.enqueueText("Title");
         llm.enqueueText("second answer");
 
         try (var ws =
@@ -198,15 +197,19 @@ class AgentFlowTests extends AgentIntegrationTest {
                     .getResponseBody();
             assertThat(queued.queued()).isTrue();
 
-            ws.await(
-                    message -> ws.events().stream()
-                                    .filter(event -> eventKind(event).equals("turn.completed"))
-                                    .count()
-                            == 2,
-                    TIMEOUT);
+            ws.awaitEvent("turn.completed", TIMEOUT);
+            var attached = ws.events().stream()
+                    .filter(event -> eventKind(event).equals("item.updated"))
+                    .map(event -> event.path("payload").path("event").path("item"))
+                    .filter(item ->
+                            item.path("id").asString().equals(queued.itemId().toString()))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(attached.path("turnId").isNull()).isFalse();
+            assertThat(ws.events().stream().filter(event -> eventKind(event).equals("turn.started")))
+                    .hasSize(1);
         }
-        assertThat(llm.requests().stream().filter(request -> request.contains("Second")))
-                .isNotEmpty();
+        assertThat(llm.requests().get(1)).contains("Second").contains("first answer");
     }
 
     @Test

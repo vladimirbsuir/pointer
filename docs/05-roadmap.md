@@ -138,7 +138,7 @@ To be settled as ADRs when the related milestone starts.
 |---|---|
 | Monaco Editor or CodeMirror 6 for code and diff viewing | M3 |
 | Token estimation library for providers without usage data | M2 |
-| Compaction strategy details (threshold, what to keep verbatim) | M4 |
+| Compaction strategy details (threshold, what to keep verbatim): [ADR 0009](adr/0009-context-compaction-and-plan-approval.md) | M4 |
 | MCP transports to support (stdio, streamable HTTP) and where MCP servers run | M5 |
 | Embedding model defaults and chunk size for RAG | M6 |
 | Container runtime and isolation for remote execution | M6 |

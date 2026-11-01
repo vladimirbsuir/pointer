@@ -204,12 +204,18 @@ Item status: `in_progress`, `completed`, `failed`, `cancelled`.
 
 | Type | Specific fields |
 |---|---|
-| `user_message` | `text`, `attachments` (`[{ "kind": "file", "path": "src/App.tsx", "content": "..." }]`), `mode` |
+| `user_message` | `text`, `attachments` (`[{ "kind": "file", "path": "src/App.tsx", "content": "..." }]`), `mode`, `planItemId` (set when the message was created by approving a plan) |
 | `assistant_message` | `text`, `step` |
 | `reasoning` | `text` (when the provider streams reasoning) |
 | `tool_call` | `step`, `toolName`, `arguments`, `argumentsJson`, `providerCallId`, `toolStatus`, `result`, `error`, `output`, `fileChanges`, `resultText`, `approvalId`, `approvalPreview` |
-| `plan` | `steps` (`[{ "title": "..." }]`), `approval` (`pending`, `approved`, `rejected`) |
+| `plan` | `step`, `summary`, `steps` (`[{ "title": "...", "details": "..." }]`), `approval` (`pending`, `approved`, `rejected`), `providerCallId`, `argumentsJson`, `resultText` |
 | `compaction_summary` | `text`, `replacedItemCount` |
+
+A user message sent while a turn runs is created with `turnId: null` (queued). At the next step boundary it is attached to the running turn if it was sent in the same mode, otherwise it starts the next turn.
+
+A `plan` item is created when the model calls the server-side `propose_plan` tool in Plan mode; the turn then ends. Approving it switches the session to Agent mode and starts a turn. Any other user message rejects pending plans. See [ADR 0009](adr/0009-context-compaction-and-plan-approval.md).
+
+A `compaction_summary` item is produced by a turn of kind `compaction` (manual) or inside a message turn before a model call (automatic). The model's context starts from the latest completed summary.
 
 `toolStatus` of a tool call:
 
@@ -227,10 +233,10 @@ Item status: `in_progress`, `completed`, `failed`, `cancelled`.
 
 | Kind | Payload | Emitted when |
 |---|---|---|
-| `turn.started` | `turnId`, `mode`, `model` | A turn begins. |
+| `turn.started` | `turnId`, `turnKind` (`message`, `compaction`), `mode`, `modelId` | A turn begins. |
 | `turn.completed` | `turnId`, `reason` (`completed`, `cancelled`, `failed`, `step_limit`, `interrupted`), `usage`, `error` | A turn ends. |
 | `item.created` | `turnId`, `item` | An item starts. Streaming deltas for it may follow. |
-| `item.updated` | `item` | An in-progress item changes, for example a tool call moving to `awaiting_approval` or `running`. Carries the full item. |
+| `item.updated` | `item` | An item changes: a tool call moving to `awaiting_approval` or `running`, a queued user message attached to a turn, a plan approved or rejected. Carries the full item. |
 | `item.completed` | `item` | An item reaches its final state. Carries the full item. |
 | `approval.requested` | `approvalId`, `itemId`, `preview` | A tool call needs approval. |
 | `approval.resolved` | `approvalId`, `decision` (`approved`, `denied`), `scope` (`once`, `session`), `message` | The user answered. |
@@ -344,7 +350,7 @@ Used by the backend itself, never exposed to the model. Names start with `pointe
 | Operation | Arguments | Result |
 |---|---|---|
 | `pointer.project_context` | none | `rulesFile` (`{ name, content }` or null), `gitBranch`, `isGitRepository` |
-| `pointer.restore_file` | `path`, `content` (null to delete), `expectedContent` | `restored` (boolean), fails with `file_modified` if the current content differs from `expectedContent` |
+| `pointer.restore_file` | `path`, `content` (null to delete), `expectedContent` (null if the file should not exist), `force` | `restored` (boolean), fails with `file_modified` if the current content differs from `expectedContent` and `force` is not set |
 
 ## 8. LLM relay
 
@@ -392,7 +398,7 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 | Sessions | `GET /projects/{id}/sessions`, `POST /projects/{id}/sessions`, `GET /sessions/{id}`, `PATCH /sessions/{id}`, `DELETE /sessions/{id}`, `GET /sessions/{id}/items`, `GET /sessions/{id}/events?afterSeq=` |
 | Turns | `POST /sessions/{id}/messages`, `POST /sessions/{id}/cancel`, `POST /sessions/{id}/compact`, `POST /sessions/{id}/plans/{itemId}/approve` |
 | Approvals | `POST /sessions/{id}/approvals/{approvalId}` with `decision`, `scope`, `message` |
-| Review | `GET /sessions/{id}/changes`, `GET /sessions/{id}/changes/{path}`, `POST /sessions/{id}/changes/revert` with `path` |
+| Review | `GET /sessions/{id}/changes`, `GET /sessions/{id}/changes/file?path=`, `POST /sessions/{id}/changes/revert` with `path` and `force` |
 | Permissions | `GET /permissions`, `PUT /permissions`, `GET /projects/{id}/permissions`, `PUT /projects/{id}/permissions` |
 | Tools | `GET /tools` |
 

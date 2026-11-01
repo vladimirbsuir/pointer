@@ -33,6 +33,19 @@ class AgentController {
         return runner.send(principal.userId(), sessionId, request, idempotencyKey);
     }
 
+    @PostMapping("/plans/{itemId}/approve")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    SessionDtos.SendMessageResponse approvePlan(
+            AuthPrincipal principal, @PathVariable UUID sessionId, @PathVariable UUID itemId) {
+        return runner.approvePlan(principal.userId(), sessionId, itemId);
+    }
+
+    @PostMapping("/compact")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    void compact(AuthPrincipal principal, @PathVariable UUID sessionId) {
+        runner.compact(principal.userId(), sessionId);
+    }
+
     @PostMapping("/cancel")
     @ResponseStatus(HttpStatus.ACCEPTED)
     void cancel(AuthPrincipal principal, @PathVariable UUID sessionId) {
