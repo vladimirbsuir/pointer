@@ -115,6 +115,44 @@ public class SessionWriter {
         return openTurn(session, null, Turn.COMPACTION).getId();
     }
 
+    @Transactional(readOnly = true)
+    public List<UUID> turnsFrom(UUID userId, UUID sessionId, UUID turnId) {
+        var session = sessionService.owned(userId, sessionId);
+        if (!isIdle(session)) {
+            throw ApiException.conflict("session_busy", "Wait until the agent finishes the current turn");
+        }
+        var target = activeTurn(sessionId, turnId);
+        return turns
+                .findBySessionIdAndNumberGreaterThanEqualAndRewoundAtIsNullOrderByNumber(sessionId, target.getNumber())
+                .stream()
+                .map(Turn::getId)
+                .toList();
+    }
+
+    @Transactional
+    public RewindResult rewind(UUID userId, UUID sessionId, UUID turnId) {
+        var session = lockOwned(userId, sessionId);
+        if (!isIdle(session)) {
+            throw ApiException.conflict("session_busy", "Wait until the agent finishes the current turn");
+        }
+        var target = activeTurn(sessionId, turnId);
+        var rewound = turns.findBySessionIdAndNumberGreaterThanEqualAndRewoundAtIsNullOrderByNumber(
+                sessionId, target.getNumber());
+        var now = clock.instant();
+        rewound.forEach(turn -> turn.markRewound(now));
+        turns.saveAll(rewound);
+        var turnIds = rewound.stream().map(Turn::getId).toList();
+        var text = items.findBySessionIdOrderByPosition(sessionId).stream()
+                .filter(item -> turnId.equals(item.getTurnId()) && Item.USER_MESSAGE.equals(item.getType()))
+                .filter(item -> item.getPayload().get("planItemId") == null)
+                .map(item -> String.valueOf(item.getPayload().getOrDefault("text", "")))
+                .findFirst()
+                .orElse("");
+        eventLog.append(userId, sessionId, "session.rewound", Map.of("turnId", turnId, "turnIds", turnIds));
+        changeStatus(session, SessionStatus.IDLE);
+        return new RewindResult(turnIds, text);
+    }
+
     @Transactional
     public int attachQueued(UUID userId, UUID sessionId, UUID turnId, String mode) {
         var session = lockOwned(userId, sessionId);
@@ -225,7 +263,7 @@ public class SessionWriter {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> conversation(UUID sessionId) {
-        return items.findBySessionIdOrderByPosition(sessionId).stream()
+        return items.findVisibleBySessionId(sessionId).stream()
                 .map(Item::toView)
                 .toList();
     }
@@ -321,6 +359,12 @@ public class SessionWriter {
         eventLog.append(session.getUserId(), session.getId(), "usage.updated", payload);
     }
 
+    private Turn activeTurn(UUID sessionId, UUID turnId) {
+        return turns.findById(turnId)
+                .filter(turn -> turn.getSessionId().equals(sessionId) && turn.getRewoundAt() == null)
+                .orElseThrow(() -> ApiException.notFound("turn_not_found", "The turn does not exist"));
+    }
+
     private static boolean isIdle(AgentSession session) {
         return SessionStatus.IDLE.equals(session.getStatus()) || SessionStatus.ERROR.equals(session.getStatus());
     }
@@ -372,6 +416,8 @@ public class SessionWriter {
         entityManager.refresh(session, LockModeType.PESSIMISTIC_WRITE);
         return session;
     }
+
+    public record RewindResult(List<UUID> turnIds, String text) {}
 
     public record AcceptedMessage(UUID itemId, UUID turnId, boolean queued, boolean startTurn) {}
 

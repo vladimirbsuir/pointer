@@ -3,8 +3,10 @@ package dev.pointer.review;
 import dev.pointer.common.error.ApiException;
 import dev.pointer.execution.ExecutionListener;
 import dev.pointer.execution.ExecutionRequest;
+import dev.pointer.execution.ExecutionResult;
 import dev.pointer.execution.ExecutionService;
 import dev.pointer.provider.llm.Cancellation;
+import dev.pointer.session.AgentSession;
 import dev.pointer.session.SessionEventPublisher;
 import dev.pointer.session.SessionService;
 import dev.pointer.session.SessionStatus;
@@ -13,6 +15,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -98,22 +101,7 @@ public class FileChangeService {
         if (!execution.canExecute(session.getExecutorDeviceId(), session.getProjectId())) {
             throw ApiException.conflict("executor_offline", "Open the project on the computer that ran the agent");
         }
-        var arguments = new LinkedHashMap<String, Object>();
-        arguments.put("path", path);
-        arguments.put("content", "created".equals(first.getChangeKind()) ? null : first.getBeforeContent());
-        arguments.put("expectedContent", last.getAfterContent());
-        arguments.put("force", force);
-        var result = execution.execute(
-                new ExecutionRequest(
-                        sessionId,
-                        session.getProjectId(),
-                        session.getExecutorDeviceId(),
-                        RESTORE_OPERATION,
-                        arguments,
-                        false,
-                        RESTORE_TIMEOUT),
-                new ExecutionListener() {},
-                new Cancellation());
+        var result = restore(session, path, active, force, false);
         if (!result.succeeded()) {
             var error = result.error() == null ? Map.<String, Object>of() : result.error();
             var code = String.valueOf(error.getOrDefault("code", "revert_failed"));
@@ -148,6 +136,66 @@ public class FileChangeService {
             payload.put("linesRemoved", saved.getLinesRemoved());
             events.append(userId, sessionId, "file.changed", payload);
         }
+    }
+
+    public List<String> restoreTurns(UUID userId, UUID sessionId, Collection<UUID> turnIds, boolean force) {
+        var session = sessions.owned(userId, sessionId);
+        var byPath = changes.findBySessionIdOrderByCreatedAt(sessionId).stream()
+                .filter(change -> !change.isReverted() && turnIds.contains(change.getTurnId()))
+                .collect(Collectors.groupingBy(FileChange::getPath, LinkedHashMap::new, Collectors.toList()));
+        if (byPath.isEmpty()) {
+            return List.of();
+        }
+        if (byPath.values().stream().anyMatch(group -> isUnavailable(group.getFirst(), group.getLast()))) {
+            throw ApiException.conflict("revert_unavailable", "A changed file is too large to restore");
+        }
+        if (!execution.canExecute(session.getExecutorDeviceId(), session.getProjectId())) {
+            throw ApiException.conflict("executor_offline", "Open the project on the computer that ran the agent");
+        }
+        if (!force) {
+            var conflicts = byPath.entrySet().stream()
+                    .filter(entry -> !restore(session, entry.getKey(), entry.getValue(), false, true)
+                            .succeeded())
+                    .map(Map.Entry::getKey)
+                    .toList();
+            if (!conflicts.isEmpty()) {
+                throw ApiException.conflict(
+                        "file_modified", "Files changed after the agent edited them: " + String.join(", ", conflicts));
+            }
+        }
+        for (var entry : byPath.entrySet()) {
+            var result = restore(session, entry.getKey(), entry.getValue(), force, false);
+            if (!result.succeeded()) {
+                var error = result.error() == null ? Map.<String, Object>of() : result.error();
+                throw ApiException.badGateway(
+                        String.valueOf(error.getOrDefault("code", "revert_failed")),
+                        String.valueOf(error.getOrDefault("message", "A file could not be restored")));
+            }
+            transactions.executeWithoutResult(
+                    status -> markReverted(userId, sessionId, entry.getKey(), entry.getValue()));
+        }
+        return List.copyOf(byPath.keySet());
+    }
+
+    private ExecutionResult restore(
+            AgentSession session, String path, List<FileChange> group, boolean force, boolean dryRun) {
+        var first = group.getFirst();
+        var arguments = new LinkedHashMap<String, Object>();
+        arguments.put("path", path);
+        arguments.put("content", "created".equals(first.getChangeKind()) ? null : first.getBeforeContent());
+        arguments.put("expectedContent", group.getLast().getAfterContent());
+        arguments.put("force", force);
+        return execution.execute(
+                new ExecutionRequest(
+                        session.getId(),
+                        session.getProjectId(),
+                        session.getExecutorDeviceId(),
+                        RESTORE_OPERATION,
+                        arguments,
+                        dryRun,
+                        RESTORE_TIMEOUT),
+                new ExecutionListener() {},
+                new Cancellation());
     }
 
     private ChangedFile markReverted(UUID userId, UUID sessionId, String path, List<FileChange> reverted) {

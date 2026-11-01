@@ -39,6 +39,7 @@ public class Turn extends BaseEntity {
     private String idempotencyKey;
     private Instant startedAt;
     private Instant completedAt;
+    private Instant rewoundAt;
 
     protected Turn() {}
 
@@ -84,6 +85,14 @@ public class Turn extends BaseEntity {
 
     public long getOutputTokens() {
         return outputTokens;
+    }
+
+    public Instant getRewoundAt() {
+        return rewoundAt;
+    }
+
+    void markRewound(Instant now) {
+        this.rewoundAt = now;
     }
 
     void addUsage(long input, long output) {

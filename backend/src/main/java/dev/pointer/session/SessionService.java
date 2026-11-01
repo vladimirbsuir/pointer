@@ -114,7 +114,7 @@ public class SessionService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> items(UUID userId, UUID sessionId) {
         owned(userId, sessionId);
-        return items.findBySessionIdOrderByPosition(sessionId).stream()
+        return items.findVisibleBySessionId(sessionId).stream()
                 .map(Item::toView)
                 .toList();
     }

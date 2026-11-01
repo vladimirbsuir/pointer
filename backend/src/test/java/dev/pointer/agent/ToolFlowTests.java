@@ -158,6 +158,60 @@ class ToolFlowTests extends AgentIntegrationTest {
     }
 
     @Test
+    void rewindRestoresFilesAndHidesLaterTurns() throws Exception {
+        var setup = withAutoApprove(setUp(false));
+        llm.enqueueToolCall("call_1", "edit_file", "{\"path\":\"a.txt\",\"oldText\":\"one\",\"newText\":\"two\"}");
+        llm.enqueueText("Done.");
+        var requests = new CopyOnWriteArrayList<JsonNode>();
+
+        try (var device = executor(setup, requests, request -> switch (request.path("operation")
+                .asString()) {
+            case "pointer.restore_file" ->
+                succeeded(Map.of("restored", !request.path("dryRun").asBoolean()));
+            case "edit_file" ->
+                Map.of(
+                        "status", "succeeded",
+                        "result", Map.of("replacements", 1),
+                        "fileChanges",
+                                List.of(Map.of(
+                                        "path", "a.txt",
+                                        "changeKind", "modified",
+                                        "before", "one",
+                                        "after", "two",
+                                        "linesAdded", 1,
+                                        "linesRemoved", 1)));
+            default -> succeeded(Map.of());
+        })) {
+            send(setup, "Change one to two", null);
+            device.awaitEvent("turn.completed", TIMEOUT);
+            var turnId = completedItem(device, "tool_call").path("turnId").asString();
+
+            var response = client.post()
+                    .uri("/api/v1/sessions/{id}/rewind", setup.sessionId())
+                    .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                    .body(Map.of("turnId", turnId, "restoreFiles", true))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(JsonNode.class)
+                    .returnResult()
+                    .getResponseBody();
+            assertThat(response.path("text").asString()).isEqualTo("Change one to two");
+            assertThat(response.path("restoredFiles").get(0).asString()).isEqualTo("a.txt");
+            device.awaitEvent("session.rewound", TIMEOUT);
+
+            var items = getJson(setup, "/api/v1/sessions/{id}/items");
+            assertThat(items).isEmpty();
+            var files = getJson(setup, "/api/v1/sessions/{id}/changes");
+            assertThat(files.get(0).path("reverted").asBoolean()).isTrue();
+        }
+        assertThat(requests.stream()
+                        .filter(request -> request.path("operation").asString().equals("pointer.restore_file"))
+                        .map(request -> request.path("dryRun").asBoolean()))
+                .containsExactly(true, false);
+    }
+
+    @Test
     void deniedToolCallIsReportedToModelWithUserMessage() throws Exception {
         var setup = setUp(false);
         llm.enqueueToolCall("call_1", "run_command", "{\"command\":\"npm publish\"}");

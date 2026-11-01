@@ -7,6 +7,7 @@ import dev.pointer.session.SessionDtos;
 import dev.pointer.testing.GatewayTestClient;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -188,6 +189,38 @@ class ExperienceFlowTests extends AgentIntegrationTest {
                 .singleElement()
                 .asString()
                 .contains("Queued note");
+    }
+
+    @Test
+    void conversationRewindRemovesLaterTurnsFromContext() throws Exception {
+        var setup = setUp(false);
+        llm.enqueueText("Answer one");
+
+        try (var ws = viewer(setup)) {
+            send(setup, "First question", null);
+            ws.awaitEvent("turn.completed", TIMEOUT);
+            awaitTitle(ws);
+            llm.enqueueText("Answer two");
+            send(setup, "Second question", null);
+            ws.await(message -> countEvents(ws, "turn.completed") == 2, TIMEOUT);
+
+            var secondTurn = lastItem(ws, "assistant_message").path("turnId").asString();
+            client.post()
+                    .uri("/api/v1/sessions/{id}/rewind", setup.sessionId())
+                    .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                    .body(Map.of("turnId", secondTurn))
+                    .exchange()
+                    .expectStatus()
+                    .isOk();
+
+            llm.enqueueText("Answer three");
+            send(setup, "Third question", null);
+            ws.await(message -> countEvents(ws, "turn.completed") == 3, TIMEOUT);
+        }
+        assertThat(llm.requests().getLast())
+                .contains("First question")
+                .contains("Third question")
+                .doesNotContain("Second question");
     }
 
     private GatewayTestClient viewer(Setup setup) throws Exception {

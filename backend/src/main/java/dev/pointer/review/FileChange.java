@@ -65,6 +65,10 @@ class FileChange extends BaseEntity {
         return linesRemoved;
     }
 
+    UUID getTurnId() {
+        return turnId;
+    }
+
     UUID getItemId() {
         return itemId;
     }

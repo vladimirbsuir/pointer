@@ -260,6 +260,7 @@ Index: (`project_id`, `updated_at` desc).
 | `input_tokens`, `output_tokens` | bigint | |
 | `idempotency_key` | text | From `POST /messages`, nullable |
 | `started_at`, `completed_at` | timestamptz | |
+| `rewound_at` | timestamptz | Set when the user rewinds the session to this turn or an earlier one; the turn's items are then hidden from history and context |
 
 Unique: (`session_id`, `number`), (`session_id`, `idempotency_key`).
 

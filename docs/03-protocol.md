@@ -217,6 +217,8 @@ A `plan` item is created when the model calls the server-side `propose_plan` too
 
 A `compaction_summary` item is produced by a turn of kind `compaction` (manual) or inside a message turn before a model call (automatic). The model's context starts from the latest completed summary.
 
+Rewinding (`POST /sessions/{id}/rewind` with `turnId`, `restoreFiles`, `force`) marks the turn and every later turn as rewound. With `restoreFiles`, agent file changes from those turns are first checked with a dry-run `pointer.restore_file` per file and then restored; a file changed since fails the whole request with `file_modified` unless `force` is set. Only changes made by write tools are restored, not side effects of `run_command`. The response returns the restored paths and the text of the rewound user message.
+
 `toolStatus` of a tool call:
 
 | Value | Meaning |
@@ -242,6 +244,7 @@ A `compaction_summary` item is produced by a turn of kind `compaction` (manual) 
 | `approval.resolved` | `approvalId`, `decision` (`approved`, `denied`), `scope` (`once`, `session`), `message` | The user answered. |
 | `file.changed` | `changeId`, `itemId`, `path`, `changeKind` (`created`, `modified`, `deleted`), `linesAdded`, `linesRemoved` | A tool call changed a file. |
 | `file.reverted` | `changeIds`, `path` | The user reverted changes to a file. |
+| `session.rewound` | `turnId`, `turnIds` | The user rewound the session to before `turnId`. Items of all `turnIds` leave the history and the model's context. |
 | `status.changed` | `status` | Session status changes. |
 | `usage.updated` | `contextTokens`, `contextWindow`, `totalInputTokens`, `totalOutputTokens` | After each model call. |
 | `session.updated` | `title`, `mode`, `model`, `autoApprove` | Session settings change. |
@@ -350,7 +353,7 @@ Used by the backend itself, never exposed to the model. Names start with `pointe
 | Operation | Arguments | Result |
 |---|---|---|
 | `pointer.project_context` | none | `rulesFile` (`{ name, content }` or null), `gitBranch`, `isGitRepository` |
-| `pointer.restore_file` | `path`, `content` (null to delete), `expectedContent` (null if the file should not exist), `force` | `restored` (boolean), fails with `file_modified` if the current content differs from `expectedContent` and `force` is not set |
+| `pointer.restore_file` | `path`, `content` (null to delete), `expectedContent` (null if the file should not exist), `force` | `restored` (boolean), fails with `file_modified` if the current content differs from `expectedContent` and `force` is not set. With `dryRun` it only performs the check. |
 
 ## 8. LLM relay
 
@@ -398,7 +401,7 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 | Sessions | `GET /projects/{id}/sessions`, `POST /projects/{id}/sessions`, `GET /sessions/{id}`, `PATCH /sessions/{id}`, `DELETE /sessions/{id}`, `GET /sessions/{id}/items`, `GET /sessions/{id}/events?afterSeq=` |
 | Turns | `POST /sessions/{id}/messages`, `POST /sessions/{id}/cancel`, `POST /sessions/{id}/compact`, `POST /sessions/{id}/plans/{itemId}/approve` |
 | Approvals | `POST /sessions/{id}/approvals/{approvalId}` with `decision`, `scope`, `message` |
-| Review | `GET /sessions/{id}/changes`, `GET /sessions/{id}/changes/file?path=`, `POST /sessions/{id}/changes/revert` with `path` and `force` |
+| Review | `GET /sessions/{id}/changes`, `GET /sessions/{id}/changes/file?path=`, `POST /sessions/{id}/changes/revert` with `path` and `force`, `POST /sessions/{id}/rewind` with `turnId`, `restoreFiles` and `force` |
 | Permissions | `GET /permissions`, `PUT /permissions`, `GET /projects/{id}/permissions`, `PUT /projects/{id}/permissions` |
 | Tools | `GET /tools` |
 

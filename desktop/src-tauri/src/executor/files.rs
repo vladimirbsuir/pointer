@@ -152,6 +152,9 @@ pub fn restore_file(root: &Path, request: &Request) -> Result<ExecOutcome, ExecE
             "The file changed after the agent edited it",
         ));
     }
+    if request.dry_run {
+        return Ok(ExecOutcome::result(json!({ "restored": false })));
+    }
     match request.args.get("content").and_then(Value::as_str) {
         Some(content) => write_text(&path, content)?,
         None => {

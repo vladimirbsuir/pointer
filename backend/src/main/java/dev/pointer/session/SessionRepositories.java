@@ -23,11 +23,21 @@ interface TurnRepository extends JpaRepository<Turn, UUID> {
     int maxNumber(UUID sessionId);
 
     List<Turn> findByStatus(String status);
+
+    List<Turn> findBySessionIdAndNumberGreaterThanEqualAndRewoundAtIsNullOrderByNumber(UUID sessionId, int number);
 }
 
 interface ItemRepository extends JpaRepository<Item, UUID> {
 
     List<Item> findBySessionIdOrderByPosition(UUID sessionId);
+
+    @Query("""
+            select i from Item i
+            where i.sessionId = :sessionId
+              and (i.turnId is null or i.turnId not in (
+                  select t.id from Turn t where t.sessionId = :sessionId and t.rewoundAt is not null))
+            order by i.position""")
+    List<Item> findVisibleBySessionId(UUID sessionId);
 
     List<Item> findBySessionIdAndTurnIdIsNullOrderByPosition(UUID sessionId);
 
