@@ -142,3 +142,4 @@ To be settled as ADRs when the related milestone starts.
 | MCP transports to support (stdio, streamable HTTP) and where MCP servers run: [ADR 0010](adr/0010-mcp-servers-on-the-device.md) | M5 |
 | Embedding model defaults and chunk size for RAG | M6 |
 | Container runtime and isolation for remote execution | M6 |
+| Where session worktrees live and how they merge: [ADR 0011](adr/0011-session-worktrees.md) | M5 |

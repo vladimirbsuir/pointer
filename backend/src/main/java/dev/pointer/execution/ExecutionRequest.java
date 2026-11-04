@@ -11,4 +11,5 @@ public record ExecutionRequest(
         String operation,
         Map<String, Object> arguments,
         boolean dryRun,
-        Duration timeout) {}
+        Duration timeout,
+        String worktree) {}

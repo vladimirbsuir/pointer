@@ -283,7 +283,8 @@ public class SessionWriter {
                 turn.getMode(),
                 turn.getModelId(),
                 session.getContextTokens(),
-                session.isTitleGenerated() && AgentSession.DEFAULT_TITLE.equals(session.getTitle()));
+                session.isTitleGenerated() && AgentSession.DEFAULT_TITLE.equals(session.getTitle()),
+                session.activeWorktree());
     }
 
     @Transactional
@@ -432,5 +433,6 @@ public class SessionWriter {
             String mode,
             UUID modelId,
             int contextTokens,
-            boolean needsTitle) {}
+            boolean needsTitle,
+            String worktree) {}
 }

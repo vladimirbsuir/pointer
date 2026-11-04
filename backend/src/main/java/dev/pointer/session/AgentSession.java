@@ -15,6 +15,7 @@ import org.hibernate.annotations.DynamicUpdate;
 public class AgentSession extends BaseEntity {
 
     public static final String DEFAULT_TITLE = "New session";
+    public static final String WORKTREE_ACTIVE = "active";
 
     private UUID userId;
     private UUID projectId;
@@ -35,6 +36,9 @@ public class AgentSession extends BaseEntity {
     private int contextTokens;
     private long totalInputTokens;
     private long totalOutputTokens;
+    private String worktreeBranch;
+    private String worktreeBaseBranch;
+    private String worktreeState;
     private Instant archivedAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -108,6 +112,22 @@ public class AgentSession extends BaseEntity {
         return totalOutputTokens;
     }
 
+    public String getWorktreeBranch() {
+        return worktreeBranch;
+    }
+
+    public String getWorktreeBaseBranch() {
+        return worktreeBaseBranch;
+    }
+
+    public String getWorktreeState() {
+        return worktreeState;
+    }
+
+    public String activeWorktree() {
+        return WORKTREE_ACTIVE.equals(worktreeState) ? worktreeBranch : null;
+    }
+
     public Instant getArchivedAt() {
         return archivedAt;
     }
@@ -143,6 +163,18 @@ public class AgentSession extends BaseEntity {
 
     void archive(boolean archived, Instant now) {
         this.archivedAt = archived ? now : null;
+        this.updatedAt = now;
+    }
+
+    void attachWorktree(String branch, String baseBranch, Instant now) {
+        this.worktreeBranch = branch;
+        this.worktreeBaseBranch = baseBranch;
+        this.worktreeState = WORKTREE_ACTIVE;
+        this.updatedAt = now;
+    }
+
+    void closeWorktree(String state, Instant now) {
+        this.worktreeState = state;
         this.updatedAt = now;
     }
 

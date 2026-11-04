@@ -123,6 +123,9 @@ public class ExecutionService {
         payload.put("arguments", request.arguments());
         payload.put("dryRun", request.dryRun());
         payload.put("timeoutMs", request.timeout().toMillis());
+        if (request.worktree() != null) {
+            payload.put("worktree", request.worktree());
+        }
         return payload;
     }
 

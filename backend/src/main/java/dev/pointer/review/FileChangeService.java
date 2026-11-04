@@ -193,7 +193,8 @@ public class FileChangeService {
                         RESTORE_OPERATION,
                         arguments,
                         dryRun,
-                        RESTORE_TIMEOUT),
+                        RESTORE_TIMEOUT,
+                        session.activeWorktree()),
                 new ExecutionListener() {},
                 new Cancellation());
     }

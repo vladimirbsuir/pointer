@@ -283,7 +283,8 @@ class ToolCallHandler {
                 tool.getOperation(),
                 executorArguments,
                 dryRun,
-                timeoutFor(tool, arguments));
+                timeoutFor(tool, arguments),
+                scope.worktree());
     }
 
     private ExecutionListener statusListener(TurnScope scope) {
@@ -360,5 +361,6 @@ class ToolCallHandler {
             UUID deviceId,
             UUID turnId,
             String mode,
+            String worktree,
             Cancellation cancellation) {}
 }

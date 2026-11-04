@@ -26,9 +26,12 @@ public final class SessionDtos {
             long totalInputTokens,
             long totalOutputTokens,
             UUID executorDeviceId,
+            SessionWorktree worktree,
             Instant archivedAt,
             Instant createdAt,
             Instant updatedAt) {}
+
+    public record SessionWorktree(String branch, String baseBranch, String state) {}
 
     public record CreateSessionRequest(
             @Size(min = 1, max = 200) String title,

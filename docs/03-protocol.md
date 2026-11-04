@@ -267,7 +267,7 @@ Rewinding (`POST /sessions/{id}/rewind` with `turnId`, `restoreFiles`, `force`) 
 | `session.rewound` | `turnId`, `turnIds` | The user rewound the session to before `turnId`. Items of all `turnIds` leave the history and the model's context. |
 | `status.changed` | `status` | Session status changes. |
 | `usage.updated` | `contextTokens`, `contextWindow`, `totalInputTokens`, `totalOutputTokens` | After each model call. |
-| `session.updated` | `title`, `mode`, `model`, `autoApprove` | Session settings change. |
+| `session.updated` | `title`, `mode`, `model`, `autoApprove`, `archived`, `worktree` | Session settings change, including worktree creation, merge and discard. |
 
 Approval `preview`:
 
@@ -295,11 +295,14 @@ Approval `preview`:
   "operation": "edit_file",
   "arguments": { "path": "src/App.tsx", "oldText": "foo", "newText": "bar" },
   "dryRun": false,
-  "timeoutMs": 30000
+  "timeoutMs": 30000,
+  "worktree": "pointer/01a1a7ea"
 }
 ```
 
-The client rejects with `exec.result` status `rejected` if the project is not mapped on the device, the operation is unknown, or a path resolves outside the project root.
+`worktree` is present only for sessions with an active worktree ([ADR 0011](adr/0011-session-worktrees.md)). The client then uses `<app data>/worktrees/<sessionId>` as the root instead of the project folder.
+
+The client rejects with `exec.result` status `rejected` if the project is not mapped on the device, the operation is unknown, a path resolves outside the root, or the session worktree does not exist (`worktree_missing`).
 
 ### 6.2 `exec.output` (client в†’ server)
 
@@ -379,6 +382,10 @@ Used by the backend itself, never exposed to the model. Names start with `pointe
 | Operation | Arguments | Result |
 |---|---|---|
 | `pointer.project_context` | none | `rulesFile` (`{ name, content }` or null), `gitBranch`, `isGitRepository` |
+| `pointer.worktree_create` | none | `branch`, `baseBranch`, `path`. Creates the worktree on a new branch from `HEAD`. Fails with `not_a_git_repository`, `not_repository_root`, `detached_head` or `worktree_exists`. |
+| `pointer.worktree_status` | `baseBranch` | `path`, `branch`, `baseBranch`, `commitsAhead`, `uncommittedFiles`, `baseCheckedOut` |
+| `pointer.worktree_merge` | `baseBranch`, `message` | `merged`, `commits`. Commits pending changes with `message`, merges the branch with `--no-ff` into the project folder, then removes the worktree and the branch. Fails with `base_not_checked_out`, `commit_failed` or `merge_conflict` (the merge is aborted). |
+| `pointer.worktree_discard` | none | `discarded`. Removes the worktree and deletes the branch. |
 | `pointer.restore_file` | `path`, `content` (null to delete), `expectedContent` (null if the file should not exist), `force` | `restored` (boolean), fails with `file_modified` if the current content differs from `expectedContent` and `force` is not set. With `dryRun` it only performs the check. |
 
 ## 8. LLM relay
@@ -428,6 +435,7 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 | Turns | `POST /sessions/{id}/messages`, `POST /sessions/{id}/cancel`, `POST /sessions/{id}/compact`, `POST /sessions/{id}/plans/{itemId}/approve` |
 | Approvals | `POST /sessions/{id}/approvals/{approvalId}` with `decision`, `scope`, `message` |
 | Review | `GET /sessions/{id}/changes`, `GET /sessions/{id}/changes/file?path=`, `POST /sessions/{id}/changes/revert` with `path` and `force`, `POST /sessions/{id}/rewind` with `turnId`, `restoreFiles` and `force` |
+| Worktrees | `POST /sessions/{id}/worktree` (before the first message), `GET /sessions/{id}/worktree`, `POST /sessions/{id}/worktree/merge` with `message`, `POST /sessions/{id}/worktree/discard` |
 | Permissions | `GET /permissions`, `PUT /permissions`, `GET /projects/{id}/permissions`, `PUT /projects/{id}/permissions` |
 | Tools | `GET /tools` |
 

@@ -238,6 +238,9 @@ Prefix rules for `run_command` (PERM-4).
 | `status` | text | `idle`, `running`, `waiting_for_approval`, `waiting_for_executor`, `error` |
 | `auto_approve` | boolean | PERM-6 |
 | `last_seq` | bigint | Last event sequence number |
+| `worktree_branch` | text | Nullable; branch of the session worktree ([ADR 0011](adr/0011-session-worktrees.md)) |
+| `worktree_base_branch` | text | Branch the worktree was created from and merges into |
+| `worktree_state` | text | `active`, `merged`, `discarded`; null for regular sessions |
 | `context_tokens` | integer | Current context size |
 | `total_input_tokens` | bigint | |
 | `total_output_tokens` | bigint | |

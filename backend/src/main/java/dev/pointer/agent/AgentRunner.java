@@ -163,6 +163,7 @@ public class AgentRunner implements LiveItemSnapshots {
                     context.executorDeviceId(),
                     turnId,
                     context.mode(),
+                    context.worktree(),
                     turn.cancellation);
             var project = projectContext(scope);
             var globalInstructions = settingsService.get(userId).globalInstructions();
@@ -292,7 +293,8 @@ public class AgentRunner implements LiveItemSnapshots {
                         PROJECT_CONTEXT_OPERATION,
                         Map.of(),
                         false,
-                        PROJECT_CONTEXT_TIMEOUT),
+                        PROJECT_CONTEXT_TIMEOUT,
+                        scope.worktree()),
                 new ExecutionListener() {},
                 scope.cancellation());
         if (!result.succeeded()) {
