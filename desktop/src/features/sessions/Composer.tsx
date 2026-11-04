@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { ArrowUpIcon, FileTextIcon, SlashIcon, SquareIcon, XIcon } from "lucide-react";
+import {
+  ArrowUpIcon,
+  FileTextIcon,
+  ImagePlusIcon,
+  SlashIcon,
+  SquareIcon,
+  XIcon,
+} from "lucide-react";
 import { core } from "@/shared/api/core";
 import { useSlashCommands } from "@/shared/api/queries";
 import type { SessionMode } from "@/shared/api/types";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
 import { Textarea } from "@/shared/ui/textarea";
+import { uploadImage } from "./upload-image";
 import { expandCommand, findCommandQuery, matchingCommands } from "./slash-commands";
 
 const modes: SessionMode[] = ["ask", "plan", "agent"];
@@ -15,14 +23,22 @@ const modes: SessionMode[] = ["ask", "plan", "agent"];
 const MENTION_PATTERN = /(^|\s)@([^\s@]*)$/;
 const SUGGESTION_DELAY_MS = 120;
 const VISIBLE_SUGGESTIONS = 8;
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGES = 5;
 
-export type Attachment = { kind: "file"; path: string; content: string };
+export type Attachment =
+  { kind: "file"; path: string; content: string } | { kind: "image"; attachmentId: string };
+
+type PendingImage = { key: string; file: File; url: string };
 
 type Mention = { start: number; end: number; query: string };
 
 type ComposerProps = {
   initialText: string;
+  sessionId: string;
   projectId: string;
+  supportsImages: boolean;
   running: boolean;
   disabledReason: string | null;
   mode: SessionMode;
@@ -46,7 +62,9 @@ function nextMode(mode: SessionMode): SessionMode {
 
 export function Composer({
   initialText,
+  sessionId,
   projectId,
+  supportsImages,
   running,
   disabledReason,
   mode,
@@ -63,6 +81,8 @@ export function Composer({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [commandQuery, setCommandQuery] = useState<string | null>(null);
+  const [images, setImages] = useState<PendingImage[]>([]);
+  const fileInput = useRef<HTMLInputElement>(null);
   const { data: commands } = useSlashCommands();
   const commandSuggestions =
     commandQuery === null
@@ -138,6 +158,58 @@ export function Composer({
     });
   };
 
+  const addImages = (files: File[]) => {
+    const candidates = files.filter((file) => IMAGE_TYPES.includes(file.type));
+    if (candidates.length === 0) {
+      return false;
+    }
+    if (!supportsImages) {
+      toast.error(t("chat.imagesUnsupported"));
+      return true;
+    }
+    const accepted = candidates.filter((file) => file.size <= MAX_IMAGE_BYTES);
+    if (accepted.length < candidates.length) {
+      toast.error(t("chat.imageTooLarge"));
+    }
+    setImages((current) => {
+      const room = Math.max(0, MAX_IMAGES - current.length);
+      if (accepted.length > room) {
+        toast.error(t("chat.tooManyImages", { count: MAX_IMAGES }));
+      }
+      return [
+        ...current,
+        ...accepted.slice(0, room).map((file) => ({
+          key: crypto.randomUUID(),
+          file,
+          url: URL.createObjectURL(file),
+        })),
+      ];
+    });
+    return true;
+  };
+
+  const removeImage = (key: string) => {
+    setImages((current) => {
+      current
+        .filter((image) => image.key === key)
+        .forEach((image) => URL.revokeObjectURL(image.url));
+      return current.filter((image) => image.key !== key);
+    });
+  };
+
+  const uploadImages = async () => {
+    const uploaded: Attachment[] = [];
+    for (const image of images) {
+      try {
+        uploaded.push({ kind: "image", attachmentId: await uploadImage(sessionId, image.file) });
+      } catch {
+        toast.error(t("chat.imageUploadFailed"));
+        return null;
+      }
+    }
+    return uploaded;
+  };
+
   const readAttachments = async (message: string) => {
     const paths = attached.filter((path) => message.includes(`@${path}`));
     const attachments: Attachment[] = [];
@@ -162,14 +234,18 @@ export function Composer({
     }
     setSending(true);
     const message = expandCommand(text.trim(), commands ?? []);
-    const attachments = await readAttachments(message);
-    const sent = attachments !== null && (await onSend(message, attachments));
+    const files = await readAttachments(message);
+    const uploaded = files === null ? null : await uploadImages();
+    const sent =
+      files !== null && uploaded !== null && (await onSend(message, [...files, ...uploaded]));
     setSending(false);
     if (sent) {
       setText("");
       setAttached([]);
       setMention(null);
       setCommandQuery(null);
+      images.forEach((image) => URL.revokeObjectURL(image.url));
+      setImages([]);
     }
   };
 
@@ -231,7 +307,19 @@ export function Composer({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 pb-6">
-      <div className="relative rounded-2xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
+      <div
+        className="relative rounded-2xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/30"
+        onDragOver={(event) => {
+          if (event.dataTransfer.types.includes("Files")) {
+            event.preventDefault();
+          }
+        }}
+        onDrop={(event) => {
+          if (addImages([...event.dataTransfer.files])) {
+            event.preventDefault();
+          }
+        }}
+      >
         {commandSuggestions.length > 0 && (
           <div className="absolute inset-x-2 bottom-full z-10 mb-2 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-md">
             <ul role="listbox" aria-label={t("commands.title")}>
@@ -287,6 +375,23 @@ export function Composer({
             )}
           </div>
         )}
+        {images.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-3 pt-3">
+            {images.map((image) => (
+              <span key={image.key} className="relative">
+                <img src={image.url} alt="" className="size-16 rounded-md border object-cover" />
+                <button
+                  type="button"
+                  aria-label={t("chat.removeImage")}
+                  className="absolute -top-1.5 -right-1.5 rounded-full border bg-background p-0.5 text-muted-foreground hover:text-foreground"
+                  onClick={() => removeImage(image.key)}
+                >
+                  <XIcon className="size-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         {attached.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-3 pt-3">
             {attached.map((path) => (
@@ -323,6 +428,11 @@ export function Composer({
             setCommandQuery(null);
           }}
           onKeyDown={onKeyDown}
+          onPaste={(event) => {
+            if (addImages([...event.clipboardData.files])) {
+              event.preventDefault();
+            }
+          }}
           placeholder={disabledReason ?? t("chat.placeholder")}
           rows={2}
           className="max-h-60 min-h-16 resize-none border-0 bg-transparent px-4 pt-3 shadow-none focus-visible:ring-0 dark:bg-transparent"
@@ -347,20 +457,51 @@ export function Composer({
               </button>
             ))}
           </div>
-          {running && text.trim().length === 0 ? (
-            <Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t("chat.stop")}>
-              <SquareIcon className="fill-current" />
-            </Button>
-          ) : (
-            <Button
-              size="icon-sm"
-              disabled={!canSend}
-              onClick={() => void send()}
-              aria-label={t("chat.send")}
-            >
-              <ArrowUpIcon />
-            </Button>
-          )}
+          <div className="ml-auto flex items-center gap-1">
+            {supportsImages && (
+              <>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept={IMAGE_TYPES.join(",")}
+                  multiple
+                  hidden
+                  onChange={(event) => {
+                    addImages([...(event.target.files ?? [])]);
+                    event.target.value = "";
+                  }}
+                />
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  title={t("chat.attachImage")}
+                  aria-label={t("chat.attachImage")}
+                  onClick={() => fileInput.current?.click()}
+                >
+                  <ImagePlusIcon />
+                </Button>
+              </>
+            )}
+            {running && text.trim().length === 0 ? (
+              <Button
+                size="icon-sm"
+                variant="secondary"
+                onClick={onStop}
+                aria-label={t("chat.stop")}
+              >
+                <SquareIcon className="fill-current" />
+              </Button>
+            ) : (
+              <Button
+                size="icon-sm"
+                disabled={!canSend}
+                onClick={() => void send()}
+                aria-label={t("chat.send")}
+              >
+                <ArrowUpIcon />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>

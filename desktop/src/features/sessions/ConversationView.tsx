@@ -206,7 +206,9 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
         <Composer
           key={draft.key}
           initialText={draft.text}
+          sessionId={sessionId}
           projectId={session.projectId}
+          supportsImages={currentModel?.supportsVision ?? false}
           running={running}
           disabledReason={disabledReason}
           mode={session.mode}

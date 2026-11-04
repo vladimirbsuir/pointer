@@ -140,7 +140,11 @@
     "commit_failed": "Could not commit the worktree changes. Check your git user name and email.",
     "git_failed": "A git command failed.",
     "command_exists": "A command with this name already exists.",
-    "command_not_found": "The command does not exist."
+    "command_not_found": "The command does not exist.",
+    "model_without_vision": "The selected model does not accept images.",
+    "unsupported_attachment": "Only PNG, JPEG, GIF and WebP images are supported.",
+    "attachment_too_large": "Images must be at most 5 MB.",
+    "attachment_not_found": "The attachment was not found."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",
@@ -173,7 +177,13 @@
     "attachFailed": "Could not attach {{path}}",
     "changes": "Changes",
     "planApprovedMessage": "Plan approved. Implementing…",
-    "estimatedCost": "Estimated cost: {{cost}}"
+    "estimatedCost": "Estimated cost: {{cost}}",
+    "attachImage": "Attach image",
+    "removeImage": "Remove image",
+    "imagesUnsupported": "The selected model does not accept images. Enable image support for it in Settings > Providers.",
+    "imageTooLarge": "Images must be at most 5 MB.",
+    "tooManyImages": "You can attach up to {{count}} images.",
+    "imageUploadFailed": "Could not upload the image."
   },
   "modes": {
     "ask": "Ask",
@@ -200,8 +210,9 @@
     "filter": "Filter models",
     "inputPrice": "Input, $ per 1M tokens",
     "outputPrice": "Output, $ per 1M tokens",
-    "pricing": "Pricing for cost estimates",
-    "priceSummary": "${{input}} / ${{output}}"
+    "pricing": "Model options",
+    "priceSummary": "${{input}} / ${{output}}",
+    "supportsVision": "Accepts images"
   },
   "approval": {
     "title": "Allow this action?",

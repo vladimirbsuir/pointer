@@ -4,8 +4,9 @@ import { api, unwrap } from "@/shared/api/client";
 import type { Model } from "@/shared/api/types";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { Switch } from "@/shared/ui/switch";
 
-type ModelPriceEditorProps = {
+type ModelOptionsEditorProps = {
   providerId: string;
   model: Model;
   onDone: (save: () => Promise<unknown>) => void;
@@ -21,10 +22,16 @@ function parsePrice(value: string) {
   return Number.isFinite(price) && price >= 0 && price <= 100_000 ? price : undefined;
 }
 
-export function ModelPriceEditor({ providerId, model, onDone, onCancel }: ModelPriceEditorProps) {
+export function ModelOptionsEditor({
+  providerId,
+  model,
+  onDone,
+  onCancel,
+}: ModelOptionsEditorProps) {
   const { t } = useTranslation();
   const [input, setInput] = useState(model.inputPricePerMtok?.toString() ?? "");
   const [output, setOutput] = useState(model.outputPricePerMtok?.toString() ?? "");
+  const [supportsVision, setSupportsVision] = useState(model.supportsVision);
   const inputPrice = parsePrice(input);
   const outputPrice = parsePrice(output);
   const valid = inputPrice !== undefined && outputPrice !== undefined;
@@ -36,9 +43,10 @@ export function ModelPriceEditor({ providerId, model, onDone, onCancel }: ModelP
         ...path,
         body:
           inputPrice === null && outputPrice === null
-            ? { clearPrices: true }
+            ? { clearPrices: true, supportsVision }
             : {
                 clearPrices: true,
+                supportsVision,
                 inputPricePerMtok: inputPrice ?? 0,
                 outputPricePerMtok: outputPrice ?? 0,
               },
@@ -68,6 +76,10 @@ export function ModelPriceEditor({ providerId, model, onDone, onCancel }: ModelP
           aria-invalid={outputPrice === undefined}
           onChange={(event) => setOutput(event.target.value)}
         />
+      </label>
+      <label className="flex h-8 items-center gap-1.5 text-xs text-muted-foreground">
+        <Switch size="sm" checked={supportsVision} onCheckedChange={setSupportsVision} />
+        {t("providers.supportsVision")}
       </label>
       <div className="ml-auto flex gap-1">
         <Button size="sm" variant="ghost" onClick={onCancel}>

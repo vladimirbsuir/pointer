@@ -200,7 +200,11 @@ public class AgentRunner implements LiveItemSnapshots {
                     }
                 }
                 var messages = contextAssembler.build(
-                        context.mode(), globalInstructions, project, writer.conversation(sessionId));
+                        context.mode(),
+                        globalInstructions,
+                        project,
+                        writer.conversation(sessionId),
+                        model.supportsVision());
                 if (firstMessages == null) {
                     firstMessages = messages;
                 }
@@ -429,7 +433,11 @@ public class AgentRunner implements LiveItemSnapshots {
                         model.contextWindow());
             }
             var remaining = contextAssembler.build(
-                    scope.mode(), globalInstructions, project, writer.conversation(scope.sessionId()));
+                    scope.mode(),
+                    globalInstructions,
+                    project,
+                    writer.conversation(scope.sessionId()),
+                    model.supportsVision());
             var tokens = ContextAssembler.estimateTokens(remaining);
             writer.resetContextTokens(scope.userId(), scope.sessionId(), tokens, model.contextWindow());
             return OptionalInt.of(tokens);

@@ -1,6 +1,7 @@
 package dev.pointer.agent;
 
 import dev.pointer.provider.llm.ChatMessage;
+import dev.pointer.session.AttachmentService;
 import dev.pointer.session.Item;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -9,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -50,15 +52,24 @@ class ContextAssembler {
 
     private static final int CHARS_PER_TOKEN = 4;
     private static final int TOKENS_PER_MESSAGE = 4;
+    private static final int TOKENS_PER_IMAGE = 1_000;
+    private static final String IMAGE_UNSUPPORTED =
+            "[An image was attached here, but the current model does not accept images.]";
 
     private final Clock clock;
+    private final AttachmentService attachments;
 
-    ContextAssembler(Clock clock) {
+    ContextAssembler(Clock clock, AttachmentService attachments) {
         this.clock = clock;
+        this.attachments = attachments;
     }
 
     List<ChatMessage> build(
-            String mode, String globalInstructions, ProjectContext project, List<Map<String, Object>> conversation) {
+            String mode,
+            String globalInstructions,
+            ProjectContext project,
+            List<Map<String, Object>> conversation,
+            boolean supportsVision) {
         var messages = new ArrayList<ChatMessage>();
         messages.add(ChatMessage.system(systemPrompt(mode, globalInstructions, project)));
         var group = new StepGroup();
@@ -67,7 +78,7 @@ class ContextAssembler {
             switch (type) {
                 case Item.USER_MESSAGE -> {
                     group.flushInto(messages);
-                    messages.add(ChatMessage.user(withAttachments(text(item), item.get("attachments"))));
+                    messages.add(userMessage(item, supportsVision));
                 }
                 case Item.COMPACTION_SUMMARY -> {
                     group.flushInto(messages);
@@ -82,7 +93,7 @@ class ContextAssembler {
     }
 
     List<ChatMessage> buildCompaction(List<Map<String, Object>> covered) {
-        var messages = build("agent", null, null, covered);
+        var messages = build("agent", null, null, covered, false);
         messages.set(0, ChatMessage.system(COMPACTION_SYSTEM));
         messages.add(ChatMessage.user(COMPACTION_REQUEST));
         return messages;
@@ -98,13 +109,15 @@ class ContextAssembler {
 
     static int estimateTokens(List<ChatMessage> messages) {
         var chars = 0L;
+        var images = 0;
         for (var message : messages) {
             chars += message.content() == null ? 0 : message.content().length();
             for (var call : message.toolCalls()) {
                 chars += call.name().length() + call.arguments().length();
             }
+            images += message.imageUrls().size();
         }
-        return (int) (chars / CHARS_PER_TOKEN) + messages.size() * TOKENS_PER_MESSAGE;
+        return (int) (chars / CHARS_PER_TOKEN) + messages.size() * TOKENS_PER_MESSAGE + images * TOKENS_PER_IMAGE;
     }
 
     private String systemPrompt(String mode, String globalInstructions, ProjectContext project) {
@@ -160,13 +173,39 @@ class ContextAssembler {
         return item.get("text") == null ? "" : String.valueOf(item.get("text"));
     }
 
+    private ChatMessage userMessage(Map<String, Object> item, boolean supportsVision) {
+        var text = withAttachments(text(item), item.get("attachments"));
+        var imageIds = imageIds(item.get("attachments"));
+        if (imageIds.isEmpty()) {
+            return ChatMessage.user(text);
+        }
+        if (!supportsVision) {
+            return ChatMessage.user(text + "\n\n" + IMAGE_UNSUPPORTED);
+        }
+        var urls = imageIds.stream()
+                .map(attachments::dataUrl)
+                .flatMap(Optional::stream)
+                .toList();
+        return ChatMessage.user(text, urls);
+    }
+
+    private static List<UUID> imageIds(Object attachments) {
+        if (!(attachments instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream()
+                .filter(attachment -> attachment instanceof Map<?, ?> map && "image".equals(map.get("kind")))
+                .map(attachment -> UUID.fromString(String.valueOf(((Map<?, ?>) attachment).get("attachmentId"))))
+                .toList();
+    }
+
     private static String withAttachments(String text, Object attachments) {
         if (!(attachments instanceof List<?> list) || list.isEmpty()) {
             return text;
         }
         var result = new StringBuilder();
         for (var attachment : list) {
-            if (attachment instanceof Map<?, ?> map) {
+            if (attachment instanceof Map<?, ?> map && !"image".equals(map.get("kind"))) {
                 result.append("<file path=\"")
                         .append(map.get("path"))
                         .append("\">\n")

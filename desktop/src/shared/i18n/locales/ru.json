@@ -140,7 +140,11 @@
     "commit_failed": "Не удалось закоммитить изменения worktree. Проверьте имя и email пользователя git.",
     "git_failed": "Команда git завершилась с ошибкой.",
     "command_exists": "Команда с таким названием уже есть.",
-    "command_not_found": "Команда не найдена."
+    "command_not_found": "Команда не найдена.",
+    "model_without_vision": "Выбранная модель не принимает изображения.",
+    "unsupported_attachment": "Поддерживаются только изображения PNG, JPEG, GIF и WebP.",
+    "attachment_too_large": "Размер изображения — не больше 5 МБ.",
+    "attachment_not_found": "Вложение не найдено."
   },
   "chat": {
     "empty": "Опишите задачу или задайте вопрос, чтобы начать.",
@@ -173,7 +177,13 @@
     "attachFailed": "Не удалось прикрепить {{path}}",
     "changes": "Изменения",
     "planApprovedMessage": "План утверждён. Выполняю…",
-    "estimatedCost": "Примерная стоимость: {{cost}}"
+    "estimatedCost": "Примерная стоимость: {{cost}}",
+    "attachImage": "Прикрепить изображение",
+    "removeImage": "Убрать изображение",
+    "imagesUnsupported": "Выбранная модель не принимает изображения. Включите их поддержку в Настройки > Провайдеры.",
+    "imageTooLarge": "Размер изображения — не больше 5 МБ.",
+    "tooManyImages": "Можно прикрепить не больше {{count}} изображений.",
+    "imageUploadFailed": "Не удалось загрузить изображение."
   },
   "modes": {
     "ask": "Вопрос",
@@ -200,8 +210,9 @@
     "filter": "Поиск моделей",
     "inputPrice": "Ввод, $ за 1 млн токенов",
     "outputPrice": "Вывод, $ за 1 млн токенов",
-    "pricing": "Цены для оценки стоимости",
-    "priceSummary": "${{input}} / ${{output}}"
+    "pricing": "Параметры модели",
+    "priceSummary": "${{input}} / ${{output}}",
+    "supportsVision": "Принимает изображения"
   },
   "approval": {
     "title": "Разрешить это действие?",

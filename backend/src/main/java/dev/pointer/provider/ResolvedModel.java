@@ -11,6 +11,7 @@ public record ResolvedModel(
         String displayName,
         Integer contextWindow,
         boolean supportsTools,
+        boolean supportsVision,
         BigDecimal inputPricePerMtok,
         BigDecimal outputPricePerMtok,
         Endpoint endpoint) {

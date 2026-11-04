@@ -224,7 +224,7 @@ Item status: `in_progress`, `completed`, `failed`, `cancelled`.
 
 | Type | Specific fields |
 |---|---|
-| `user_message` | `text`, `attachments` (`[{ "kind": "file", "path": "src/App.tsx", "content": "..." }]`), `mode`, `planItemId` (set when the message was created by approving a plan) |
+| `user_message` | `text`, `attachments` (`[{ "kind": "file", "path": "src/App.tsx", "content": "..." }]` or `{ "kind": "image", "attachmentId": "...", "mediaType": "image/png" }`), `mode`, `planItemId` (set when the message was created by approving a plan) |
 | `assistant_message` | `text`, `step` |
 | `reasoning` | `text` (when the provider streams reasoning) |
 | `tool_call` | `step`, `toolName`, `arguments`, `argumentsJson`, `providerCallId`, `toolStatus`, `result`, `error`, `output`, `fileChanges`, `resultText`, `approvalId`, `approvalPreview` |
@@ -434,6 +434,7 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 | Providers | `GET /providers`, `POST /providers`, `PATCH /providers/{id}`, `DELETE /providers/{id}`, `POST /providers/{id}/test`, `POST /providers/{id}/models/refresh`, `PATCH /providers/{id}/models/{modelId}` |
 | Projects | `GET /projects`, `POST /projects`, `PATCH /projects/{id}`, `DELETE /projects/{id}`, `GET /projects/{id}/settings`, `PUT /projects/{id}/settings` |
 | Sessions | `GET /projects/{id}/sessions`, `POST /projects/{id}/sessions`, `GET /sessions/{id}`, `PATCH /sessions/{id}`, `DELETE /sessions/{id}`, `GET /sessions/{id}/items`, `GET /sessions/{id}/events?afterSeq=` |
+| Attachments | `POST /sessions/{id}/attachments` (raw PNG, JPEG, GIF or WebP body, at most 5 MB), `GET /sessions/{id}/attachments/{attachmentId}` |
 | Turns | `POST /sessions/{id}/messages`, `POST /sessions/{id}/cancel`, `POST /sessions/{id}/compact`, `POST /sessions/{id}/plans/{itemId}/approve` |
 | Approvals | `POST /sessions/{id}/approvals/{approvalId}` with `decision`, `scope`, `message` |
 | Review | `GET /sessions/{id}/changes`, `GET /sessions/{id}/changes/file?path=`, `POST /sessions/{id}/changes/revert` with `path` and `force`, `POST /sessions/{id}/rewind` with `turnId`, `restoreFiles` and `force` |

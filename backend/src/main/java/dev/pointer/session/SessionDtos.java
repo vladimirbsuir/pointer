@@ -54,9 +54,10 @@ public final class SessionDtos {
             UUID modelId) {}
 
     public record Attachment(
-            @Pattern(regexp = "file") String kind,
+            @Pattern(regexp = "file|image") String kind,
             @Size(max = 1000) String path,
-            @Size(max = 500_000) String content) {}
+            @Size(max = 500_000) String content,
+            UUID attachmentId) {}
 
     public record SendMessageResponse(UUID itemId, UUID turnId, boolean queued) {}
 

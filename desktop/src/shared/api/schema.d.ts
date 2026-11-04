@@ -228,6 +228,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/approvals/{approvalId}": {
         parameters: {
             query?: never;
@@ -612,6 +628,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/attachments/{attachmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/github/authorize-url": {
         parameters: {
             query?: never;
@@ -742,6 +774,8 @@ export interface components {
             kind?: string;
             path?: string;
             content?: string;
+            /** Format: uuid */
+            attachmentId?: string;
         };
         SendMessageRequest: {
             text?: string;
@@ -766,6 +800,13 @@ export interface components {
             reverted?: boolean;
             /** Format: date-time */
             lastChangedAt?: string;
+        };
+        AttachmentResponse: {
+            /** Format: uuid */
+            id?: string;
+            mediaType?: string;
+            /** Format: int32 */
+            sizeBytes?: number;
         };
         ResolveApprovalRequest: {
             decision?: string;
@@ -1411,6 +1452,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    upload: {
+        parameters: {
+            query?: never;
+            header: {
+                "Content-Type": string;
+            };
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/png": string;
+                "image/jpeg": string;
+                "image/gif": string;
+                "image/webp": string;
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentResponse"];
+                };
             };
         };
     };
@@ -2193,6 +2265,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileDiff"];
+                };
+            };
+        };
+    };
+    download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
                 };
             };
         };

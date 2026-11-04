@@ -138,6 +138,12 @@ public class OpenAiCompatibleClient {
         result.put("role", message.role().name().toLowerCase(Locale.ROOT));
         var content = message.content() == null ? "" : message.content();
         result.put("content", content.isEmpty() && !message.toolCalls().isEmpty() ? null : content);
+        if (!message.imageUrls().isEmpty()) {
+            var parts = new ArrayList<Map<String, Object>>();
+            parts.add(Map.of("type", "text", "text", content));
+            message.imageUrls().forEach(url -> parts.add(Map.of("type", "image_url", "image_url", Map.of("url", url))));
+            result.put("content", parts);
+        }
         if (!message.toolCalls().isEmpty()) {
             result.put(
                     "tool_calls",

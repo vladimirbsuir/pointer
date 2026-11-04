@@ -6,6 +6,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,7 @@ public class SessionWriter {
     private final SessionEventLog eventLog;
     private final SessionService sessionService;
     private final ProviderService providerService;
+    private final AttachmentService attachmentService;
     private final EntityManager entityManager;
     private final Clock clock;
 
@@ -38,6 +40,7 @@ public class SessionWriter {
             SessionEventLog eventLog,
             SessionService sessionService,
             ProviderService providerService,
+            AttachmentService attachmentService,
             EntityManager entityManager,
             Clock clock) {
         this.sessions = sessions;
@@ -46,6 +49,7 @@ public class SessionWriter {
         this.eventLog = eventLog;
         this.sessionService = sessionService;
         this.providerService = providerService;
+        this.attachmentService = attachmentService;
         this.entityManager = entityManager;
         this.clock = clock;
     }
@@ -74,8 +78,7 @@ public class SessionWriter {
             throw ApiException.badRequest("model_required", "Choose a model before sending a message");
         }
         rejectPendingPlans(session);
-        var payload = userMessage(
-                request.text(), request.attachments() == null ? List.of() : request.attachments(), session.getMode());
+        var payload = userMessage(request.text(), attachments(session, request.attachments()), session.getMode());
         if (!isIdle(session)) {
             var queued = saveItem(session, null, Item.USER_MESSAGE, Item.COMPLETED, payload);
             sessions.save(session);
@@ -331,6 +334,34 @@ public class SessionWriter {
                 .forEach(queued -> attach(session, queued, turn.getId()));
         var item = saveItem(session, turn.getId(), Item.USER_MESSAGE, Item.COMPLETED, payload);
         return new AcceptedMessage(item.getId(), turn.getId(), false, true);
+    }
+
+    private List<Map<String, Object>> attachments(AgentSession session, List<SessionDtos.Attachment> requested) {
+        if (requested == null) {
+            return List.of();
+        }
+        var result = new ArrayList<Map<String, Object>>();
+        for (var attachment : requested) {
+            var entry = new LinkedHashMap<String, Object>();
+            if ("image".equals(attachment.kind())) {
+                if (attachment.attachmentId() == null) {
+                    throw ApiException.badRequest("invalid_attachment", "An image attachment needs an attachmentId");
+                }
+                if (!providerService.supportsVision(session.getModelId())) {
+                    throw ApiException.badRequest("model_without_vision", "The selected model does not accept images");
+                }
+                var stored = attachmentService.inSession(session.getId(), attachment.attachmentId());
+                entry.put("kind", "image");
+                entry.put("attachmentId", stored.getId());
+                entry.put("mediaType", stored.getMediaType());
+            } else {
+                entry.put("kind", "file");
+                entry.put("path", attachment.path());
+                entry.put("content", attachment.content());
+            }
+            result.add(entry);
+        }
+        return result;
     }
 
     private static Map<String, Object> userMessage(String text, List<?> attachments, String mode) {

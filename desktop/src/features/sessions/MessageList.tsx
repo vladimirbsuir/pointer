@@ -10,6 +10,7 @@ import {
   FoldVerticalIcon,
 } from "lucide-react";
 import type { Item } from "@/shared/api/types";
+import { AttachmentImage } from "./AttachmentImage";
 import { Markdown } from "./Markdown";
 import { PlanCard } from "./PlanCard";
 import { RewindControl } from "./RewindControl";
@@ -146,18 +147,34 @@ function MessageItem({ item, sessionId, running, onRewound }: MessageItemProps) 
   }
 
   if (item.type === "user_message") {
-    const attachments = (item.attachments as { path: string }[] | undefined) ?? [];
+    const attachments =
+      (item.attachments as { kind?: string; path?: string; attachmentId?: string }[] | undefined) ??
+      [];
+    const images = attachments.filter((attachment) => attachment.kind === "image");
     return (
       <div className="group flex flex-col items-end gap-1">
-        {attachments.map((attachment) => (
-          <span
-            key={attachment.path}
-            className="flex items-center gap-1 text-xs text-muted-foreground"
-          >
-            <FileTextIcon className="size-3" />
-            {attachment.path}
-          </span>
-        ))}
+        {attachments
+          .filter((attachment) => attachment.kind !== "image")
+          .map((attachment) => (
+            <span
+              key={attachment.path}
+              className="flex items-center gap-1 text-xs text-muted-foreground"
+            >
+              <FileTextIcon className="size-3" />
+              {attachment.path}
+            </span>
+          ))}
+        {images.length > 0 && (
+          <div className="flex max-w-[85%] flex-wrap justify-end gap-2">
+            {images.map((image) => (
+              <AttachmentImage
+                key={image.attachmentId}
+                sessionId={sessionId}
+                attachmentId={image.attachmentId!}
+              />
+            ))}
+          </div>
+        )}
         <div className="flex max-w-[85%] items-start gap-1">
           {item.turnId !== null && (
             <RewindControl

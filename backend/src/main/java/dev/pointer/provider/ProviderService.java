@@ -180,9 +180,15 @@ public class ProviderService {
                 model.getDisplayName(),
                 model.getContextWindow(),
                 model.supportsTools(),
+                model.supportsVision(),
                 model.getInputPricePerMtok(),
                 model.getOutputPricePerMtok(),
                 endpoint(provider, preferredDeviceId));
+    }
+
+    @Transactional(readOnly = true)
+    public boolean supportsVision(UUID modelId) {
+        return models.findById(modelId).map(ProviderModel::supportsVision).orElse(false);
     }
 
     @Transactional(readOnly = true)

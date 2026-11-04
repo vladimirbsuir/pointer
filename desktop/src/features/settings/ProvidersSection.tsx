@@ -21,7 +21,7 @@ import { Button } from "@/shared/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
 import { Switch } from "@/shared/ui/switch";
-import { ModelPriceEditor } from "./ModelPriceEditor";
+import { ModelOptionsEditor } from "./ModelOptionsEditor";
 
 type Preset = { name: string; baseUrl: string; isLocal: boolean; needsKey: boolean };
 
@@ -337,7 +337,7 @@ function ProviderCard({ provider }: { provider: Provider }) {
                   </Button>
                 </div>
                 {pricingModelId === model.id && (
-                  <ModelPriceEditor
+                  <ModelOptionsEditor
                     providerId={provider.id}
                     model={model}
                     onCancel={() => setPricingModelId(null)}

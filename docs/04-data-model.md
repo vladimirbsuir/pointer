@@ -344,6 +344,19 @@ The replayable event log ([protocol 4.4](03-protocol.md#44-sessionevent-server--
 
 ## 7. Review
 
+### `attachments`
+
+Images attached to user messages (SESS-11). Messages reference them by id; the context sends them to vision models as `image_url` data URLs and replaces them with a short note for other models.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `session_id` | uuid | FK `sessions`, `ON DELETE CASCADE` |
+| `media_type` | text | `image/png`, `image/jpeg`, `image/gif`, `image/webp` |
+| `size_bytes` | integer | At most 5 MB |
+| `data` | bytea | |
+| `created_at` | timestamptz | |
+
 ### `file_changes`
 
 | Column | Type | Notes |

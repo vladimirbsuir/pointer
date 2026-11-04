@@ -47,3 +47,8 @@ interface ItemRepository extends JpaRepository<Item, UUID> {
 
     List<Item> findBySessionIdAndTurnIdAndStatus(UUID sessionId, UUID turnId, String status);
 }
+
+interface AttachmentRepository extends JpaRepository<Attachment, UUID> {
+
+    Optional<Attachment> findByIdAndSessionId(UUID id, UUID sessionId);
+}
