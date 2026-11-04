@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { ArrowUpIcon, FileTextIcon, SquareIcon, XIcon } from "lucide-react";
+import { ArrowUpIcon, FileTextIcon, SlashIcon, SquareIcon, XIcon } from "lucide-react";
 import { core } from "@/shared/api/core";
+import { useSlashCommands } from "@/shared/api/queries";
 import type { SessionMode } from "@/shared/api/types";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
 import { Textarea } from "@/shared/ui/textarea";
+import { expandCommand, findCommandQuery, matchingCommands } from "./slash-commands";
 
 const modes: SessionMode[] = ["ask", "plan", "agent"];
 
@@ -60,6 +62,12 @@ export function Composer({
   const [mention, setMention] = useState<Mention | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [commandQuery, setCommandQuery] = useState<string | null>(null);
+  const { data: commands } = useSlashCommands();
+  const commandSuggestions =
+    commandQuery === null
+      ? []
+      : matchingCommands(commands ?? [], commandQuery).slice(0, VISIBLE_SUGGESTIONS);
   const canSend = text.trim().length > 0 && !sending && disabledReason === null;
   const mentionQuery = mention?.query ?? null;
 
@@ -91,7 +99,27 @@ export function Composer({
 
   const updateText = (value: string, caret: number) => {
     setText(value);
+    trackTriggers(value, caret);
+  };
+
+  const trackTriggers = (value: string, caret: number) => {
     setMention(findMention(value, caret));
+    const query = findCommandQuery(value, caret);
+    if (query !== commandQuery) {
+      setActiveIndex(0);
+    }
+    setCommandQuery(query);
+  };
+
+  const selectCommand = (name: string) => {
+    const inserted = `/${name} `;
+    const value = inserted + text.slice(1 + (commandQuery ?? "").length);
+    setText(value);
+    setCommandQuery(null);
+    requestAnimationFrame(() => {
+      textarea.current?.focus();
+      textarea.current?.setSelectionRange(inserted.length, inserted.length);
+    });
   };
 
   const selectSuggestion = (path: string) => {
@@ -133,7 +161,7 @@ export function Composer({
       return;
     }
     setSending(true);
-    const message = text.trim();
+    const message = expandCommand(text.trim(), commands ?? []);
     const attachments = await readAttachments(message);
     const sent = attachments !== null && (await onSend(message, attachments));
     setSending(false);
@@ -141,10 +169,34 @@ export function Composer({
       setText("");
       setAttached([]);
       setMention(null);
+      setCommandQuery(null);
     }
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (commandSuggestions.length > 0) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        setActiveIndex(
+          (index) => (index + step + commandSuggestions.length) % commandSuggestions.length,
+        );
+        return;
+      }
+      if (event.key === "Tab" || (event.key === "Enter" && !event.shiftKey)) {
+        const command = commandSuggestions[activeIndex];
+        if (command && (event.key === "Tab" || command.name !== commandQuery)) {
+          event.preventDefault();
+          selectCommand(command.name);
+          return;
+        }
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setCommandQuery(null);
+        return;
+      }
+    }
     if (mention && suggestions.length > 0) {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
@@ -180,6 +232,32 @@ export function Composer({
   return (
     <div className="mx-auto w-full max-w-3xl px-6 pb-6">
       <div className="relative rounded-2xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
+        {commandSuggestions.length > 0 && (
+          <div className="absolute inset-x-2 bottom-full z-10 mb-2 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-md">
+            <ul role="listbox" aria-label={t("commands.title")}>
+              {commandSuggestions.map((command, index) => (
+                <li
+                  key={command.id}
+                  role="option"
+                  aria-selected={index === activeIndex}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    selectCommand(command.name);
+                  }}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs",
+                    index === activeIndex && "bg-accent text-accent-foreground",
+                  )}
+                >
+                  <SlashIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="font-mono">{command.name}</span>
+                  <span className="truncate text-muted-foreground">{command.description}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {mention && (
           <div className="absolute inset-x-2 bottom-full z-10 mb-2 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-md">
             {suggestions.length === 0 ? (
@@ -238,9 +316,12 @@ export function Composer({
             updateText(event.target.value, event.target.selectionStart ?? event.target.value.length)
           }
           onSelect={(event) =>
-            setMention(findMention(text, event.currentTarget.selectionStart ?? text.length))
+            trackTriggers(text, event.currentTarget.selectionStart ?? text.length)
           }
-          onBlur={() => setMention(null)}
+          onBlur={() => {
+            setMention(null);
+            setCommandQuery(null);
+          }}
           onKeyDown={onKeyDown}
           placeholder={disabledReason ?? t("chat.placeholder")}
           rows={2}

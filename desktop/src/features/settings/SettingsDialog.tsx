@@ -19,6 +19,7 @@ import { Separator } from "@/shared/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { AppearanceSwitcher } from "./AppearanceSwitcher";
 import { InstructionsSection } from "./InstructionsSection";
+import { CommandsSection } from "./CommandsSection";
 import { McpSection } from "./McpSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { ProvidersSection } from "./ProvidersSection";
@@ -57,6 +58,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             <TabsTrigger value="account">{t("settings.account")}</TabsTrigger>
             <TabsTrigger value="providers">{t("settings.providers")}</TabsTrigger>
             <TabsTrigger value="instructions">{t("settings.instructions")}</TabsTrigger>
+            <TabsTrigger value="commands">{t("commands.title")}</TabsTrigger>
             <TabsTrigger value="permissions">{t("settings.permissions")}</TabsTrigger>
             <TabsTrigger value="mcp">MCP</TabsTrigger>
             <TabsTrigger value="appearance">{t("settings.appearance")}</TabsTrigger>
@@ -73,6 +75,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           </TabsContent>
           <TabsContent value="instructions" className="pt-4">
             <InstructionsSection />
+          </TabsContent>
+          <TabsContent value="commands" className="pt-4">
+            <CommandsSection />
           </TabsContent>
           <TabsContent value="permissions" className="pt-4">
             <PermissionsSection />

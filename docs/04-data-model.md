@@ -110,6 +110,21 @@ Connection presence is kept in memory, not in the database.
 | `preferences` | jsonb | Theme, notification and UI preferences |
 | `updated_at` | timestamptz | |
 
+### `slash_commands`
+
+User-defined slash commands (UI-7). The client expands `/name arguments` into the prompt before sending; `$ARGUMENTS` in the prompt is replaced with the arguments, otherwise they are appended.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK `users` |
+| `name` | text | `[a-z0-9][a-z0-9-]{0,39}` |
+| `description` | text | Shown in the composer suggestions |
+| `prompt` | text | |
+| `created_at`, `updated_at` | timestamptz | |
+
+Unique: (`user_id`, `name`).
+
 ## 4. Providers and models
 
 ### `providers`

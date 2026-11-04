@@ -27,6 +27,14 @@ export type SessionStatus =
 
 export type SessionMode = "ask" | "plan" | "agent";
 
+export type SlashCommand = {
+  id: string;
+  name: string;
+  description: string;
+  prompt: string;
+  updatedAt: string;
+};
+
 export type SessionWorktree = {
   branch: string;
   baseBranch: string;

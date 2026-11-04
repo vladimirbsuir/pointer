@@ -1,7 +1,7 @@
 import { QueryClient, useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "./client";
 import { core } from "./core";
-import type { Project, Provider, Session } from "./types";
+import type { Project, Provider, Session, SlashCommand } from "./types";
 
 export const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -10,6 +10,7 @@ export const queryClient = new QueryClient({
 export const queryKeys = {
   providers: ["providers"] as const,
   settings: ["settings"] as const,
+  commands: ["commands"] as const,
   projects: ["projects"] as const,
   localProjects: ["localProjects"] as const,
   sessions: (projectId: string) => ["sessions", projectId] as const,
@@ -32,6 +33,13 @@ export function useSettings() {
         defaultModelId: data.defaultModelId ?? null,
       };
     },
+  });
+}
+
+export function useSlashCommands() {
+  return useQuery({
+    queryKey: queryKeys.commands,
+    queryFn: async () => (await unwrap(api().GET("/api/v1/commands"))) as SlashCommand[],
   });
 }
 

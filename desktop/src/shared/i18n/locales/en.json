@@ -138,7 +138,9 @@
     "base_not_checked_out": "Check out the base branch in the project folder before merging.",
     "merge_conflict": "The merge has conflicts and was cancelled. Nothing was changed.",
     "commit_failed": "Could not commit the worktree changes. Check your git user name and email.",
-    "git_failed": "A git command failed."
+    "git_failed": "A git command failed.",
+    "command_exists": "A command with this name already exists.",
+    "command_not_found": "The command does not exist."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",
@@ -323,5 +325,19 @@
     "confirmDiscard": "Delete the worktree and all its changes?",
     "merged": "Changes merged into {{base}}",
     "discarded": "Worktree discarded"
+  },
+  "commands": {
+    "title": "Commands",
+    "description": "Slash commands expand into prompts. Type / at the start of a message to use one.",
+    "empty": "No commands yet.",
+    "add": "Add command",
+    "edit": "Edit command",
+    "delete": "Delete command",
+    "name": "Name",
+    "nameHint": "Lowercase letters, digits and dashes, used as /name.",
+    "descriptionLabel": "Description",
+    "prompt": "Prompt",
+    "promptPlaceholder": "Review the changes in $ARGUMENTS for bugs and missing tests.",
+    "promptHint": "$ARGUMENTS is replaced with the text typed after the command. Without it, that text is appended to the prompt."
   }
 }

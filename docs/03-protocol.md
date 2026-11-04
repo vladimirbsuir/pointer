@@ -429,7 +429,7 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 | Area | Endpoints |
 |---|---|
 | Auth | `POST /auth/register` (public), `POST /auth/login` (public), `POST /auth/refresh` (public), `POST /auth/logout` (public, takes the refresh token), `GET /auth/github/authorize-url` (public), `POST /auth/github/callback` (public), `POST /auth/github/link`, `PUT /auth/password` |
-| User | `GET /me`, `PATCH /me`, `GET /me/settings`, `PUT /me/settings` |
+| User | `GET /me`, `PATCH /me`, `GET /me/settings`, `PUT /me/settings`, `GET /commands`, `POST /commands`, `PUT /commands/{id}`, `DELETE /commands/{id}` |
 | Devices | `GET /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |
 | Providers | `GET /providers`, `POST /providers`, `PATCH /providers/{id}`, `DELETE /providers/{id}`, `POST /providers/{id}/test`, `POST /providers/{id}/models/refresh`, `PATCH /providers/{id}/models/{modelId}` |
 | Projects | `GET /projects`, `POST /projects`, `PATCH /projects/{id}`, `DELETE /projects/{id}`, `GET /projects/{id}/settings`, `PUT /projects/{id}/settings` |
