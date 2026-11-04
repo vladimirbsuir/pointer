@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -13,6 +14,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -24,9 +26,14 @@ public class ExecutionService {
     private static final Duration CANCEL_GRACE = Duration.ofSeconds(5);
 
     private final DeviceChannel channel;
+    private final ObjectProvider<ServerOperation> serverOperations;
     private final Map<UUID, PendingCall> pending = new ConcurrentHashMap<>();
 
     public ExecutionResult execute(ExecutionRequest request, ExecutionListener listener, Cancellation cancellation) {
+        var serverOperation = serverOperation(request.operation());
+        if (serverOperation.isPresent()) {
+            return serverOperation.get().execute(request, cancellation);
+        }
         if (!awaitDevice(request, listener, cancellation)) {
             return ExecutionResult.failure(
                     ExecutionResult.CANCELLED, "cancelled", "Cancelled while waiting for the device");
@@ -44,6 +51,18 @@ public class ExecutionService {
 
     public boolean canExecute(UUID deviceId, UUID projectId) {
         return channel.canExecute(deviceId, projectId);
+    }
+
+    public boolean isOperationAvailable(String operation, UUID projectId) {
+        return serverOperation(operation)
+                .map(server -> projectId == null || server.isAvailable(projectId))
+                .orElse(true);
+    }
+
+    private Optional<ServerOperation> serverOperation(String operation) {
+        return serverOperations.stream()
+                .filter(server -> server.operation().equals(operation))
+                .findFirst();
     }
 
     public void onOutput(UUID callId, String stream, String data) {

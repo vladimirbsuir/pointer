@@ -9,14 +9,20 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
+import tools.jackson.databind.json.JsonMapper;
 
 public final class FakeOpenAiServer implements AutoCloseable {
 
+    private static final int EMBEDDING_DIMENSIONS = 64;
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+
     private final HttpServer server;
     private final List<String> requests = new CopyOnWriteArrayList<>();
+    private final List<List<String>> embeddingInputs = new CopyOnWriteArrayList<>();
     private final ConcurrentLinkedQueue<Response> queued = new ConcurrentLinkedQueue<>();
     private volatile List<String> models = List.of("fake-model");
     private volatile String requiredApiKey;
@@ -30,6 +36,7 @@ public final class FakeOpenAiServer implements AutoCloseable {
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         server.createContext("/v1/models", this::handleModels);
         server.createContext("/v1/chat/completions", this::handleChat);
+        server.createContext("/v1/embeddings", this::handleEmbeddings);
         server.start();
     }
 
@@ -82,6 +89,37 @@ public final class FakeOpenAiServer implements AutoCloseable {
 
     public List<String> requests() {
         return List.copyOf(requests);
+    }
+
+    public List<List<String>> embeddingInputs() {
+        return List.copyOf(embeddingInputs);
+    }
+
+    public static float[] embedding(String text) {
+        var vector = new float[EMBEDDING_DIMENSIONS];
+        for (var word : text.toLowerCase(Locale.ROOT).split("[^a-z0-9]+")) {
+            if (!word.isEmpty()) {
+                vector[Math.floorMod(word.hashCode(), EMBEDDING_DIMENSIONS)] += 1;
+            }
+        }
+        vector[0] += 0.01f;
+        return vector;
+    }
+
+    private void handleEmbeddings(HttpExchange exchange) throws IOException {
+        var body = JSON.readTree(exchange.getRequestBody().readAllBytes());
+        var inputs = new ArrayList<String>();
+        body.path("input").forEach(input -> inputs.add(input.asString()));
+        embeddingInputs.add(List.copyOf(inputs));
+        var data = new ArrayList<String>();
+        for (var index = 0; index < inputs.size(); index++) {
+            var values = new ArrayList<String>();
+            for (var value : embedding(inputs.get(index))) {
+                values.add(Float.toString(value));
+            }
+            data.add("{\"index\":" + index + ",\"embedding\":[" + String.join(",", values) + "]}");
+        }
+        respond(exchange, 200, "application/json", "{\"object\":\"list\",\"data\":[" + String.join(",", data) + "]}");
     }
 
     private void handleModels(HttpExchange exchange) throws IOException {

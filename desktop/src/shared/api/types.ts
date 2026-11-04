@@ -27,6 +27,18 @@ export type Project = Required<Omit<Schemas["ProjectResponse"], "archivedAt">> &
   archivedAt: string | null;
 };
 
+export type ProjectIndex = {
+  status: "none" | "indexing" | "ready" | "failed";
+  embeddingModelId: string | null;
+  embeddingModelKey: string | null;
+  filesTotal: number;
+  filesDone: number;
+  fileCount: number;
+  chunkCount: number;
+  error: string | null;
+  indexedAt: string | null;
+};
+
 export type SessionStatus =
   "idle" | "running" | "waiting_for_approval" | "waiting_for_executor" | "error";
 

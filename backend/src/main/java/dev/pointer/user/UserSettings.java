@@ -21,6 +21,7 @@ public class UserSettings {
 
     private String globalInstructions;
     private UUID defaultModelId;
+    private UUID embeddingModelId;
 
     @JdbcTypeCode(SqlTypes.JSON)
     private Map<String, Object> preferences;
@@ -47,6 +48,11 @@ public class UserSettings {
 
     void changeDefaultModel(UUID defaultModelId, Instant now) {
         this.defaultModelId = defaultModelId;
+        this.updatedAt = now;
+    }
+
+    void changeEmbeddingModel(UUID embeddingModelId, Instant now) {
+        this.embeddingModelId = embeddingModelId;
         this.updatedAt = now;
     }
 }

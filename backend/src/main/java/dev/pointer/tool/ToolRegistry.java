@@ -1,5 +1,6 @@
 package dev.pointer.tool;
 
+import dev.pointer.execution.ExecutionService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,12 +14,14 @@ public class ToolRegistry {
 
     private final ToolRepository tools;
     private final McpToolCatalog mcpTools;
+    private final ExecutionService execution;
 
     @Transactional(readOnly = true)
     public List<ToolDefinition> available(UUID userId, UUID projectId, UUID deviceId) {
         var reported = mcpTools.reportedBy(deviceId);
         return tools.findAvailable(userId, projectId).stream()
                 .filter(tool -> !tool.isMcp() || reported.contains(tool.getName()))
+                .filter(tool -> execution.isOperationAvailable(tool.getOperation(), projectId))
                 .toList();
     }
 

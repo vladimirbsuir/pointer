@@ -5,6 +5,7 @@ import {
   CheckIcon,
   ChevronRightIcon,
   ClockIcon,
+  DatabaseZapIcon,
   FilePenIcon,
   FileTextIcon,
   FolderIcon,
@@ -43,7 +44,21 @@ const icons: Record<string, typeof WrenchIcon> = {
   edit_file: FilePenIcon,
   run_command: SquareTerminalIcon,
   web_fetch: GlobeIcon,
+  semantic_search: DatabaseZapIcon,
 };
+
+function searchResultsText(results: unknown) {
+  if (!Array.isArray(results)) {
+    return undefined;
+  }
+  return (results as Record<string, unknown>[])
+    .map((hit) => {
+      const location = `${String(hit.path)}:${String(hit.startLine)}-${String(hit.endLine)}`;
+      const symbol = typeof hit.symbol === "string" ? `  ${hit.symbol}` : "";
+      return `${location}${symbol}  (${String(hit.score)})`;
+    })
+    .join("\n");
+}
 
 function argument(call: ToolCall, name: string) {
   const value = call.arguments?.[name];
@@ -75,6 +90,8 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
         return t("tools.run_command", { target: argument(call, "command") });
       case "web_fetch":
         return t("tools.web_fetch", { target: argument(call, "url") });
+      case "semantic_search":
+        return t("tools.semantic_search", { target: argument(call, "query") });
       default:
         return mcpParts
           ? t("tools.mcp", { server: mcpParts[0], tool: mcpParts.slice(1).join("__") })
@@ -104,6 +121,10 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
         return t("tools.exitCode", { code: String(result.exitCode ?? "?") });
       case "web_fetch":
         return t("tools.httpStatus", { code: String(result.status ?? "?") });
+      case "semantic_search":
+        return t("tools.matches", {
+          count: (result.results as unknown[] | undefined)?.length ?? 0,
+        });
       default: {
         const change = call.fileChanges?.[0];
         return change ? `+${change.linesAdded} −${change.linesRemoved}` : null;
@@ -112,6 +133,7 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
   })();
 
   const output =
+    searchResultsText(call.result?.results) ??
     call.output ??
     call.liveOutput ??
     (call.result?.output as string | undefined) ??

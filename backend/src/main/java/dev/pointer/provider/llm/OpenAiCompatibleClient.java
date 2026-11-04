@@ -43,6 +43,30 @@ public class OpenAiCompatibleClient {
         }
     }
 
+    public List<float[]> embed(Endpoint endpoint, String model, List<String> inputs, Cancellation cancellation) {
+        var body = json.writeValueAsBytes(Map.of("model", model, "input", inputs));
+        var request = new HttpTransport.Request("POST", endpoint.url("/embeddings"), headers(endpoint, false), body);
+        try (var response = endpoint.transport().send(request, cancellation)) {
+            ensureSuccess(response);
+            var data = json.readTree(response.body()).path("data");
+            var vectors = new float[inputs.size()][];
+            for (var entry : data) {
+                var index = entry.path("index").asInt(-1);
+                if (index >= 0 && index < vectors.length) {
+                    vectors[index] = vector(entry.path("embedding"));
+                }
+            }
+            for (var vector : vectors) {
+                if (vector == null || vector.length == 0) {
+                    throw new LlmException("invalid_embeddings", "The provider returned incomplete embeddings", 0);
+                }
+            }
+            return List.of(vectors);
+        } catch (IOException exception) {
+            throw new LlmException("provider_unreachable", exception.getMessage(), exception);
+        }
+    }
+
     public void stream(Endpoint endpoint, ChatRequest chatRequest, StreamListener listener, Cancellation cancellation) {
         var body = json.writeValueAsBytes(requestBody(chatRequest));
         var request =
@@ -192,6 +216,14 @@ public class OpenAiCompatibleClient {
                 response.status() == 401 || response.status() == 403 ? "provider_unauthorized" : "provider_error",
                 message.isBlank() ? "HTTP " + response.status() : message,
                 response.status());
+    }
+
+    private static float[] vector(JsonNode node) {
+        var vector = new float[node.size()];
+        for (var index = 0; index < vector.length; index++) {
+            vector[index] = (float) node.get(index).asDouble();
+        }
+        return vector;
     }
 
     private static String textOrNull(JsonNode node) {

@@ -356,6 +356,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["status_1"];
+        put?: never;
+        post: operations["start"];
+        delete: operations["delete_1"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/commands": {
         parameters: {
             query?: never;
@@ -478,7 +494,7 @@ export interface paths {
         get: operations["get"];
         put?: never;
         post?: never;
-        delete: operations["delete_1"];
+        delete: operations["delete_2"];
         options?: never;
         head?: never;
         patch: operations["update_1"];
@@ -494,7 +510,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete: operations["delete_2"];
+        delete: operations["delete_3"];
         options?: never;
         head?: never;
         patch: operations["update_2"];
@@ -526,7 +542,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete: operations["delete_3"];
+        delete: operations["delete_4"];
         options?: never;
         head?: never;
         patch: operations["update_3"];
@@ -690,11 +706,16 @@ export interface components {
             /** Format: uuid */
             defaultModelId?: string;
             clearDefaultModel?: boolean;
+            /** Format: uuid */
+            embeddingModelId?: string;
+            clearEmbeddingModel?: boolean;
         };
         SettingsResponse: {
             globalInstructions?: string;
             /** Format: uuid */
             defaultModelId?: string;
+            /** Format: uuid */
+            embeddingModelId?: string;
         };
         CommandRequest: {
             name: string;
@@ -877,6 +898,26 @@ export interface components {
             mode?: string;
             /** Format: uuid */
             modelId?: string;
+        };
+        StartIndexRequest: {
+            rebuild?: boolean;
+        };
+        IndexStatusResponse: {
+            status?: string;
+            /** Format: uuid */
+            embeddingModelId?: string;
+            embeddingModelKey?: string;
+            /** Format: int32 */
+            filesTotal?: number;
+            /** Format: int32 */
+            filesDone?: number;
+            /** Format: int32 */
+            fileCount?: number;
+            /** Format: int32 */
+            chunkCount?: number;
+            error?: string;
+            /** Format: date-time */
+            indexedAt?: string;
         };
         DeviceInfo: {
             /** Format: uuid */
@@ -1717,6 +1758,74 @@ export interface operations {
             };
         };
     };
+    status_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexStatusResponse"];
+                };
+            };
+        };
+    };
+    start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StartIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexStatusResponse"];
+                };
+            };
+        };
+    };
+    delete_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_3: {
         parameters: {
             query?: never;
@@ -1925,7 +2034,7 @@ export interface operations {
             };
         };
     };
-    delete_1: {
+    delete_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -1971,7 +2080,7 @@ export interface operations {
             };
         };
     };
-    delete_2: {
+    delete_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -2065,7 +2174,7 @@ export interface operations {
             };
         };
     };
-    delete_3: {
+    delete_4: {
         parameters: {
             query?: never;
             header?: never;

@@ -1,7 +1,7 @@
 import { QueryClient, useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "./client";
 import { core } from "./core";
-import type { Project, Provider, Session, SlashCommand } from "./types";
+import type { ProjectIndex, Project, Provider, Session, SlashCommand } from "./types";
 
 export const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -14,6 +14,7 @@ export const queryKeys = {
   projects: ["projects"] as const,
   localProjects: ["localProjects"] as const,
   sessions: (projectId: string) => ["sessions", projectId] as const,
+  projectIndex: (projectId: string) => ["projectIndex", projectId] as const,
 };
 
 export function useProviders() {
@@ -31,8 +32,21 @@ export function useSettings() {
       return {
         globalInstructions: data.globalInstructions ?? "",
         defaultModelId: data.defaultModelId ?? null,
+        embeddingModelId: data.embeddingModelId ?? null,
       };
     },
+  });
+}
+
+export function useProjectIndex(projectId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.projectIndex(projectId),
+    enabled,
+    queryFn: async () =>
+      (await unwrap(
+        api().GET("/api/v1/projects/{projectId}/index", { params: { path: { projectId } } }),
+      )) as ProjectIndex,
+    refetchInterval: (query) => (query.state.data?.status === "indexing" ? 1000 : false),
   });
 }
 

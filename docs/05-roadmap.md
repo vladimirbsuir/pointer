@@ -36,7 +36,7 @@ gantt
 | M3 Executor and tools | end of January | The agent reads, edits and runs commands with approvals | Implemented |
 | M4 Agent experience | early March | **MVP v0.1**, used daily for Pointer development | Implemented; the week of daily use is tracked by the author |
 | M5 MVP+ | end of March | Checkpoints, worktrees, MCP, terminal | Implemented (November 2026) |
-| M6 Highlights | mid May | RAG, custom tools, Telegram, remote execution | Next |
+| M6 Highlights | mid May | RAG, custom tools, Telegram, remote execution | In progress: RAG implemented (November 2026) |
 | M7 Hardening and thesis | mid June | Cloud deployment, measurements, thesis text | Planned |
 
 Development runs ahead of the targets: M0 to M5 were implemented by early November 2026. "Implemented" means the features are built and covered by tests; done criteria that require a period of real use are confirmed separately.
@@ -109,7 +109,7 @@ Ordered by value; the last items may move after the highlights if time is short.
 
 Ordered by value for the defense.
 
-1. **RAG with AST chunking** (CTX-7, TOOL-14): tree-sitter chunking in the core, embeddings through an OpenAI-compatible `/embeddings` endpoint, pgvector index, incremental reindexing, `semantic_search` tool. Includes a small evaluation comparing answers with and without RAG.
+1. **RAG with AST chunking** (CTX-7, TOOL-14): tree-sitter chunking in the core, embeddings through an OpenAI-compatible `/embeddings` endpoint, pgvector index, incremental reindexing, `semantic_search` tool. Implemented; the evaluation comparing answers with and without RAG is part of the M7 measurements.
 2. **Agent-proposed custom tools** (TOOL-13): proposal item type, review and approval UI, storage and versioning, execution of stored implementations through the executor.
 3. **Telegram remote control** (REM-1, 2): account linking, session list, sending messages, progress updates, inline approval buttons.
 4. **Remote execution** (REM-3): container executor running a cloned GitHub repository, pushing a branch.
@@ -143,6 +143,6 @@ To be settled as ADRs when the related milestone starts.
 | Token estimation library for providers without usage data | M2 |
 | Compaction strategy details (threshold, what to keep verbatim): [ADR 0009](adr/0009-context-compaction-and-plan-approval.md) | M4 |
 | MCP transports to support (stdio, streamable HTTP) and where MCP servers run: [ADR 0010](adr/0010-mcp-servers-on-the-device.md) | M5 |
-| Embedding model defaults and chunk size for RAG | M6 |
+| Embedding model defaults and chunk size for RAG: [ADR 0013](adr/0013-semantic-code-index.md) | M6 |
 | Container runtime and isolation for remote execution | M6 |
 | Where session worktrees live and how they merge: [ADR 0011](adr/0011-session-worktrees.md) | M5 |

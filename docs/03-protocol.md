@@ -375,6 +375,10 @@ Notes:
 - `run_command` runs in PowerShell with the project root (or `workingDirectory` within it) as the current directory.
 - `web_fetch` runs on the device, so it reaches the same hosts as the user's browser, including local dev servers. It refuses non-text content with `unsupported_content`. It is offered in every mode and asks for approval by default, with a `fetch` preview holding the URL.
 
+`semantic_search` (`query`, `limit?` up to 20, `path?` directory prefix) never reaches the device as an `exec.request`: the backend executes it against the project index, after an incremental `pointer.index_scan` pass. The result is `results: [{ path, startLine, endLine, symbol?, kind, score, content }]` and `index` (`fresh`, `updating` when many files changed and a background update runs, `offline` when the device could not be asked). The tool is offered only for projects with a non-empty index.
+
+The index itself is managed over REST: `GET /projects/{id}/index` returns the status (`none`, `indexing`, `ready`, `failed`, counters, model, error), `POST /projects/{id}/index` with optional `rebuild` starts indexing on the requesting device (`202`; `400 embedding_model_not_configured`, `409 index_device_offline`, `409 index_running`), `DELETE /projects/{id}/index` removes it. The embedding model is the user setting `embeddingModelId`.
+
 MCP tools reach the executor as operation `mcp.call` with `server`, `tool` and `arguments`. The result is `content` (text blocks joined, other blocks as placeholders) and `structuredContent` when the server returns it. A result with `isError` becomes a failure with code `tool_error`.
 
 ### 7.2 Internal operations
@@ -389,6 +393,10 @@ Used by the backend itself, never exposed to the model. Names start with `pointe
 | `pointer.worktree_merge` | `baseBranch`, `message` | `merged`, `commits`. Commits pending changes with `message`, merges the branch with `--no-ff` into the project folder, then removes the worktree and the branch. Fails with `base_not_checked_out`, `commit_failed` or `merge_conflict` (the merge is aborted). |
 | `pointer.worktree_discard` | none | `discarded`. Removes the worktree and deletes the branch. |
 | `pointer.restore_file` | `path`, `content` (null to delete), `expectedContent` (null if the file should not exist), `force` | `restored` (boolean), fails with `file_modified` if the current content differs from `expectedContent` and `force` is not set. With `dryRun` it only performs the check. |
+| `pointer.index_scan` | none | `files: [{ path, hash }]` (SHA-256 of the content), `truncated`. Lists files of the project folder that can be indexed ([ADR 0013](adr/0013-semantic-code-index.md)). |
+| `pointer.index_chunks` | `paths` (at most 200) | `files: [{ path, hash, chunks: [{ symbol, kind, startLine, endLine, content }] }]`. A file that no longer exists has `missing: true`, a file that cannot be indexed `skipped: true`. |
+
+Index operations always work on the project folder, never on a session worktree.
 
 ## 8. LLM relay
 

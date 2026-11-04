@@ -107,6 +107,7 @@ Connection presence is kept in memory, not in the database.
 | `user_id` | uuid | PK, FK `users` |
 | `global_instructions` | text | PROJ-4 |
 | `default_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL` |
+| `embedding_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL`; model used for semantic indexes (CTX-7) |
 | `preferences` | jsonb | Theme, notification and UI preferences |
 | `updated_at` | timestamptz | |
 
@@ -375,14 +376,35 @@ Images attached to user messages (SESS-11). Messages reference them by id; the c
 
 Index: (`session_id`, `path`). Content is stored only for text files up to 1 MiB; larger or binary files are recorded without content and cannot be reverted.
 
+### Semantic index
+
+Tables of the `rag` module ([ADR 0013](adr/0013-semantic-code-index.md)), accessed with plain SQL because of the `vector` type.
+
+`index_states`: one row per indexed project.
+
+| Column | Type | Notes |
+|---|---|---|
+| `project_id` | uuid | PK, FK `projects` |
+| `user_id` | uuid | FK `users`, whose provider computes embeddings |
+| `embedding_model_id` | uuid | FK `models`, `ON DELETE SET NULL` |
+| `embedding_model_key` | text | Model key at indexing time, for display |
+| `dimensions` | integer | Vector length returned by the model |
+| `status` | text | `indexing`, `ready`, `failed` |
+| `files_total`, `files_done` | integer | Progress of the current pass over changed files |
+| `file_count`, `chunk_count` | integer | Size of the index |
+| `error` | text | Last failure |
+| `indexed_at`, `updated_at` | timestamptz | |
+
+`indexed_files`: (`project_id`, `path`) PK, `content_hash` (SHA-256 reported by the device).
+
+`code_chunks`: `id`, `project_id`, `path`, `symbol` (nullable, e.g. `SessionService.create`), `kind` (syntax node kind, `group` or `lines`), `start_line`, `end_line`, `content`, `embedding vector` without a fixed dimension. Index on (`project_id`, `path`); search is an exact cosine scan per project.
+
 ## 8. Planned for highlight features
 
 Sketched here so the core schema leaves room for them. Final definitions come with their milestones.
 
 | Table | Feature | Purpose |
 |---|---|---|
-| `code_chunks` | RAG | `project_id`, `path`, `symbol`, `kind`, `start_line`, `end_line`, `content_hash`, `embedding vector(n)`; HNSW index on `embedding` |
-| `index_states` | RAG | Per project: embedding model, last indexed time, file hashes |
 | `custom_tool_implementations` | Custom tools | Implementation kind and body for `tools` rows with `source = 'custom'`, plus the proposing session |
 | `telegram_links` | Telegram | `user_id`, `chat_id`, link code, linked time |
 | `remote_workspaces` | Remote execution | Container id, repository, branch, status for sessions on the container executor |

@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ChevronRightIcon,
+  DatabaseZapIcon,
   FolderIcon,
   FolderPlusIcon,
   GitBranchIcon,
@@ -26,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu";
 import { createSession } from "./create-session";
+import { ProjectIndexDialog } from "./ProjectIndexDialog";
 import { useWorkspace } from "./workspace-store";
 
 function folderName(path: string) {
@@ -104,6 +106,7 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
   const queryClient = useQueryClient();
   const activeProjectId = useWorkspace((state) => state.activeProjectId);
   const [expanded, setExpanded] = useState(true);
+  const [indexOpen, setIndexOpen] = useState(false);
   const { data: sessions } = useSessions(project.id);
 
   const startSession = async (worktree = false) => {
@@ -176,9 +179,19 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
               <GitBranchIcon />
               {t("shell.newWorktreeSession")}
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setIndexOpen(true)}>
+              <DatabaseZapIcon />
+              {t("shell.semanticIndex")}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <ProjectIndexDialog
+        project={project}
+        linked={Boolean(path)}
+        open={indexOpen}
+        onOpenChange={setIndexOpen}
+      />
       {expanded && (
         <div className="ml-4 flex flex-col">
           {sessions?.map((session) => (

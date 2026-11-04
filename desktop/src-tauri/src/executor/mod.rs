@@ -1,5 +1,7 @@
+mod chunker;
 mod command;
 mod files;
+mod index;
 mod paths;
 mod search;
 mod web;
@@ -219,6 +221,8 @@ async fn execute(
         "grep" => search::grep(&root, &request),
         "pointer.project_context" => files::project_context(&root),
         "pointer.restore_file" => files::restore_file(&root, &request),
+        "pointer.index_scan" => index::scan(&root),
+        "pointer.index_chunks" => index::chunks(&root, &request),
         other => Err(ExecError::rejected(
             "unknown_operation",
             format!("Unknown operation {other}"),

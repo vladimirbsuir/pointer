@@ -77,6 +77,30 @@ function change(path: string, after: string, dryRun: boolean): Result {
   ]);
 }
 
+function contentHash(content: string) {
+  let hash = 0;
+  for (const char of content) {
+    hash = (Math.imul(hash, 31) + char.charCodeAt(0)) | 0;
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function blockChunks(content: string) {
+  const lines = content.split("\n");
+  const starts = lines.flatMap((line, index) => (/^\S/.test(line) ? [index] : []));
+  return starts
+    .map((start, position) => {
+      const end = (starts[position + 1] ?? lines.length) - 1;
+      const text = lines
+        .slice(start, end + 1)
+        .join("\n")
+        .trimEnd();
+      const symbol = /^(?:def|class|function)\s+(\w+)/.exec(lines[start] ?? "")?.[1] ?? null;
+      return { symbol, kind: "block", startLine: start + 1, endLine: end + 1, content: text };
+    })
+    .filter((chunk) => chunk.content.length > 0);
+}
+
 export function suggestFilesInBrowser(query: string) {
   const needle = query.toLowerCase();
   return [...files.keys()].filter((path) => path.toLowerCase().includes(needle)).sort();
@@ -149,6 +173,20 @@ export function executeInBrowser(
       );
       return ok({ matches, truncated: false });
     }
+    case "pointer.index_scan":
+      return ok({
+        files: [...files].map(([path, content]) => ({ path, hash: contentHash(content) })),
+        truncated: false,
+      });
+    case "pointer.index_chunks":
+      return ok({
+        files: (args.paths as string[]).map((path) => {
+          const content = files.get(path);
+          return content === undefined
+            ? { path, missing: true }
+            : { path, hash: contentHash(content), chunks: blockChunks(content) };
+        }),
+      });
     case "write_file":
       return change(normalize(args.path), String(args.content ?? ""), dryRun);
     case "edit_file": {

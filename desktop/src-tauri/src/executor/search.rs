@@ -129,7 +129,7 @@ fn is_subsequence(text: &str, query: &str) -> bool {
         .all(|wanted| remaining.any(|candidate| candidate == wanted))
 }
 
-fn files(base: &Path) -> impl Iterator<Item = std::path::PathBuf> {
+pub(super) fn files(base: &Path) -> impl Iterator<Item = std::path::PathBuf> {
     WalkBuilder::new(base)
         .hidden(false)
         .require_git(false)

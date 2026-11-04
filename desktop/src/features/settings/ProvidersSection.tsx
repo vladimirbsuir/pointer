@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   ChevronRightIcon,
   CircleDollarSignIcon,
+  DatabaseZapIcon,
   PlusIcon,
   RefreshCwIcon,
   StarIcon,
@@ -195,6 +196,16 @@ function ProviderCard({ provider }: { provider: Provider }) {
       }
     });
 
+  const toggleEmbedding = (modelId: string, active: boolean) =>
+    run(async () => {
+      await unwrap(
+        api().PUT("/api/v1/me/settings", {
+          body: active ? { clearEmbeddingModel: true } : { embeddingModelId: modelId },
+        }),
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+    });
+
   const setDefault = (modelId: string) =>
     run(async () => {
       await unwrap(api().PUT("/api/v1/me/settings", { body: { defaultModelId: modelId } }));
@@ -284,6 +295,7 @@ function ProviderCard({ provider }: { provider: Provider }) {
           )}
           {visibleModels.map((model) => {
             const isDefault = settings?.defaultModelId === model.id;
+            const isEmbedding = settings?.embeddingModelId === model.id;
             return (
               <li key={model.id}>
                 <div className="flex items-center gap-2 px-4 py-1.5 text-sm">
@@ -325,6 +337,15 @@ function ProviderCard({ provider }: { provider: Provider }) {
                     ) : (
                       <CircleDollarSignIcon />
                     )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    disabled={busy || (!isEmbedding && !model.enabled)}
+                    title={isEmbedding ? t("providers.isEmbedding") : t("providers.makeEmbedding")}
+                    onClick={() => void toggleEmbedding(model.id, isEmbedding)}
+                  >
+                    <DatabaseZapIcon className={cn(isEmbedding && "text-sky-500")} />
                   </Button>
                   <Button
                     variant="ghost"

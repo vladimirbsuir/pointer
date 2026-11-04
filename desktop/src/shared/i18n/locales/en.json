@@ -38,7 +38,8 @@
     "notLinked": "Folder is not linked on this device",
     "linkFolder": "Link folder",
     "connected": "Connected",
-    "disconnected": "Reconnecting…"
+    "disconnected": "Reconnecting…",
+    "semanticIndex": "Semantic index"
   },
   "settings": {
     "title": "Settings",
@@ -144,7 +145,10 @@
     "model_without_vision": "The selected model does not accept images.",
     "unsupported_attachment": "Only PNG, JPEG, GIF and WebP images are supported.",
     "attachment_too_large": "Images must be at most 5 MB.",
-    "attachment_not_found": "The attachment was not found."
+    "attachment_not_found": "The attachment was not found.",
+    "embedding_model_not_configured": "Choose an embedding model in Settings → Providers first.",
+    "index_device_offline": "Open the project on this computer to index it.",
+    "index_running": "The project is already being indexed."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",
@@ -212,7 +216,9 @@
     "outputPrice": "Output, $ per 1M tokens",
     "pricing": "Model options",
     "priceSummary": "${{input}} / ${{output}}",
-    "supportsVision": "Accepts images"
+    "supportsVision": "Accepts images",
+    "makeEmbedding": "Use for semantic search",
+    "isEmbedding": "Embedding model for semantic search"
   },
   "approval": {
     "title": "Allow this action?",
@@ -237,7 +243,8 @@
     "entries": "{{count}} entries",
     "exitCode": "exit {{code}}",
     "mcp": "{{server}} · {{tool}}",
-    "httpStatus": "HTTP {{code}}"
+    "httpStatus": "HTTP {{code}}",
+    "semantic_search": "Semantic search \"{{target}}\""
   },
   "permissions": {
     "tools": "Tools",
@@ -355,5 +362,21 @@
     "prompt": "Prompt",
     "promptPlaceholder": "Review the changes in $ARGUMENTS for bugs and missing tests.",
     "promptHint": "$ARGUMENTS is replaced with the text typed after the command. Without it, that text is appended to the prompt."
+  },
+  "index": {
+    "title": "Semantic index · {{project}}",
+    "description": "The agent searches the indexed code by meaning with the semantic_search tool. Code is split along syntax boundaries on this computer and embedded with your embedding model.",
+    "none": "The project is not indexed yet.",
+    "progress": "Indexing: {{done}} of {{total}} changed files",
+    "stats": "{{files}} files, {{chunks}} fragments",
+    "indexedAt": "Updated {{time}}",
+    "model": "Embedding model: {{model}}",
+    "noModel": "No embedding model selected. Mark one in Settings → Providers.",
+    "modelChanged": "The embedding model changed; updating rebuilds the whole index.",
+    "notLinked": "Link the project folder on this computer to index it.",
+    "build": "Index",
+    "update": "Update",
+    "rebuild": "Rebuild",
+    "delete": "Delete"
   }
 }

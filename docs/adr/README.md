@@ -19,3 +19,4 @@ File name: `NNNN-short-title.md`. Status: `Proposed`, `Accepted`, `Superseded by
 | [0010](0010-mcp-servers-on-the-device.md) | MCP servers run on the user's device | Accepted |
 | [0011](0011-session-worktrees.md) | Sessions in git worktrees | Accepted |
 | [0012](0012-lombok-for-boilerplate.md) | Lombok for constructor injection and entity getters | Accepted |
+| [0013](0013-semantic-code-index.md) | Semantic code index | Accepted |

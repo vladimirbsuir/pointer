@@ -37,6 +37,14 @@ public class SettingsService {
             }
             userSettings.changeDefaultModel(request.defaultModelId(), now);
         }
+        if (Boolean.TRUE.equals(request.clearEmbeddingModel())) {
+            userSettings.changeEmbeddingModel(null, now);
+        } else if (request.embeddingModelId() != null) {
+            if (!providerService.modelBelongsTo(userId, request.embeddingModelId())) {
+                throw ApiException.notFound("model_not_found", "Model does not exist");
+            }
+            userSettings.changeEmbeddingModel(request.embeddingModelId(), now);
+        }
         return toResponse(settings.save(userSettings));
     }
 
@@ -46,16 +54,28 @@ public class SettingsService {
         return configured != null ? configured : providerService.firstEnabledModel(userId);
     }
 
+    @Transactional(readOnly = true)
+    public UUID embeddingModel(UUID userId) {
+        return find(userId).getEmbeddingModelId();
+    }
+
     private UserSettings find(UUID userId) {
         return settings.findById(userId).orElseGet(() -> settings.save(new UserSettings(userId, clock.instant())));
     }
 
     private static SettingsResponse toResponse(UserSettings userSettings) {
-        return new SettingsResponse(userSettings.getGlobalInstructions(), userSettings.getDefaultModelId());
+        return new SettingsResponse(
+                userSettings.getGlobalInstructions(),
+                userSettings.getDefaultModelId(),
+                userSettings.getEmbeddingModelId());
     }
 
-    public record SettingsResponse(String globalInstructions, UUID defaultModelId) {}
+    public record SettingsResponse(String globalInstructions, UUID defaultModelId, UUID embeddingModelId) {}
 
     public record UpdateSettingsRequest(
-            @Size(max = 20_000) String globalInstructions, UUID defaultModelId, Boolean clearDefaultModel) {}
+            @Size(max = 20_000) String globalInstructions,
+            UUID defaultModelId,
+            Boolean clearDefaultModel,
+            UUID embeddingModelId,
+            Boolean clearEmbeddingModel) {}
 }
