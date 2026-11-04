@@ -23,6 +23,25 @@ import tools.jackson.databind.JsonNode;
 class AgentFlowTests extends AgentIntegrationTest {
 
     @Test
+    void unreachableProviderFailsTheTurnInsteadOfLeavingItRunning() throws Exception {
+        var setup = setUp(false);
+        llm.close();
+
+        try (var ws =
+                GatewayTestClient.connect(port, setup.auth().accessToken(), setup.deviceId(), List.of("viewer"))) {
+            ws.subscribe(setup.sessionId(), 0);
+            send(setup, "Hello", null).expectStatus().isEqualTo(HttpStatus.ACCEPTED);
+
+            var completed = ws.awaitEvent("turn.completed", Duration.ofSeconds(30))
+                    .path("payload")
+                    .path("event");
+            assertThat(completed.path("reason").asString()).isEqualTo("failed");
+            assertThat(completed.path("error").path("code").asString()).isEqualTo("provider_unreachable");
+        }
+        assertThat(sessionStatus(setup)).isEqualTo("error");
+    }
+
+    @Test
     void sessionCostIsEstimatedFromModelPrices() throws Exception {
         var setup = setUp(false);
         var providers = client.get()

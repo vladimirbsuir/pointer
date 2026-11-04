@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.TreeMap;
@@ -142,10 +143,14 @@ public class AgentRunner implements LiveItemSnapshots {
     }
 
     private void launch(UUID userId, UUID sessionId, UUID turnId) {
-        executor.submit(() -> {
-            var nextTurn = Optional.of(turnId);
-            while (nextTurn.isPresent()) {
-                nextTurn = runTurn(userId, sessionId, nextTurn.get());
+        executor.execute(() -> {
+            try {
+                var nextTurn = Optional.of(turnId);
+                while (nextTurn.isPresent()) {
+                    nextTurn = runTurn(userId, sessionId, nextTurn.get());
+                }
+            } catch (Throwable throwable) {
+                log.error("Agent loop for session {} stopped unexpectedly", sessionId, throwable);
             }
         });
     }
@@ -315,8 +320,14 @@ public class AgentRunner implements LiveItemSnapshots {
                 writer.completeItem(userId, sessionId, itemId, Item.FAILED, Map.of("text", live.text.toString())));
         var cancelled = turn.cancellation.isCancelled();
         var reason = cancelled ? Turn.CANCELLED : Turn.FAILED;
-        return writer.finishTurn(
-                userId, sessionId, turnId, reason, cancelled ? null : Map.of("code", code, "message", message));
+        var error = cancelled
+                ? null
+                : Map.<String, Object>of(
+                        "code",
+                        Objects.requireNonNullElse(code, "internal_error"),
+                        "message",
+                        Objects.requireNonNullElse(message, "The model request failed"));
+        return writer.finishTurn(userId, sessionId, turnId, reason, error);
     }
 
     private void generateTitle(UUID userId, UUID sessionId, ResolvedModel model, List<ChatMessage> messages) {
