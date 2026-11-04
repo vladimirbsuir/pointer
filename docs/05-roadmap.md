@@ -28,16 +28,18 @@ gantt
     M7 Hardening and thesis    :m7, after m6, 4w
 ```
 
-| Milestone | Target end | Outcome |
-|---|---|---|
-| M0 Foundation | mid November | Projects build, run and pass CI |
-| M1 Accounts | end of November | Sign-in from the desktop app |
-| M2 Chat and realtime | end of December | Streaming chat with any OpenAI-compatible or local model |
-| M3 Executor and tools | end of January | The agent reads, edits and runs commands with approvals |
-| M4 Agent experience | early March | **MVP v0.1**, used daily for Pointer development |
-| M5 MVP+ | end of March | Checkpoints, worktrees, MCP, terminal |
-| M6 Highlights | mid May | RAG, custom tools, Telegram, remote execution |
-| M7 Hardening and thesis | mid June | Cloud deployment, measurements, thesis text |
+| Milestone | Target end | Outcome | Status |
+|---|---|---|---|
+| M0 Foundation | mid November | Projects build, run and pass CI | Implemented |
+| M1 Accounts | end of November | Sign-in from the desktop app | Implemented |
+| M2 Chat and realtime | end of December | Streaming chat with any OpenAI-compatible or local model | Implemented |
+| M3 Executor and tools | end of January | The agent reads, edits and runs commands with approvals | Implemented |
+| M4 Agent experience | early March | **MVP v0.1**, used daily for Pointer development | Implemented; the week of daily use is tracked by the author |
+| M5 MVP+ | end of March | Checkpoints, worktrees, MCP, terminal | Implemented (November 2026) |
+| M6 Highlights | mid May | RAG, custom tools, Telegram, remote execution | Next |
+| M7 Hardening and thesis | mid June | Cloud deployment, measurements, thesis text | Planned |
+
+Development runs ahead of the targets: M0 to M5 were implemented by early November 2026. "Implemented" means the features are built and covered by tests; done criteria that require a period of real use are confirmed separately.
 
 ## 3. Milestones
 
@@ -117,6 +119,7 @@ Ordered by value for the defense.
 - Deploy the backend to a cloud server with TLS.
 - Measurements for the thesis: time to first token overhead (NFR-2), reconnect behaviour (NFR-3), RAG evaluation results.
 - Bug fixing from dogfooding, test coverage of core backend logic (NFR-10).
+- Known issue: turns interrupted by a backend restart are marked `interrupted` in the database without session events, so open clients show them as running until the session is reloaded.
 - Thesis write-up and defense materials.
 
 ## 4. Risks

@@ -98,15 +98,19 @@ A module exposes a small public API (services, DTOs, domain events) and keeps ev
 | `auth` | Registration, password and GitHub sign-in, JWT issuing, refresh-token rotation. |
 | `user` | Profile, global settings, global instructions, language preference. |
 | `device` | Device registration and presence: which devices are connected, with which capabilities and projects. |
-| `provider` | Provider and model configuration, key encryption, the LLM client, direct and relay transports. |
+| `provider` | Provider and model configuration including vision support and prices for cost estimates, key encryption, the LLM client, direct and relay transports. |
 | `project` | Projects and project-level settings. |
-| `session` | Sessions, turns, items, the event log, event fan-out to subscribers. |
+| `session` | Sessions, turns, items, image attachments, the event log, event fan-out to subscribers. |
 | `agent` | The agent loop, modes, context assembly, compaction, title generation. |
 | `tool` | Tool registry, tool definitions and schemas, permission policies and evaluation. |
 | `execution` | Executor abstraction, dispatching calls, correlating results, timeouts. |
-| `review` | File change records, diffs, revert. |
+| `review` | File change records, diffs, revert, rewind to a turn. |
+| `worktree` | Session worktrees: creation, status, merge and discard through executor operations ([ADR 0011](adr/0011-session-worktrees.md)). |
+| `command` | User-defined slash commands. |
 | `gateway` | WebSocket endpoint: authentication, protocol parsing, routing to modules. |
 | `common` | Cross-cutting basics: error model, ids, clock, JSON. |
+
+DTOs are records; Lombok is limited to constructor injection and entity getters ([ADR 0012](adr/0012-lombok-for-boilerplate.md)).
 
 Highlight modules plug in later without touching the agent loop: `rag`, `customtool`, `telegram`, `container` (server-side executor).
 
@@ -234,7 +238,7 @@ classDiagram
 |---|---|
 | `auth` | Refresh token in Windows Credential Manager, access token refresh, GitHub OAuth through a loopback listener ([ADR 0008](adr/0008-github-sign-in-loopback-redirect.md)). |
 | `connection` | WebSocket client: handshake, heartbeat, reconnect with backoff, per-session `seq` tracking, routing of incoming messages. |
-| `executor` | Implementations of executor operations. Path guard limiting access to the project root. |
+| `executor` | Implementations of executor operations, including `web_fetch` and the `pointer.worktree_*` operations that run the system `git`. Path guard limiting access to the session root: the project folder or the session worktree ([ADR 0011](adr/0011-session-worktrees.md)). |
 | `process` | Running commands in PowerShell, streaming output, killing the whole process tree on cancel (Windows job objects). |
 | `relay` | HTTP requests to local LLM runtimes, streaming responses back. Allows only loopback hosts and hosts the user approved on this device. |
 | `projects` | Local mapping `projectId → path`, stored in the app data directory. |
