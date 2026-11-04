@@ -6,9 +6,12 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
 
 @Entity
 @Table(name = "slash_commands")
+@Getter(AccessLevel.PACKAGE)
 class SlashCommand extends BaseEntity {
 
     private UUID userId;
@@ -28,22 +31,6 @@ class SlashCommand extends BaseEntity {
         this.prompt = prompt;
         this.createdAt = now;
         this.updatedAt = now;
-    }
-
-    String getName() {
-        return name;
-    }
-
-    String getDescription() {
-        return description;
-    }
-
-    String getPrompt() {
-        return prompt;
-    }
-
-    Instant getUpdatedAt() {
-        return updatedAt;
     }
 
     void change(String name, String description, String prompt, Instant now) {

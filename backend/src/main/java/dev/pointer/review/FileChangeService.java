@@ -22,12 +22,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
+@RequiredArgsConstructor
 public class FileChangeService {
 
     private static final int MAX_STORED_CHARS = 1_000_000;
@@ -40,21 +42,6 @@ public class FileChangeService {
     private final ExecutionService execution;
     private final TransactionTemplate transactions;
     private final Clock clock;
-
-    FileChangeService(
-            FileChangeRepository changes,
-            SessionEventPublisher events,
-            SessionService sessions,
-            ExecutionService execution,
-            TransactionTemplate transactions,
-            Clock clock) {
-        this.changes = changes;
-        this.events = events;
-        this.sessions = sessions;
-        this.execution = execution;
-        this.transactions = transactions;
-        this.clock = clock;
-    }
 
     @Transactional(readOnly = true)
     public List<ChangedFile> list(UUID userId, UUID sessionId) {

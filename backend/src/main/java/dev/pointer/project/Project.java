@@ -6,9 +6,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.Getter;
 
 @Entity
 @Table(name = "projects")
+@Getter
 public class Project extends BaseEntity {
 
     private UUID userId;
@@ -25,22 +27,6 @@ public class Project extends BaseEntity {
         this.name = name;
         this.createdAt = now;
         this.updatedAt = now;
-    }
-
-    public UUID getUserId() {
-        return userId;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public Instant getArchivedAt() {
-        return archivedAt;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
     }
 
     void rename(String name, Instant now) {

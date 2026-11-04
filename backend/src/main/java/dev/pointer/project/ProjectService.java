@@ -7,19 +7,16 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class ProjectService {
 
     private final ProjectRepository projects;
     private final Clock clock;
-
-    ProjectService(ProjectRepository projects, Clock clock) {
-        this.projects = projects;
-        this.clock = clock;
-    }
 
     @Transactional(readOnly = true)
     public List<ProjectResponse> list(UUID userId) {

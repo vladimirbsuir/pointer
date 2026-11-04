@@ -8,11 +8,13 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.Getter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "tools")
+@Getter
 public class ToolDefinition extends BaseEntity {
 
     public static final String READ = "read";
@@ -86,54 +88,6 @@ public class ToolDefinition extends BaseEntity {
 
     public boolean isMcp() {
         return MCP.equals(source);
-    }
-
-    public String getMcpServer() {
-        return mcpServer;
-    }
-
-    public String getMcpTool() {
-        return mcpTool;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public Map<String, Object> getParametersSchema() {
-        return parametersSchema;
-    }
-
-    public String getKind() {
-        return kind;
-    }
-
-    public String getOperation() {
-        return operation;
-    }
-
-    public List<String> getModes() {
-        return modes;
-    }
-
-    public String getDefaultPolicy() {
-        return defaultPolicy;
-    }
-
-    public UUID getOwnerUserId() {
-        return ownerUserId;
-    }
-
-    public UUID getProjectId() {
-        return projectId;
-    }
-
-    public boolean isEnabled() {
-        return enabled;
     }
 
     public boolean availableIn(String mode) {

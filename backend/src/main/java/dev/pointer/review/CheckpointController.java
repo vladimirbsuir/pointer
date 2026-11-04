@@ -6,21 +6,18 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@RequiredArgsConstructor
 class CheckpointController {
 
     private final SessionWriter writer;
     private final FileChangeService fileChanges;
-
-    CheckpointController(SessionWriter writer, FileChangeService fileChanges) {
-        this.writer = writer;
-        this.fileChanges = fileChanges;
-    }
 
     @PostMapping("/api/v1/sessions/{sessionId}/rewind")
     RewindResponse rewind(

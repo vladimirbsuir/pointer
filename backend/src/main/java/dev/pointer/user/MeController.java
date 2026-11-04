@@ -2,6 +2,7 @@ package dev.pointer.user;
 
 import dev.pointer.common.security.AuthPrincipal;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -11,15 +12,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/me")
+@RequiredArgsConstructor
 class MeController {
 
     private final UserService userService;
     private final SettingsService settingsService;
-
-    MeController(UserService userService, SettingsService settingsService) {
-        this.userService = userService;
-        this.settingsService = settingsService;
-    }
 
     @GetMapping("/settings")
     SettingsService.SettingsResponse settings(AuthPrincipal principal) {

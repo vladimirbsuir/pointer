@@ -7,17 +7,29 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
 
 @Entity
 @Table(name = "providers")
 public class Provider extends BaseEntity {
 
+    @Getter
     private UUID userId;
+
+    @Getter
     private String name;
+
     private String adapter;
+
+    @Getter
     private String baseUrl;
+
     private byte[] apiKeyEncrypted;
+
+    @Getter(AccessLevel.PACKAGE)
     private String apiKeyHint;
+
     private boolean isLocal;
     private Instant createdAt;
     private Instant updatedAt;
@@ -35,28 +47,12 @@ public class Provider extends BaseEntity {
         this.updatedAt = now;
     }
 
-    public UUID getUserId() {
-        return userId;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getBaseUrl() {
-        return baseUrl;
-    }
-
     public boolean isLocal() {
         return isLocal;
     }
 
     Optional<byte[]> getApiKeyEncrypted() {
         return Optional.ofNullable(apiKeyEncrypted);
-    }
-
-    String getApiKeyHint() {
-        return apiKeyHint;
     }
 
     void rename(String name, Instant now) {

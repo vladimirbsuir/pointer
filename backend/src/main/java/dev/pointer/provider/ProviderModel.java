@@ -7,9 +7,11 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.Getter;
 
 @Entity
 @Table(name = "models")
+@Getter
 public class ProviderModel extends BaseEntity {
 
     static final String DISCOVERED = "discovered";
@@ -43,48 +45,12 @@ public class ProviderModel extends BaseEntity {
         this.updatedAt = now;
     }
 
-    public UUID getProviderId() {
-        return providerId;
-    }
-
-    public String getModelKey() {
-        return modelKey;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public Integer getContextWindow() {
-        return contextWindow;
-    }
-
-    public Integer getMaxOutputTokens() {
-        return maxOutputTokens;
-    }
-
     public boolean supportsTools() {
         return supportsTools;
     }
 
     public boolean supportsVision() {
         return supportsVision;
-    }
-
-    public BigDecimal getInputPricePerMtok() {
-        return inputPricePerMtok;
-    }
-
-    public BigDecimal getOutputPricePerMtok() {
-        return outputPricePerMtok;
-    }
-
-    public String getSource() {
-        return source;
-    }
-
-    public boolean isEnabled() {
-        return enabled;
     }
 
     void update(ProviderDtos.UpdateModelRequest request, Instant now) {

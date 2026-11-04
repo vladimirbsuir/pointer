@@ -4,6 +4,7 @@ import dev.pointer.common.security.AuthPrincipal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
@@ -12,17 +13,12 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 class AccessTokenIssuer {
 
     private final JwtEncoder encoder;
     private final AuthProperties properties;
     private final Clock clock;
-
-    AccessTokenIssuer(JwtEncoder encoder, AuthProperties properties, Clock clock) {
-        this.encoder = encoder;
-        this.properties = properties;
-        this.clock = clock;
-    }
 
     IssuedToken issue(UUID userId, UUID deviceId) {
         var issuedAt = clock.instant();

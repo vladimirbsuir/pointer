@@ -1,5 +1,6 @@
 package dev.pointer.gateway;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,15 +15,12 @@ import org.springframework.web.socket.server.standard.ServletServerContainerFact
 @Configuration(proxyBeanMethods = false)
 @EnableWebSocket
 @EnableScheduling
+@RequiredArgsConstructor
 class GatewayConfiguration implements WebSocketConfigurer {
 
     private static final int MAX_TEXT_MESSAGE_BYTES = 4 * 1024 * 1024;
 
     private final GatewayHandler handler;
-
-    GatewayConfiguration(GatewayHandler handler) {
-        this.handler = handler;
-    }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {

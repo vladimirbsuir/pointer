@@ -9,10 +9,12 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class McpToolCatalog {
 
     private static final int MAX_TOOL_NAME_LENGTH = 64;
@@ -20,11 +22,6 @@ public class McpToolCatalog {
     private final ToolRepository tools;
     private final Clock clock;
     private final Map<UUID, Set<String>> reportedByDevice = new ConcurrentHashMap<>();
-
-    McpToolCatalog(ToolRepository tools, Clock clock) {
-        this.tools = tools;
-        this.clock = clock;
-    }
 
     @Transactional
     public void report(UUID userId, UUID deviceId, List<ReportedTool> reported) {

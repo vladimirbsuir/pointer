@@ -5,21 +5,17 @@ import dev.pointer.provider.ProviderService;
 import jakarta.validation.constraints.Size;
 import java.time.Clock;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class SettingsService {
 
     private final UserSettingsRepository settings;
     private final ProviderService providerService;
     private final Clock clock;
-
-    SettingsService(UserSettingsRepository settings, ProviderService providerService, Clock clock) {
-        this.settings = settings;
-        this.providerService = providerService;
-        this.clock = clock;
-    }
 
     @Transactional(readOnly = true)
     public SettingsResponse get(UUID userId) {

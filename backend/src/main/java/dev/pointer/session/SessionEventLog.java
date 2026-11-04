@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -16,6 +17,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
+@RequiredArgsConstructor
 class SessionEventLog {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
@@ -24,13 +26,6 @@ class SessionEventLog {
     private final JsonMapper json;
     private final SessionEventBus bus;
     private final Clock clock;
-
-    SessionEventLog(JdbcClient jdbc, JsonMapper json, SessionEventBus bus, Clock clock) {
-        this.jdbc = jdbc;
-        this.json = json;
-        this.bus = bus;
-        this.clock = clock;
-    }
 
     @Transactional(propagation = Propagation.MANDATORY)
     SessionEventRecord append(UUID userId, UUID sessionId, String kind, Map<String, Object> payload) {

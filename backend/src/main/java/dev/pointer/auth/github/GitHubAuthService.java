@@ -12,11 +12,13 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
+@RequiredArgsConstructor
 class GitHubAuthService {
 
     static final String SCOPES = "read:user user:email";
@@ -29,14 +31,6 @@ class GitHubAuthService {
     private final GitHubClient client;
     private final UserService userService;
     private final AuthSessionService sessions;
-
-    GitHubAuthService(
-            GitHubProperties properties, GitHubClient client, UserService userService, AuthSessionService sessions) {
-        this.properties = properties;
-        this.client = client;
-        this.userService = userService;
-        this.sessions = sessions;
-    }
 
     String authorizationUrl(String codeChallenge, String state, String redirectUri) {
         ensureConfigured();

@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,13 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth/github")
 @EnableConfigurationProperties(GitHubProperties.class)
 @Validated
+@RequiredArgsConstructor
 class GitHubAuthController {
 
     private final GitHubAuthService service;
-
-    GitHubAuthController(GitHubAuthService service) {
-        this.service = service;
-    }
 
     @GetMapping("/authorize-url")
     AuthorizeUrlResponse authorizeUrl(

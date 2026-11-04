@@ -8,21 +8,18 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 class SlashCommandService {
 
     static final String NAME_PATTERN = "[a-z0-9][a-z0-9-]{0,39}";
 
     private final SlashCommandRepository commands;
     private final Clock clock;
-
-    SlashCommandService(SlashCommandRepository commands, Clock clock) {
-        this.commands = commands;
-        this.clock = clock;
-    }
 
     @Transactional(readOnly = true)
     List<CommandResponse> list(UUID userId) {

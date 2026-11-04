@@ -7,11 +7,13 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import lombok.Getter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "devices")
+@Getter
 public class Device extends BaseEntity {
 
     private UUID userId;
@@ -43,14 +45,6 @@ public class Device extends BaseEntity {
         this.lastSeenAt = now;
         this.revokedAt = null;
         this.updatedAt = now;
-    }
-
-    public UUID getUserId() {
-        return userId;
-    }
-
-    public String getName() {
-        return name;
     }
 
     public boolean isRevoked() {

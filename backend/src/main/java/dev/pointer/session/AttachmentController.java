@@ -2,6 +2,7 @@ package dev.pointer.session;
 
 import dev.pointer.common.security.AuthPrincipal;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -18,13 +19,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/sessions/{sessionId}/attachments")
+@RequiredArgsConstructor
 class AttachmentController {
 
     private final AttachmentService service;
-
-    AttachmentController(AttachmentService service) {
-        this.service = service;
-    }
 
     @PostMapping(consumes = {"image/png", "image/jpeg", "image/gif", "image/webp"})
     @ResponseStatus(HttpStatus.CREATED)

@@ -4,6 +4,7 @@ import dev.pointer.common.security.AuthPrincipal;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,13 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/sessions/{sessionId}/changes")
+@RequiredArgsConstructor
 class ReviewController {
 
     private final FileChangeService service;
-
-    ReviewController(FileChangeService service) {
-        this.service = service;
-    }
 
     @GetMapping
     List<FileChangeService.ChangedFile> list(AuthPrincipal principal, @PathVariable UUID sessionId) {

@@ -12,9 +12,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 class ContextAssembler {
 
     static final String NOT_EXECUTED = "The tool call was not executed.";
@@ -58,11 +60,6 @@ class ContextAssembler {
 
     private final Clock clock;
     private final AttachmentService attachments;
-
-    ContextAssembler(Clock clock, AttachmentService attachments) {
-        this.clock = clock;
-        this.attachments = attachments;
-    }
 
     List<ChatMessage> build(
             String mode,

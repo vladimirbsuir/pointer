@@ -9,11 +9,13 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import lombok.Getter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "items")
+@Getter
 public class Item extends BaseEntity {
 
     public static final String USER_MESSAGE = "user_message";
@@ -59,26 +61,6 @@ public class Item extends BaseEntity {
         this.payload = new HashMap<>(payload);
         this.createdAt = now;
         this.completedAt = COMPLETED.equals(status) ? now : null;
-    }
-
-    public UUID getSessionId() {
-        return sessionId;
-    }
-
-    public UUID getTurnId() {
-        return turnId;
-    }
-
-    public long getPosition() {
-        return position;
-    }
-
-    public String getType() {
-        return type;
-    }
-
-    public String getStatus() {
-        return status;
     }
 
     public Map<String, Object> getPayload() {

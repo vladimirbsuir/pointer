@@ -10,11 +10,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
+@RequiredArgsConstructor
 public class OpenAiCompatibleClient {
 
     private static final String DATA_PREFIX = "data:";
@@ -22,10 +24,6 @@ public class OpenAiCompatibleClient {
     private static final int MAX_ERROR_BYTES = 4096;
 
     private final JsonMapper json;
-
-    public OpenAiCompatibleClient(JsonMapper json) {
-        this.json = json;
-    }
 
     public List<String> listModels(Endpoint endpoint) {
         var request = new HttpTransport.Request("GET", endpoint.url("/models"), headers(endpoint, false), null);

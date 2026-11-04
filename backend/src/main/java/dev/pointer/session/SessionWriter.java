@@ -12,10 +12,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class SessionWriter {
 
     public static final String PLAN_PENDING = "pending";
@@ -32,27 +34,6 @@ public class SessionWriter {
     private final AttachmentService attachmentService;
     private final EntityManager entityManager;
     private final Clock clock;
-
-    SessionWriter(
-            AgentSessionRepository sessions,
-            TurnRepository turns,
-            ItemRepository items,
-            SessionEventLog eventLog,
-            SessionService sessionService,
-            ProviderService providerService,
-            AttachmentService attachmentService,
-            EntityManager entityManager,
-            Clock clock) {
-        this.sessions = sessions;
-        this.turns = turns;
-        this.items = items;
-        this.eventLog = eventLog;
-        this.sessionService = sessionService;
-        this.providerService = providerService;
-        this.attachmentService = attachmentService;
-        this.entityManager = entityManager;
-        this.clock = clock;
-    }
 
     @Transactional
     public AcceptedMessage acceptUserMessage(

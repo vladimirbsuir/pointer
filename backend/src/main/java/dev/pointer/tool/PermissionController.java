@@ -5,6 +5,7 @@ import dev.pointer.project.ProjectService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -14,17 +15,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1")
+@RequiredArgsConstructor
 class PermissionController {
 
     private final PermissionService permissions;
     private final ToolRegistry registry;
     private final ProjectService projects;
-
-    PermissionController(PermissionService permissions, ToolRegistry registry, ProjectService projects) {
-        this.permissions = permissions;
-        this.registry = registry;
-        this.projects = projects;
-    }
 
     @GetMapping("/tools")
     List<ToolResponse> tools(AuthPrincipal principal) {

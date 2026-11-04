@@ -13,12 +13,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 @Service
+@RequiredArgsConstructor
 public class WorktreeService {
 
     static final String BRANCH_PREFIX = "pointer/";
@@ -36,11 +38,6 @@ public class WorktreeService {
 
     private final SessionService sessions;
     private final ExecutionService execution;
-
-    WorktreeService(SessionService sessions, ExecutionService execution) {
-        this.sessions = sessions;
-        this.execution = execution;
-    }
 
     public SessionDtos.SessionResponse create(UUID userId, UUID sessionId) {
         var session = sessions.worktreeCandidate(userId, sessionId);

@@ -13,11 +13,13 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class ProviderService {
 
     private static final int API_KEY_HINT_LENGTH = 4;
@@ -29,23 +31,6 @@ public class ProviderService {
     private final DirectHttpTransport directTransport;
     private final ObjectProvider<RelayTransports> relayTransports;
     private final Clock clock;
-
-    ProviderService(
-            ProviderRepository providers,
-            ProviderModelRepository models,
-            SecretCipher cipher,
-            OpenAiCompatibleClient client,
-            DirectHttpTransport directTransport,
-            ObjectProvider<RelayTransports> relayTransports,
-            Clock clock) {
-        this.providers = providers;
-        this.models = models;
-        this.cipher = cipher;
-        this.client = client;
-        this.directTransport = directTransport;
-        this.relayTransports = relayTransports;
-        this.clock = clock;
-    }
 
     @Transactional(readOnly = true)
     public List<ProviderDtos.ProviderResponse> list(UUID userId) {

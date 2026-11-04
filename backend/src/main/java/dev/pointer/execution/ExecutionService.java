@@ -12,9 +12,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class ExecutionService {
 
     private static final Duration POLL_INTERVAL = Duration.ofMillis(250);
@@ -23,10 +25,6 @@ public class ExecutionService {
 
     private final DeviceChannel channel;
     private final Map<UUID, PendingCall> pending = new ConcurrentHashMap<>();
-
-    ExecutionService(DeviceChannel channel) {
-        this.channel = channel;
-    }
 
     public ExecutionResult execute(ExecutionRequest request, ExecutionListener listener, Cancellation cancellation) {
         if (!awaitDevice(request, listener, cancellation)) {

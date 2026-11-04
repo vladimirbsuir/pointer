@@ -3,19 +3,16 @@ package dev.pointer.tool;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class ToolRegistry {
 
     private final ToolRepository tools;
     private final McpToolCatalog mcpTools;
-
-    ToolRegistry(ToolRepository tools, McpToolCatalog mcpTools) {
-        this.tools = tools;
-        this.mcpTools = mcpTools;
-    }
 
     @Transactional(readOnly = true)
     public List<ToolDefinition> available(UUID userId, UUID projectId, UUID deviceId) {

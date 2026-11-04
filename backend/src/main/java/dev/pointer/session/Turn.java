@@ -7,11 +7,13 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import lombok.Getter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "turns")
+@Getter
 public class Turn extends BaseEntity {
 
     public static final String RUNNING = "running";
@@ -53,42 +55,6 @@ public class Turn extends BaseEntity {
         this.status = RUNNING;
         this.idempotencyKey = idempotencyKey;
         this.startedAt = now;
-    }
-
-    public UUID getSessionId() {
-        return sessionId;
-    }
-
-    public int getNumber() {
-        return number;
-    }
-
-    public String getKind() {
-        return kind;
-    }
-
-    public String getMode() {
-        return mode;
-    }
-
-    public UUID getModelId() {
-        return modelId;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public long getInputTokens() {
-        return inputTokens;
-    }
-
-    public long getOutputTokens() {
-        return outputTokens;
-    }
-
-    public Instant getRewoundAt() {
-        return rewoundAt;
     }
 
     void markRewound(Instant now) {

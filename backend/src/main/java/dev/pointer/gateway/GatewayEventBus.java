@@ -5,18 +5,16 @@ import dev.pointer.session.SessionEventRecord;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 class GatewayEventBus implements SessionEventBus {
 
     static final String VIEWER = "viewer";
 
     private final ConnectionRegistry registry;
-
-    GatewayEventBus(ConnectionRegistry registry) {
-        this.registry = registry;
-    }
 
     @Override
     public void publishEvent(UUID userId, SessionEventRecord event) {

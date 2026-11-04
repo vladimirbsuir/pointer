@@ -36,6 +36,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -43,6 +44,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class AgentRunner implements LiveItemSnapshots {
 
     private static final Logger log = LoggerFactory.getLogger(AgentRunner.class);
@@ -69,31 +71,6 @@ public class AgentRunner implements LiveItemSnapshots {
     private final ExecutionService execution;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<UUID, RunningTurn> running = new ConcurrentHashMap<>();
-
-    AgentRunner(
-            SessionWriter writer,
-            SessionService sessionService,
-            ProviderService providerService,
-            SettingsService settingsService,
-            OpenAiCompatibleClient client,
-            ContextAssembler contextAssembler,
-            SessionEventBus bus,
-            ToolCallHandler toolCalls,
-            ToolRegistry toolRegistry,
-            ProjectService projectService,
-            ExecutionService execution) {
-        this.writer = writer;
-        this.sessionService = sessionService;
-        this.providerService = providerService;
-        this.settingsService = settingsService;
-        this.client = client;
-        this.contextAssembler = contextAssembler;
-        this.bus = bus;
-        this.toolCalls = toolCalls;
-        this.toolRegistry = toolRegistry;
-        this.projectService = projectService;
-        this.execution = execution;
-    }
 
     @EventListener(ApplicationReadyEvent.class)
     void recoverInterruptedTurns() {

@@ -21,11 +21,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
+@RequiredArgsConstructor
 class ToolCallHandler {
 
     static final int MAX_RESULT_CHARS = 30_000;
@@ -45,27 +47,6 @@ class ToolCallHandler {
     private final SessionService sessionService;
     private final SessionEventBus bus;
     private final JsonMapper json;
-
-    ToolCallHandler(
-            ToolRegistry registry,
-            PermissionService permissions,
-            ApprovalService approvals,
-            ExecutionService execution,
-            FileChangeService fileChanges,
-            SessionWriter writer,
-            SessionService sessionService,
-            SessionEventBus bus,
-            JsonMapper json) {
-        this.registry = registry;
-        this.permissions = permissions;
-        this.approvals = approvals;
-        this.execution = execution;
-        this.fileChanges = fileChanges;
-        this.writer = writer;
-        this.sessionService = sessionService;
-        this.bus = bus;
-        this.json = json;
-    }
 
     void handle(TurnScope scope, int step, String providerCallId, String toolName, String argumentsJson) {
         var arguments = parseArguments(argumentsJson);

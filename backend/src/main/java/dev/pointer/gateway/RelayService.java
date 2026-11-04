@@ -19,9 +19,11 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 class RelayService implements RelayTransports {
 
     static final String RELAY = "relay";
@@ -31,10 +33,6 @@ class RelayService implements RelayTransports {
 
     private final ConnectionRegistry registry;
     private final Map<UUID, RelayCall> calls = new ConcurrentHashMap<>();
-
-    RelayService(ConnectionRegistry registry) {
-        this.registry = registry;
-    }
 
     @Override
     public HttpTransport forUser(UUID userId, UUID preferredDeviceId) {

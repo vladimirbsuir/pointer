@@ -14,10 +14,12 @@ import java.time.Clock;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class AuthSessionService {
 
     private static final int REFRESH_TOKEN_BYTES = 32;
@@ -29,21 +31,6 @@ public class AuthSessionService {
     private final AuthProperties properties;
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
-
-    AuthSessionService(
-            RefreshTokenRepository refreshTokens,
-            AccessTokenIssuer accessTokens,
-            DeviceService deviceService,
-            UserService userService,
-            AuthProperties properties,
-            Clock clock) {
-        this.refreshTokens = refreshTokens;
-        this.accessTokens = accessTokens;
-        this.deviceService = deviceService;
-        this.userService = userService;
-        this.properties = properties;
-        this.clock = clock;
-    }
 
     @Transactional
     public AuthResponse start(User user, DeviceInfo deviceInfo) {

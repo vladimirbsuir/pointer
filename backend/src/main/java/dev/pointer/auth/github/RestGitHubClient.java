@@ -5,6 +5,7 @@ import dev.pointer.common.error.ApiException;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -14,16 +15,13 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 @Component
+@RequiredArgsConstructor
 class RestGitHubClient implements GitHubClient {
 
     private static final String API_VERSION = "2022-11-28";
 
     private final GitHubProperties properties;
     private final RestClient restClient = RestClient.create();
-
-    RestGitHubClient(GitHubProperties properties) {
-        this.properties = properties;
-    }
 
     @Override
     public String exchangeCode(String code, String codeVerifier, String redirectUri) {

@@ -13,10 +13,12 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class PermissionService {
 
     public static final String ALLOW = "allow";
@@ -30,19 +32,6 @@ public class PermissionService {
     private final CommandRuleRepository commandRules;
     private final SessionGrantRepository grants;
     private final Clock clock;
-
-    PermissionService(
-            ToolRepository tools,
-            PermissionPolicyRepository policies,
-            CommandRuleRepository commandRules,
-            SessionGrantRepository grants,
-            Clock clock) {
-        this.tools = tools;
-        this.policies = policies;
-        this.commandRules = commandRules;
-        this.grants = grants;
-        this.clock = clock;
-    }
 
     @Transactional(readOnly = true)
     public String evaluate(

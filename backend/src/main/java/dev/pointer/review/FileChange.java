@@ -6,9 +6,12 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
 
 @Entity
 @Table(name = "file_changes")
+@Getter(AccessLevel.PACKAGE)
 class FileChange extends BaseEntity {
 
     private UUID sessionId;
@@ -47,46 +50,6 @@ class FileChange extends BaseEntity {
         this.linesAdded = linesAdded;
         this.linesRemoved = linesRemoved;
         this.createdAt = now;
-    }
-
-    String getPath() {
-        return path;
-    }
-
-    String getChangeKind() {
-        return changeKind;
-    }
-
-    int getLinesAdded() {
-        return linesAdded;
-    }
-
-    int getLinesRemoved() {
-        return linesRemoved;
-    }
-
-    UUID getTurnId() {
-        return turnId;
-    }
-
-    UUID getItemId() {
-        return itemId;
-    }
-
-    String getBeforeContent() {
-        return beforeContent;
-    }
-
-    String getAfterContent() {
-        return afterContent;
-    }
-
-    Instant getRevertedAt() {
-        return revertedAt;
-    }
-
-    Instant getCreatedAt() {
-        return createdAt;
     }
 
     boolean isReverted() {

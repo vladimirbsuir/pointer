@@ -8,11 +8,13 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.Getter;
 import org.hibernate.annotations.DynamicUpdate;
 
 @Entity
 @DynamicUpdate
 @Table(name = "sessions")
+@Getter
 public class AgentSession extends BaseEntity {
 
     public static final String DEFAULT_TITLE = "New session";
@@ -62,88 +64,8 @@ public class AgentSession extends BaseEntity {
         this.updatedAt = now;
     }
 
-    public UUID getUserId() {
-        return userId;
-    }
-
-    public UUID getProjectId() {
-        return projectId;
-    }
-
-    public UUID getExecutorDeviceId() {
-        return executorDeviceId;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public boolean isTitleGenerated() {
-        return titleGenerated;
-    }
-
-    public String getMode() {
-        return mode;
-    }
-
-    public UUID getModelId() {
-        return modelId;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public boolean isAutoApprove() {
-        return autoApprove;
-    }
-
-    public long getLastSeq() {
-        return lastSeq;
-    }
-
-    public int getContextTokens() {
-        return contextTokens;
-    }
-
-    public long getTotalInputTokens() {
-        return totalInputTokens;
-    }
-
-    public long getTotalOutputTokens() {
-        return totalOutputTokens;
-    }
-
-    public BigDecimal getEstimatedCost() {
-        return estimatedCost;
-    }
-
-    public String getWorktreeBranch() {
-        return worktreeBranch;
-    }
-
-    public String getWorktreeBaseBranch() {
-        return worktreeBaseBranch;
-    }
-
-    public String getWorktreeState() {
-        return worktreeState;
-    }
-
     public String activeWorktree() {
         return WORKTREE_ACTIVE.equals(worktreeState) ? worktreeBranch : null;
-    }
-
-    public Instant getArchivedAt() {
-        return archivedAt;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
     }
 
     void rename(String title, boolean generated, Instant now) {

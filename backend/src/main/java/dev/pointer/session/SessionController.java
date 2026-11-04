@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,15 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1")
+@RequiredArgsConstructor
 class SessionController {
 
     private final SessionService service;
     private final ApprovalService approvals;
-
-    SessionController(SessionService service, ApprovalService approvals) {
-        this.service = service;
-        this.approvals = approvals;
-    }
 
     @PostMapping("/sessions/{sessionId}/approvals/{approvalId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)

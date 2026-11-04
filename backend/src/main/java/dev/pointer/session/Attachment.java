@@ -6,9 +6,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.Getter;
 
 @Entity
 @Table(name = "attachments")
+@Getter
 public class Attachment extends BaseEntity {
 
     private UUID sessionId;
@@ -26,21 +28,5 @@ public class Attachment extends BaseEntity {
         this.sizeBytes = data.length;
         this.data = data;
         this.createdAt = now;
-    }
-
-    public UUID getSessionId() {
-        return sessionId;
-    }
-
-    public String getMediaType() {
-        return mediaType;
-    }
-
-    public int getSizeBytes() {
-        return sizeBytes;
-    }
-
-    public byte[] getData() {
-        return data;
     }
 }

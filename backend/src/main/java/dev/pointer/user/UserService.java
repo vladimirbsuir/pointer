@@ -4,23 +4,18 @@ import dev.pointer.common.error.ApiException;
 import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository users;
     private final UserIdentityRepository identities;
     private final UserSettingsRepository settings;
     private final Clock clock;
-
-    UserService(UserRepository users, UserIdentityRepository identities, UserSettingsRepository settings, Clock clock) {
-        this.users = users;
-        this.identities = identities;
-        this.settings = settings;
-        this.clock = clock;
-    }
 
     @Transactional
     public User createWithPassword(String email, String passwordHash, String displayName, String locale) {

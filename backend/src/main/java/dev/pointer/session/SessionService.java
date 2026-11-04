@@ -9,11 +9,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class SessionService {
 
     static final String DEFAULT_MODE = "agent";
@@ -29,29 +31,6 @@ public class SessionService {
     private final ProviderService providerService;
     private final SettingsService settingsService;
     private final Clock clock;
-
-    SessionService(
-            AgentSessionRepository sessions,
-            ItemRepository items,
-            TurnRepository turns,
-            ApplicationEventPublisher publisher,
-            SessionEventLog eventLog,
-            SessionEventBus bus,
-            ProjectService projectService,
-            ProviderService providerService,
-            SettingsService settingsService,
-            Clock clock) {
-        this.sessions = sessions;
-        this.items = items;
-        this.turns = turns;
-        this.publisher = publisher;
-        this.eventLog = eventLog;
-        this.bus = bus;
-        this.projectService = projectService;
-        this.providerService = providerService;
-        this.settingsService = settingsService;
-        this.clock = clock;
-    }
 
     @Transactional
     public SessionDtos.SessionResponse create(

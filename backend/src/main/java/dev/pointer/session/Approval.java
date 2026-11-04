@@ -8,11 +8,14 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "approvals")
+@Getter(AccessLevel.PACKAGE)
 class Approval extends BaseEntity {
 
     static final String PENDING = "pending";
@@ -41,18 +44,6 @@ class Approval extends BaseEntity {
         this.preview = new HashMap<>(preview);
         this.status = PENDING;
         this.createdAt = now;
-    }
-
-    UUID getSessionId() {
-        return sessionId;
-    }
-
-    UUID getItemId() {
-        return itemId;
-    }
-
-    String getStatus() {
-        return status;
     }
 
     boolean isPending() {

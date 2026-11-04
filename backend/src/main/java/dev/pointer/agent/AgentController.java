@@ -4,6 +4,7 @@ import dev.pointer.common.security.AuthPrincipal;
 import dev.pointer.session.SessionDtos;
 import jakarta.validation.Valid;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,13 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/sessions/{sessionId}")
+@RequiredArgsConstructor
 class AgentController {
 
     private final AgentRunner runner;
-
-    AgentController(AgentRunner runner) {
-        this.runner = runner;
-    }
 
     @PostMapping("/messages")
     @ResponseStatus(HttpStatus.ACCEPTED)

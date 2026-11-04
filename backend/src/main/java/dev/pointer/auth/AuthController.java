@@ -2,6 +2,7 @@ package dev.pointer.auth;
 
 import dev.pointer.common.security.AuthPrincipal;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -12,15 +13,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/auth")
+@RequiredArgsConstructor
 class AuthController {
 
     private final PasswordAuthService passwordAuth;
     private final AuthSessionService sessions;
-
-    AuthController(PasswordAuthService passwordAuth, AuthSessionService sessions) {
-        this.passwordAuth = passwordAuth;
-        this.sessions = sessions;
-    }
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)

@@ -6,9 +6,12 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
 
 @Entity
 @Table(name = "refresh_tokens")
+@Getter(AccessLevel.PACKAGE)
 class RefreshToken extends BaseEntity {
 
     private UUID userId;
@@ -30,18 +33,6 @@ class RefreshToken extends BaseEntity {
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
         this.createdAt = now;
-    }
-
-    UUID getUserId() {
-        return userId;
-    }
-
-    UUID getDeviceId() {
-        return deviceId;
-    }
-
-    UUID getFamilyId() {
-        return familyId;
     }
 
     boolean isExpired(Instant now) {

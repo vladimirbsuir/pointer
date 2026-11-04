@@ -6,9 +6,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.Getter;
 
 @Entity
 @Table(name = "user_identities")
+@Getter
 public class UserIdentity extends BaseEntity {
 
     public static final String GITHUB = "github";
@@ -32,18 +34,6 @@ public class UserIdentity extends BaseEntity {
         this.providerLogin = providerLogin;
         this.createdAt = now;
         this.updatedAt = now;
-    }
-
-    public UUID getUserId() {
-        return userId;
-    }
-
-    public String getProvider() {
-        return provider;
-    }
-
-    public String getProviderLogin() {
-        return providerLogin;
     }
 
     public void updateLogin(String providerLogin, Instant now) {

@@ -7,11 +7,13 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import lombok.Getter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "user_settings")
+@Getter
 public class UserSettings {
 
     @Id
@@ -32,18 +34,6 @@ public class UserSettings {
         this.globalInstructions = "";
         this.preferences = new HashMap<>();
         this.updatedAt = now;
-    }
-
-    public UUID getUserId() {
-        return userId;
-    }
-
-    public String getGlobalInstructions() {
-        return globalInstructions;
-    }
-
-    public UUID getDefaultModelId() {
-        return defaultModelId;
     }
 
     public Map<String, Object> getPreferences() {

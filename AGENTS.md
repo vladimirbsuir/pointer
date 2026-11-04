@@ -20,6 +20,7 @@ The agent loop runs on a cloud backend; the desktop client executes tools (file 
 - Make code self-explanatory instead: precise names, small focused methods, explicit types where they help.
 - Tool directives that are syntactically comments are allowed only when a tool requires them (for example `// @ts-expect-error`, `// eslint-disable-next-line`). Prefer fixing the cause over suppressing it.
 - Do not leave commented-out code, TODO markers or explanatory notes in source files. Track open work in `docs/` or issues.
+- Backend: use records for DTOs. Lombok is limited to `@RequiredArgsConstructor` on Spring beans and `@Getter` on entities; never `@Data`, `@Setter`, `@Builder`, `@EqualsAndHashCode` or `@ToString` ([ADR 0012](docs/adr/0012-lombok-for-boilerplate.md)).
 
 ## Commits
 

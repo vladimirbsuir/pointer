@@ -7,9 +7,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Optional;
+import lombok.Getter;
 
 @Entity
 @Table(name = "users")
+@Getter
 public class User extends BaseEntity {
 
     @Column(columnDefinition = "citext")
@@ -42,24 +44,12 @@ public class User extends BaseEntity {
         return new User(email, null, displayName, locale, now);
     }
 
-    public String getEmail() {
-        return email;
-    }
-
     public Optional<String> getPasswordHash() {
         return Optional.ofNullable(passwordHash);
     }
 
     public boolean hasPassword() {
         return passwordHash != null;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public String getLocale() {
-        return locale;
     }
 
     public boolean isDisabled() {

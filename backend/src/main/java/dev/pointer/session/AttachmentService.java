@@ -6,10 +6,12 @@ import java.util.Base64;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class AttachmentService {
 
     static final int MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -18,12 +20,6 @@ public class AttachmentService {
     private final AttachmentRepository attachments;
     private final SessionService sessions;
     private final Clock clock;
-
-    AttachmentService(AttachmentRepository attachments, SessionService sessions, Clock clock) {
-        this.attachments = attachments;
-        this.sessions = sessions;
-        this.clock = clock;
-    }
 
     @Transactional
     public AttachmentResponse upload(UUID userId, UUID sessionId, String mediaType, byte[] data) {

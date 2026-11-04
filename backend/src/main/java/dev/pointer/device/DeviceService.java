@@ -2,19 +2,16 @@ package dev.pointer.device;
 
 import java.time.Clock;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class DeviceService {
 
     private final DeviceRepository devices;
     private final Clock clock;
-
-    DeviceService(DeviceRepository devices, Clock clock) {
-        this.devices = devices;
-        this.clock = clock;
-    }
 
     @Transactional
     public Device register(UUID userId, DeviceInfo info) {

@@ -3,18 +3,16 @@ package dev.pointer.gateway;
 import dev.pointer.execution.DeviceChannel;
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 class GatewayDeviceChannel implements DeviceChannel {
 
     static final String EXECUTOR = "executor";
 
     private final ConnectionRegistry registry;
-
-    GatewayDeviceChannel(ConnectionRegistry registry) {
-        this.registry = registry;
-    }
 
     @Override
     public boolean canExecute(UUID deviceId, UUID projectId) {
