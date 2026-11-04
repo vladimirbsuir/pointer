@@ -23,6 +23,50 @@ import tools.jackson.databind.JsonNode;
 class AgentFlowTests extends AgentIntegrationTest {
 
     @Test
+    void sessionCostIsEstimatedFromModelPrices() throws Exception {
+        var setup = setUp(false);
+        var providers = client.get()
+                .uri("/api/v1/providers")
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .exchange()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
+        var provider = providers.get(0);
+        client.patch()
+                .uri(
+                        "/api/v1/providers/{id}/models/{modelId}",
+                        provider.path("id").asString(),
+                        provider.path("models").get(0).path("id").asString())
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .body(Map.of("inputPricePerMtok", 2.5, "outputPricePerMtok", 10))
+                .exchange()
+                .expectStatus()
+                .isOk();
+        llm.enqueueText("Hello!");
+        llm.enqueueText("Greeting");
+
+        try (var ws =
+                GatewayTestClient.connect(port, setup.auth().accessToken(), setup.deviceId(), List.of("viewer"))) {
+            ws.subscribe(setup.sessionId(), 0);
+            send(setup, "Say hello", null).expectStatus().isEqualTo(HttpStatus.ACCEPTED);
+
+            var usage = ws.awaitEvent("usage.updated", TIMEOUT).path("payload").path("event");
+            assertThat(usage.path("estimatedCost").decimalValue()).isEqualByComparingTo("0.00008");
+            ws.awaitEvent("turn.completed", TIMEOUT);
+        }
+
+        var session = client.get()
+                .uri("/api/v1/sessions/{id}", setup.sessionId())
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .exchange()
+                .expectBody(SessionDtos.SessionResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(session.estimatedCost()).isEqualByComparingTo("0.00008");
+    }
+
+    @Test
     void messageStreamsAnswerThroughGatewayAndGeneratesTitle() throws Exception {
         var setup = setUp(false);
         llm.enqueueText("Hel", "lo!");

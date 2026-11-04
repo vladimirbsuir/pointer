@@ -5,6 +5,7 @@ import dev.pointer.common.Ids;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.DynamicUpdate;
@@ -36,6 +37,7 @@ public class AgentSession extends BaseEntity {
     private int contextTokens;
     private long totalInputTokens;
     private long totalOutputTokens;
+    private BigDecimal estimatedCost;
     private String worktreeBranch;
     private String worktreeBaseBranch;
     private String worktreeState;
@@ -112,6 +114,10 @@ public class AgentSession extends BaseEntity {
         return totalOutputTokens;
     }
 
+    public BigDecimal getEstimatedCost() {
+        return estimatedCost;
+    }
+
     public String getWorktreeBranch() {
         return worktreeBranch;
     }
@@ -183,10 +189,13 @@ public class AgentSession extends BaseEntity {
         this.updatedAt = now;
     }
 
-    void recordUsage(int contextTokens, long inputTokens, long outputTokens, Instant now) {
+    void recordUsage(int contextTokens, long inputTokens, long outputTokens, BigDecimal cost, Instant now) {
         this.contextTokens = contextTokens;
         this.totalInputTokens += inputTokens;
         this.totalOutputTokens += outputTokens;
+        if (cost != null) {
+            this.estimatedCost = estimatedCost == null ? cost : estimatedCost.add(cost);
+        }
         this.updatedAt = now;
     }
 }

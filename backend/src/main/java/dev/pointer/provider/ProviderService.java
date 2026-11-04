@@ -144,7 +144,8 @@ public class ProviderService {
         var model = new ProviderModel(providerId, key, displayName, ProviderModel.MANUAL, clock.instant());
         if (request.contextWindow() != null) {
             model.update(
-                    new ProviderDtos.UpdateModelRequest(null, request.contextWindow(), null, null, null, null),
+                    new ProviderDtos.UpdateModelRequest(
+                            null, request.contextWindow(), null, null, null, null, null, null, null),
                     clock.instant());
         }
         return toResponse(models.save(model));
@@ -179,6 +180,8 @@ public class ProviderService {
                 model.getDisplayName(),
                 model.getContextWindow(),
                 model.supportsTools(),
+                model.getInputPricePerMtok(),
+                model.getOutputPricePerMtok(),
                 endpoint(provider, preferredDeviceId));
     }
 
@@ -268,6 +271,8 @@ public class ProviderService {
                 model.getMaxOutputTokens(),
                 model.supportsTools(),
                 model.supportsVision(),
+                model.getInputPricePerMtok(),
+                model.getOutputPricePerMtok(),
                 model.getSource(),
                 model.isEnabled());
     }

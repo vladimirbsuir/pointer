@@ -272,6 +272,7 @@ public class AgentRunner implements LiveItemSnapshots {
                     scope.turnId(),
                     usage.promptTokens(),
                     usage.completionTokens(),
+                    model.cost(usage.promptTokens(), usage.completionTokens()),
                     model.contextWindow());
             return (int) (usage.promptTokens() + usage.completionTokens());
         }
@@ -413,6 +414,7 @@ public class AgentRunner implements LiveItemSnapshots {
                         scope.turnId(),
                         listener.usage.promptTokens(),
                         listener.usage.completionTokens(),
+                        model.cost(listener.usage.promptTokens(), listener.usage.completionTokens()),
                         model.contextWindow());
             }
             var remaining = contextAssembler.build(

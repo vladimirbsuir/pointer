@@ -4,6 +4,7 @@ import dev.pointer.common.BaseEntity;
 import dev.pointer.common.Ids;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -21,6 +22,8 @@ public class ProviderModel extends BaseEntity {
     private Integer maxOutputTokens;
     private boolean supportsTools;
     private boolean supportsVision;
+    private BigDecimal inputPricePerMtok;
+    private BigDecimal outputPricePerMtok;
     private String source;
     private boolean enabled;
     private Instant createdAt;
@@ -68,6 +71,14 @@ public class ProviderModel extends BaseEntity {
         return supportsVision;
     }
 
+    public BigDecimal getInputPricePerMtok() {
+        return inputPricePerMtok;
+    }
+
+    public BigDecimal getOutputPricePerMtok() {
+        return outputPricePerMtok;
+    }
+
     public String getSource() {
         return source;
     }
@@ -94,6 +105,16 @@ public class ProviderModel extends BaseEntity {
         }
         if (request.enabled() != null) {
             enabled = request.enabled();
+        }
+        if (Boolean.TRUE.equals(request.clearPrices())) {
+            inputPricePerMtok = null;
+            outputPricePerMtok = null;
+        }
+        if (request.inputPricePerMtok() != null) {
+            inputPricePerMtok = request.inputPricePerMtok();
+        }
+        if (request.outputPricePerMtok() != null) {
+            outputPricePerMtok = request.outputPricePerMtok();
         }
         updatedAt = now;
     }

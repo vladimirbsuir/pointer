@@ -4,6 +4,7 @@ import dev.pointer.common.error.ApiException;
 import dev.pointer.provider.ProviderService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -170,7 +171,7 @@ public class SessionWriter {
     @Transactional
     public void resetContextTokens(UUID userId, UUID sessionId, int contextTokens, Integer contextWindow) {
         var session = lockOwned(userId, sessionId);
-        session.recordUsage(contextTokens, 0, 0, clock.instant());
+        session.recordUsage(contextTokens, 0, 0, null, clock.instant());
         sessions.save(session);
         publishUsage(session, contextWindow);
     }
@@ -214,12 +215,19 @@ public class SessionWriter {
 
     @Transactional
     public void recordUsage(
-            UUID userId, UUID sessionId, UUID turnId, long promptTokens, long completionTokens, Integer contextWindow) {
+            UUID userId,
+            UUID sessionId,
+            UUID turnId,
+            long promptTokens,
+            long completionTokens,
+            BigDecimal cost,
+            Integer contextWindow) {
         var session = lockOwned(userId, sessionId);
         var turn = turns.findById(turnId).orElseThrow();
         turn.addUsage(promptTokens, completionTokens);
         turns.save(turn);
-        session.recordUsage((int) (promptTokens + completionTokens), promptTokens, completionTokens, clock.instant());
+        session.recordUsage(
+                (int) (promptTokens + completionTokens), promptTokens, completionTokens, cost, clock.instant());
         sessions.save(session);
         publishUsage(session, contextWindow);
     }
@@ -357,6 +365,7 @@ public class SessionWriter {
         payload.put("contextWindow", contextWindow);
         payload.put("totalInputTokens", session.getTotalInputTokens());
         payload.put("totalOutputTokens", session.getTotalOutputTokens());
+        payload.put("estimatedCost", session.getEstimatedCost());
         eventLog.append(session.getUserId(), session.getId(), "usage.updated", payload);
     }
 

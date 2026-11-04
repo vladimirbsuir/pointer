@@ -7,10 +7,15 @@ export type Me = Required<Omit<Schemas["MeResponse"], "github">> & {
 };
 
 export type Model = Required<
-  Omit<Schemas["ModelResponse"], "contextWindow" | "maxOutputTokens">
+  Omit<
+    Schemas["ModelResponse"],
+    "contextWindow" | "maxOutputTokens" | "inputPricePerMtok" | "outputPricePerMtok"
+  >
 > & {
   contextWindow: number | null;
   maxOutputTokens: number | null;
+  inputPricePerMtok: number | null;
+  outputPricePerMtok: number | null;
 };
 
 export type Provider = Required<Omit<Schemas["ProviderResponse"], "models" | "apiKeyHint">> & {
@@ -53,9 +58,10 @@ export type WorktreeStatus = {
 export type Session = Required<
   Omit<
     Schemas["SessionResponse"],
-    "modelId" | "executorDeviceId" | "archivedAt" | "status" | "mode" | "worktree"
+    "modelId" | "executorDeviceId" | "archivedAt" | "status" | "mode" | "worktree" | "estimatedCost"
   >
 > & {
+  estimatedCost: number | null;
   worktree: SessionWorktree | null;
   modelId: string | null;
   executorDeviceId: string | null;

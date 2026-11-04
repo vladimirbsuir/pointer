@@ -252,6 +252,7 @@ public class SessionService {
                 session.getContextTokens(),
                 session.getTotalInputTokens(),
                 session.getTotalOutputTokens(),
+                session.getEstimatedCost(),
                 session.getExecutorDeviceId(),
                 session.getWorktreeBranch() == null
                         ? null

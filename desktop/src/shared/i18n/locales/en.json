@@ -172,7 +172,8 @@
     "noFiles": "No matching files",
     "attachFailed": "Could not attach {{path}}",
     "changes": "Changes",
-    "planApprovedMessage": "Plan approved. Implementing…"
+    "planApprovedMessage": "Plan approved. Implementing…",
+    "estimatedCost": "Estimated cost: {{cost}}"
   },
   "modes": {
     "ask": "Ask",
@@ -196,7 +197,11 @@
     "makeDefault": "Make default",
     "isDefault": "Default model",
     "modelCount": "{{enabled}} of {{total}} models enabled",
-    "filter": "Filter models"
+    "filter": "Filter models",
+    "inputPrice": "Input, $ per 1M tokens",
+    "outputPrice": "Output, $ per 1M tokens",
+    "pricing": "Pricing for cost estimates",
+    "priceSummary": "${{input}} / ${{output}}"
   },
   "approval": {
     "title": "Allow this action?",

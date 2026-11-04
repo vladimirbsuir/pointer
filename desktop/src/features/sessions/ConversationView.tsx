@@ -248,11 +248,12 @@ function UsageIndicator({
     input: usage.totalInputTokens,
     output: usage.totalOutputTokens,
   });
+  const cost = usage.estimatedCost === null ? null : formatCost(usage.estimatedCost);
 
   return (
     <span
       className="flex shrink-0 items-center gap-1.5 text-xs whitespace-nowrap text-muted-foreground tabular-nums"
-      title={`${context}\n${total}`}
+      title={[context, total, cost && t("chat.estimatedCost", { cost })].filter(Boolean).join("\n")}
     >
       {percent !== null && (
         <span className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
@@ -263,6 +264,12 @@ function UsageIndicator({
         </span>
       )}
       {percent !== null ? `${percent}%` : t("chat.tokens", { count: usage.contextTokens })}
+      {cost && <span>· {cost}</span>}
     </span>
   );
+}
+
+function formatCost(cost: number) {
+  const digits = cost >= 1 ? 2 : cost >= 0.01 ? 3 : 4;
+  return `$${cost.toFixed(digits)}`;
 }

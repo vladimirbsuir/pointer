@@ -172,7 +172,8 @@
     "noFiles": "Файлы не найдены",
     "attachFailed": "Не удалось прикрепить {{path}}",
     "changes": "Изменения",
-    "planApprovedMessage": "План утверждён. Выполняю…"
+    "planApprovedMessage": "План утверждён. Выполняю…",
+    "estimatedCost": "Примерная стоимость: {{cost}}"
   },
   "modes": {
     "ask": "Вопрос",
@@ -196,7 +197,11 @@
     "makeDefault": "Сделать моделью по умолчанию",
     "isDefault": "Модель по умолчанию",
     "modelCount": "включено моделей: {{enabled}} из {{total}}",
-    "filter": "Поиск моделей"
+    "filter": "Поиск моделей",
+    "inputPrice": "Ввод, $ за 1 млн токенов",
+    "outputPrice": "Вывод, $ за 1 млн токенов",
+    "pricing": "Цены для оценки стоимости",
+    "priceSummary": "${{input}} / ${{output}}"
   },
   "approval": {
     "title": "Разрешить это действие?",

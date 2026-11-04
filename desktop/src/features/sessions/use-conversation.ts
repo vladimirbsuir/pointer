@@ -17,6 +17,7 @@ export type Usage = {
   contextWindow: number | null;
   totalInputTokens: number;
   totalOutputTokens: number;
+  estimatedCost: number | null;
 };
 
 export type ConversationState = {
@@ -113,6 +114,7 @@ function applyEvent(state: ConversationState, { seq, event }: SessionEvent): Con
           contextWindow: (event.contextWindow as number | null) ?? null,
           totalInputTokens: Number(event.totalInputTokens ?? 0),
           totalOutputTokens: Number(event.totalOutputTokens ?? 0),
+          estimatedCost: typeof event.estimatedCost === "number" ? event.estimatedCost : null,
         },
       };
     case "session.rewound": {
@@ -148,6 +150,7 @@ function reducer(state: ConversationState, action: Action): ConversationState {
               contextWindow: null,
               totalInputTokens: action.session.totalInputTokens,
               totalOutputTokens: action.session.totalOutputTokens,
+              estimatedCost: action.session.estimatedCost,
             }
           : null,
       };

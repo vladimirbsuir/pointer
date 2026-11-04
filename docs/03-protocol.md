@@ -266,7 +266,7 @@ Rewinding (`POST /sessions/{id}/rewind` with `turnId`, `restoreFiles`, `force`) 
 | `file.reverted` | `changeIds`, `path` | The user reverted changes to a file. |
 | `session.rewound` | `turnId`, `turnIds` | The user rewound the session to before `turnId`. Items of all `turnIds` leave the history and the model's context. |
 | `status.changed` | `status` | Session status changes. |
-| `usage.updated` | `contextTokens`, `contextWindow`, `totalInputTokens`, `totalOutputTokens` | After each model call. |
+| `usage.updated` | `contextTokens`, `contextWindow`, `totalInputTokens`, `totalOutputTokens`, `estimatedCost` | After each model call. `estimatedCost` is null until a call is made with a model that has prices (CTX-6). |
 | `session.updated` | `title`, `mode`, `model`, `autoApprove`, `archived`, `worktree` | Session settings change, including worktree creation, merge and discard. |
 
 Approval `preview`:

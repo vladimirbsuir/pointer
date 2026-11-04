@@ -701,6 +701,7 @@ export interface components {
             totalInputTokens?: number;
             /** Format: int64 */
             totalOutputTokens?: number;
+            estimatedCost?: number;
             /** Format: uuid */
             executorDeviceId?: string;
             worktree?: components["schemas"]["SessionWorktree"];
@@ -790,6 +791,8 @@ export interface components {
             maxOutputTokens?: number;
             supportsTools?: boolean;
             supportsVision?: boolean;
+            inputPricePerMtok?: number;
+            outputPricePerMtok?: number;
             source?: string;
             enabled?: boolean;
         };
@@ -920,6 +923,9 @@ export interface components {
             supportsTools?: boolean;
             supportsVision?: boolean;
             enabled?: boolean;
+            inputPricePerMtok?: number;
+            outputPricePerMtok?: number;
+            clearPrices?: boolean;
         };
         UpdateProjectRequest: {
             name?: string;

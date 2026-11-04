@@ -259,6 +259,7 @@ Prefix rules for `run_command` (PERM-4).
 | `context_tokens` | integer | Current context size |
 | `total_input_tokens` | bigint | |
 | `total_output_tokens` | bigint | |
+| `estimated_cost` | numeric(14,6) | Sum of call costs from model prices at the time of each call; null until a priced model is used (CTX-6) |
 | `archived_at` | timestamptz | Nullable |
 | `created_at`, `updated_at` | timestamptz | |
 

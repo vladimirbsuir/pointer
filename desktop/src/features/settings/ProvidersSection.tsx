@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ChevronRightIcon,
+  CircleDollarSignIcon,
   PlusIcon,
   RefreshCwIcon,
   StarIcon,
@@ -20,6 +21,7 @@ import { Button } from "@/shared/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/shared/ui/field";
 import { Input } from "@/shared/ui/input";
 import { Switch } from "@/shared/ui/switch";
+import { ModelPriceEditor } from "./ModelPriceEditor";
 
 type Preset = { name: string; baseUrl: string; isLocal: boolean; needsKey: boolean };
 
@@ -161,6 +163,7 @@ function ProviderCard({ provider }: { provider: Provider }) {
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [filter, setFilter] = useState("");
+  const [pricingModelId, setPricingModelId] = useState<string | null>(null);
   const enabledCount = provider.models.filter((model) => model.enabled).length;
   const visibleModels = provider.models.filter((model) =>
     model.displayName.toLowerCase().includes(filter.trim().toLowerCase()),
@@ -282,38 +285,68 @@ function ProviderCard({ provider }: { provider: Provider }) {
           {visibleModels.map((model) => {
             const isDefault = settings?.defaultModelId === model.id;
             return (
-              <li key={model.id} className="flex items-center gap-2 px-4 py-1.5 text-sm">
-                <Switch
-                  size="sm"
-                  checked={model.enabled}
-                  onCheckedChange={(enabled) =>
-                    void run(() =>
-                      unwrap(
-                        api().PATCH("/api/v1/providers/{providerId}/models/{modelId}", {
-                          params: { path: { providerId: provider.id, modelId: model.id } },
-                          body: { enabled },
-                        }),
-                      ),
-                    )
-                  }
-                />
-                <span
-                  className={cn(
-                    "min-w-0 flex-1 truncate",
-                    !model.enabled && "text-muted-foreground",
-                  )}
-                >
-                  {model.displayName}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  disabled={busy || isDefault || !model.enabled}
-                  title={isDefault ? t("providers.isDefault") : t("providers.makeDefault")}
-                  onClick={() => void setDefault(model.id)}
-                >
-                  <StarIcon className={cn(isDefault && "fill-current text-amber-500")} />
-                </Button>
+              <li key={model.id}>
+                <div className="flex items-center gap-2 px-4 py-1.5 text-sm">
+                  <Switch
+                    size="sm"
+                    checked={model.enabled}
+                    onCheckedChange={(enabled) =>
+                      void run(() =>
+                        unwrap(
+                          api().PATCH("/api/v1/providers/{providerId}/models/{modelId}", {
+                            params: { path: { providerId: provider.id, modelId: model.id } },
+                            body: { enabled },
+                          }),
+                        ),
+                      )
+                    }
+                  />
+                  <span
+                    className={cn(
+                      "min-w-0 flex-1 truncate",
+                      !model.enabled && "text-muted-foreground",
+                    )}
+                  >
+                    {model.displayName}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    disabled={busy}
+                    title={t("providers.pricing")}
+                    className="text-muted-foreground tabular-nums"
+                    onClick={() => setPricingModelId(pricingModelId === model.id ? null : model.id)}
+                  >
+                    {model.inputPricePerMtok !== null || model.outputPricePerMtok !== null ? (
+                      t("providers.priceSummary", {
+                        input: model.inputPricePerMtok ?? 0,
+                        output: model.outputPricePerMtok ?? 0,
+                      })
+                    ) : (
+                      <CircleDollarSignIcon />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    disabled={busy || isDefault || !model.enabled}
+                    title={isDefault ? t("providers.isDefault") : t("providers.makeDefault")}
+                    onClick={() => void setDefault(model.id)}
+                  >
+                    <StarIcon className={cn(isDefault && "fill-current text-amber-500")} />
+                  </Button>
+                </div>
+                {pricingModelId === model.id && (
+                  <ModelPriceEditor
+                    providerId={provider.id}
+                    model={model}
+                    onCancel={() => setPricingModelId(null)}
+                    onDone={(save) => {
+                      setPricingModelId(null);
+                      void run(save);
+                    }}
+                  />
+                )}
               </li>
             );
           })}

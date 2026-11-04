@@ -2,6 +2,7 @@ package dev.pointer.session;
 
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ public final class SessionDtos {
             int contextTokens,
             long totalInputTokens,
             long totalOutputTokens,
+            BigDecimal estimatedCost,
             UUID executorDeviceId,
             SessionWorktree worktree,
             Instant archivedAt,
