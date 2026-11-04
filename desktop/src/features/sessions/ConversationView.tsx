@@ -16,6 +16,7 @@ import { Composer, type Attachment } from "./Composer";
 import { MessageList } from "./MessageList";
 import { ModelPicker } from "./ModelPicker";
 import { useConversation, type Usage } from "./use-conversation";
+import { WorktreeControl } from "./WorktreeControl";
 
 const BUSY_STATUSES = ["running", "waiting_for_approval", "waiting_for_executor"];
 
@@ -126,7 +127,14 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
     <div className="flex h-full min-w-0 flex-1">
       <div className="flex h-full min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between gap-4 border-b px-4 py-2">
-          <h2 className="truncate text-sm font-medium">{session.title}</h2>
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="truncate text-sm font-medium">{session.title}</h2>
+            <WorktreeControl
+              session={session}
+              busy={running}
+              onChanged={(updated) => patchSession({ ...updated, status: session.status })}
+            />
+          </div>
           <div className="flex items-center gap-2">
             <UsageIndicator
               usage={state.usage}

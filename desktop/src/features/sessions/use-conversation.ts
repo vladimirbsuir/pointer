@@ -98,6 +98,10 @@ function applyEvent(state: ConversationState, { seq, event }: SessionEvent): Con
                 typeof event.autoApprove === "boolean"
                   ? event.autoApprove
                   : next.session.autoApprove,
+              worktree:
+                "worktree" in event
+                  ? ((event.worktree as Session["worktree"]) ?? null)
+                  : next.session.worktree,
             },
           }
         : next;

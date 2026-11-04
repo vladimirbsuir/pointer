@@ -27,12 +27,28 @@ export type SessionStatus =
 
 export type SessionMode = "ask" | "plan" | "agent";
 
+export type SessionWorktree = {
+  branch: string;
+  baseBranch: string;
+  state: "active" | "merged" | "discarded";
+};
+
+export type WorktreeStatus = {
+  path: string;
+  branch: string;
+  baseBranch: string;
+  commitsAhead: number;
+  uncommittedFiles: string[];
+  baseCheckedOut: boolean;
+};
+
 export type Session = Required<
   Omit<
     Schemas["SessionResponse"],
-    "modelId" | "executorDeviceId" | "archivedAt" | "status" | "mode"
+    "modelId" | "executorDeviceId" | "archivedAt" | "status" | "mode" | "worktree"
   >
 > & {
+  worktree: SessionWorktree | null;
   modelId: string | null;
   executorDeviceId: string | null;
   archivedAt: string | null;

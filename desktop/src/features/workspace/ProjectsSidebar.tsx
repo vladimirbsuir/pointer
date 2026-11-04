@@ -7,6 +7,7 @@ import {
   ChevronRightIcon,
   FolderIcon,
   FolderPlusIcon,
+  GitBranchIcon,
   LinkIcon,
   Loader2Icon,
   PlusIcon,
@@ -18,6 +19,12 @@ import { toAppError, type Project, type Session } from "@/shared/api/types";
 import { errorMessage } from "@/shared/i18n/errors";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/shared/ui/dropdown-menu";
 import { createSession } from "./create-session";
 import { useWorkspace } from "./workspace-store";
 
@@ -99,9 +106,9 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
   const [expanded, setExpanded] = useState(true);
   const { data: sessions } = useSessions(project.id);
 
-  const startSession = async () => {
+  const startSession = async (worktree = false) => {
     try {
-      await createSession(project.id, queryClient);
+      await createSession(project.id, queryClient, { worktree });
       setExpanded(true);
     } catch (error) {
       toast.error(errorMessage(t, toAppError(error)));
@@ -147,15 +154,30 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
             <LinkIcon className="text-amber-500" />
           </Button>
         )}
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="opacity-0 group-hover:opacity-100"
-          onClick={() => void startSession()}
-          aria-label={t("shell.newSession")}
-        >
-          <PlusIcon />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="opacity-0 group-hover:opacity-100 aria-expanded:opacity-100"
+                aria-label={t("shell.newSession")}
+              />
+            }
+          >
+            <PlusIcon />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem onClick={() => void startSession()}>
+              <PlusIcon />
+              {t("shell.newSession")}
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!path} onClick={() => void startSession(true)}>
+              <GitBranchIcon />
+              {t("shell.newWorktreeSession")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       {expanded && (
         <div className="ml-4 flex flex-col">
@@ -189,6 +211,12 @@ function SessionRow({ projectId, session }: { projectId: string; session: Sessio
         active && "bg-sidebar-accent text-sidebar-foreground",
       )}
     >
+      {session.worktree?.state === "active" && (
+        <GitBranchIcon
+          className="size-3.5 shrink-0 text-muted-foreground"
+          aria-label={session.worktree.branch}
+        />
+      )}
       <span className="min-w-0 flex-1 truncate">{session.title}</span>
       {session.status === "running" && (
         <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground" />

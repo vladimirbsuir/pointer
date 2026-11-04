@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 use similar::{ChangeTag, TextDiff};
@@ -181,7 +181,7 @@ pub fn project_context(root: &Path) -> Result<ExecOutcome, ExecError> {
         };
         Some(json!({ "name": name, "content": content }))
     });
-    let head = fs::read_to_string(root.join(".git").join("HEAD")).ok();
+    let head = fs::read_to_string(git_dir(root).join("HEAD")).ok();
     let branch = head
         .as_deref()
         .and_then(|head| head.trim().strip_prefix("ref: refs/heads/"))
@@ -191,6 +191,18 @@ pub fn project_context(root: &Path) -> Result<ExecOutcome, ExecError> {
         "gitBranch": branch,
         "isGitRepository": head.is_some(),
     })))
+}
+
+fn git_dir(root: &Path) -> PathBuf {
+    let dot_git = root.join(".git");
+    fs::read_to_string(&dot_git)
+        .ok()
+        .and_then(|link| {
+            link.trim()
+                .strip_prefix("gitdir:")
+                .map(|dir| root.join(dir.trim()))
+        })
+        .unwrap_or(dot_git)
 }
 
 fn apply_change(
@@ -449,5 +461,30 @@ mod tests {
 
         assert_eq!(outcome.result["rulesFile"]["name"], "AGENTS.md");
         assert_eq!(outcome.result["gitBranch"], "main");
+    }
+
+    #[test]
+    fn project_context_follows_worktree_git_file() {
+        let root = tempfile::tempdir().unwrap();
+        let git = tempfile::tempdir().unwrap();
+        fs::write(
+            git.path().join("HEAD"),
+            "ref: refs/heads/pointer/abc
+",
+        )
+        .unwrap();
+        fs::write(
+            root.path().join(".git"),
+            format!(
+                "gitdir: {}
+",
+                git.path().display()
+            ),
+        )
+        .unwrap();
+
+        let outcome = project_context(root.path()).unwrap();
+
+        assert_eq!(outcome.result["gitBranch"], "pointer/abc");
     }
 }

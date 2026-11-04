@@ -186,6 +186,21 @@ export function executeInBrowser(
       }
       return ok({ restored: true });
     }
+    case "pointer.worktree_create":
+      return ok({ baseBranch: "main" });
+    case "pointer.worktree_status":
+      return ok({
+        path: "C:/Users/dev/AppData/Roaming/pointer/worktrees/preview",
+        branch: "pointer/preview",
+        baseBranch: String(args.baseBranch),
+        commitsAhead: 1,
+        uncommittedFiles: ["src/App.tsx"],
+        baseCheckedOut: true,
+      });
+    case "pointer.worktree_merge":
+      return ok({ merged: true, commits: 2 });
+    case "pointer.worktree_discard":
+      return ok({ discarded: true });
     case "run_command":
       return ok({
         exitCode: 0,

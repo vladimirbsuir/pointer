@@ -2,9 +2,11 @@ mod command;
 mod files;
 mod paths;
 mod search;
+mod worktree;
 
 pub use files::read_attachment;
 pub use search::suggest_files;
+pub use worktree::Worktree;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -89,6 +91,21 @@ impl ExecError {
 
 pub type Emit = Arc<dyn Fn(&str, Value) + Send + Sync>;
 
+pub struct Workspace {
+    pub project: PathBuf,
+    pub worktree: Option<Worktree>,
+}
+
+impl Workspace {
+    fn root(&self) -> Result<PathBuf, ExecError> {
+        match &self.worktree {
+            Some(worktree) if worktree.path.is_dir() => Ok(worktree.path.clone()),
+            Some(_) => Err(worktree::missing()),
+            None => Ok(self.project.clone()),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Executor {
     running: Mutex<HashMap<String, watch::Sender<bool>>>,
@@ -98,7 +115,7 @@ impl Executor {
     pub fn handle(
         self: &Arc<Self>,
         payload: Value,
-        root: Option<PathBuf>,
+        workspace: Option<Workspace>,
         mcp: Arc<McpHub>,
         emit: Emit,
     ) {
@@ -119,8 +136,10 @@ impl Executor {
                 dry_run: payload["dryRun"].as_bool().unwrap_or(false),
                 timeout_ms: payload["timeoutMs"].as_u64().unwrap_or(30_000),
             };
-            let outcome = match root {
-                Some(root) => execute(root, request, &call_id, &mcp, emit.clone(), cancel).await,
+            let outcome = match workspace {
+                Some(workspace) => {
+                    execute(workspace, request, &call_id, &mcp, emit.clone(), cancel).await
+                }
                 None => Err(ExecError::rejected(
                     "project_not_mapped",
                     "The project is not linked to a folder on this device",
@@ -150,7 +169,7 @@ impl Executor {
 }
 
 async fn execute(
-    root: PathBuf,
+    workspace: Workspace,
     request: Request,
     call_id: &str,
     mcp: &McpHub,
@@ -160,6 +179,14 @@ async fn execute(
     if request.operation == "mcp.call" {
         return call_mcp(mcp, &request, cancel).await;
     }
+    if request.operation.starts_with("pointer.worktree_") {
+        return tokio::task::spawn_blocking(move || {
+            worktree::handle(&workspace.project, workspace.worktree.as_ref(), &request)
+        })
+        .await
+        .unwrap_or_else(|error| Err(ExecError::failed("internal_error", error.to_string())));
+    }
+    let root = workspace.root()?;
     if request.operation == "run_command" {
         let call_id = call_id.to_string();
         return command::run_command(

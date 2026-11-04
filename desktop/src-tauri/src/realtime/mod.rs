@@ -19,7 +19,7 @@ use uuid::Uuid;
 use crate::auth::session::AuthSession;
 use crate::config::{API_URL, CLIENT_VERSION};
 use crate::device::DeviceInfo;
-use crate::executor::{Emit, Executor};
+use crate::executor::{Emit, Executor, Workspace, Worktree};
 use crate::mcp::McpHub;
 use crate::projects::ProjectMap;
 use relay::Relay;
@@ -238,6 +238,11 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
     let realtime = app.state::<Realtime>();
     let device = app.state::<DeviceInfo>();
     let projects = app.state::<ProjectMap>();
+    let worktrees_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("worktrees");
 
     outgoing.send(
         "hello",
@@ -310,15 +315,25 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
                 .handle_request(envelope["payload"].clone(), outgoing.clone()),
             "exec.request" => {
                 let payload = envelope["payload"].clone();
-                let root = payload["projectId"]
+                let workspace = payload["projectId"]
                     .as_str()
-                    .and_then(|project_id| projects.path(project_id));
+                    .and_then(|project_id| projects.path(project_id))
+                    .map(|project| Workspace {
+                        project,
+                        worktree: payload["worktree"].as_str().and_then(|branch| {
+                            Worktree::locate(
+                                &worktrees_dir,
+                                payload["sessionId"].as_str().unwrap_or_default(),
+                                branch,
+                            )
+                        }),
+                    });
                 let emit_app = app.clone();
                 let emit: Emit = Arc::new(move |message_type, payload| {
                     emit_app.state::<Realtime>().deliver(message_type, payload)
                 });
                 let mcp = app.state::<Arc<McpHub>>().inner().clone();
-                realtime.executor.handle(payload, root, mcp, emit);
+                realtime.executor.handle(payload, workspace, mcp, emit);
             }
             "exec.cancel" => realtime
                 .executor

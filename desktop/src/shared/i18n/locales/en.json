@@ -34,6 +34,7 @@
     "signOut": "Sign out",
     "addProject": "Add project",
     "newSession": "New session",
+    "newWorktreeSession": "New session in worktree",
     "notLinked": "Folder is not linked on this device",
     "linkFolder": "Link folder",
     "connected": "Connected",
@@ -126,7 +127,18 @@
     "terminal_not_found": "The terminal is closed.",
     "invalid_mcp_name": "Use up to 32 Latin letters, digits, dashes or underscores for the name.",
     "invalid_mcp_target": "Enter a command or an http(s) URL.",
-    "mcp_name_taken": "A server with this name already exists."
+    "mcp_name_taken": "A server with this name already exists.",
+    "worktree_exists": "This session already has a worktree.",
+    "session_started": "A worktree can be created only before the first message.",
+    "no_worktree": "The session has no active worktree.",
+    "not_a_git_repository": "The project folder is not a git repository.",
+    "not_repository_root": "The project folder must be the top level of its git repository.",
+    "detached_head": "Check out a branch in the project folder first.",
+    "worktree_missing": "The session worktree was not found on this computer.",
+    "base_not_checked_out": "Check out the base branch in the project folder before merging.",
+    "merge_conflict": "The merge has conflicts and was cancelled. Nothing was changed.",
+    "commit_failed": "Could not commit the worktree changes. Check your git user name and email.",
+    "git_failed": "A git command failed."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",
@@ -293,5 +305,21 @@
       "running": "running",
       "failed": "failed"
     }
+  },
+  "worktree": {
+    "hint": "Runs in worktree {{branch}}, created from {{base}}",
+    "description": "This session works in its own git worktree. Merge its changes into {{base}} or discard them.",
+    "loading": "Reading worktree status…",
+    "reveal": "Show in file manager",
+    "summary": "Commits: {{commits}}, uncommitted files: {{files}}",
+    "baseNotCheckedOut": "Check out {{base}} in the project folder to merge.",
+    "commitMessage": "Commit message for uncommitted changes",
+    "busy": "Wait until the agent finishes the current turn.",
+    "merge": "Merge into {{base}}",
+    "close": "Remove worktree",
+    "discard": "Discard",
+    "confirmDiscard": "Delete the worktree and all its changes?",
+    "merged": "Changes merged into {{base}}",
+    "discarded": "Worktree discarded"
   }
 }

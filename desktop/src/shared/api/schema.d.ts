@@ -68,6 +68,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/worktree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["status"];
+        put?: never;
+        post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{sessionId}/worktree/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["merge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{sessionId}/worktree/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["discard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/rewind": {
         parameters: {
             query?: never;
@@ -189,7 +237,7 @@ export interface paths {
         };
         get: operations["list"];
         put?: never;
-        post: operations["create"];
+        post: operations["create_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -253,7 +301,7 @@ export interface paths {
         };
         get: operations["list_1"];
         put?: never;
-        post: operations["create_1"];
+        post: operations["create_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -269,7 +317,7 @@ export interface paths {
         };
         get: operations["list_2"];
         put?: never;
-        post: operations["create_2"];
+        post: operations["create_3"];
         delete?: never;
         options?: never;
         head?: never;
@@ -588,6 +636,43 @@ export interface components {
             currentPassword?: string;
             newPassword: string;
         };
+        SessionResponse: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            projectId?: string;
+            title?: string;
+            mode?: string;
+            /** Format: uuid */
+            modelId?: string;
+            status?: string;
+            autoApprove?: boolean;
+            /** Format: int64 */
+            lastSeq?: number;
+            /** Format: int32 */
+            contextTokens?: number;
+            /** Format: int64 */
+            totalInputTokens?: number;
+            /** Format: int64 */
+            totalOutputTokens?: number;
+            /** Format: uuid */
+            executorDeviceId?: string;
+            worktree?: components["schemas"]["SessionWorktree"];
+            /** Format: date-time */
+            archivedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        SessionWorktree: {
+            branch?: string;
+            baseBranch?: string;
+            state?: string;
+        };
+        MergeRequest: {
+            message?: string;
+        };
         RewindRequest: {
             /** Format: uuid */
             turnId: string;
@@ -702,34 +787,6 @@ export interface components {
             mode?: string;
             /** Format: uuid */
             modelId?: string;
-        };
-        SessionResponse: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            projectId?: string;
-            title?: string;
-            mode?: string;
-            /** Format: uuid */
-            modelId?: string;
-            status?: string;
-            autoApprove?: boolean;
-            /** Format: int64 */
-            lastSeq?: number;
-            /** Format: int32 */
-            contextTokens?: number;
-            /** Format: int64 */
-            totalInputTokens?: number;
-            /** Format: int64 */
-            totalOutputTokens?: number;
-            /** Format: uuid */
-            executorDeviceId?: string;
-            /** Format: date-time */
-            archivedAt?: string;
-            /** Format: date-time */
-            createdAt?: string;
-            /** Format: date-time */
-            updatedAt?: string;
         };
         DeviceInfo: {
             /** Format: uuid */
@@ -1022,6 +1079,100 @@ export interface operations {
             };
         };
     };
+    status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+        };
+    };
+    merge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+        };
+    };
+    discard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+        };
+    };
     rewind: {
         parameters: {
             query?: never;
@@ -1210,7 +1361,7 @@ export interface operations {
             };
         };
     };
-    create: {
+    create_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -1324,7 +1475,7 @@ export interface operations {
             };
         };
     };
-    create_1: {
+    create_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -1370,7 +1521,7 @@ export interface operations {
             };
         };
     };
-    create_2: {
+    create_3: {
         parameters: {
             query?: never;
             header?: never;
