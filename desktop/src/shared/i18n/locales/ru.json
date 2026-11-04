@@ -211,13 +211,15 @@
     "write_file": "Запись {{target}}",
     "edit_file": "Правка {{target}}",
     "run_command": "Запуск {{target}}",
+    "web_fetch": "Загрузка {{target}}",
     "other": "Инструмент {{name}}",
     "lines": "строк: {{count}}",
     "files": "файлов: {{count}}",
     "matches": "совпадений: {{count}}",
     "entries": "элементов: {{count}}",
     "exitCode": "код {{code}}",
-    "mcp": "{{server}} · {{tool}}"
+    "mcp": "{{server}} · {{tool}}",
+    "httpStatus": "HTTP {{code}}"
   },
   "permissions": {
     "tools": "Инструменты",

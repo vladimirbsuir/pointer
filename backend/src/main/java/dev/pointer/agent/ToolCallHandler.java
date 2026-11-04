@@ -29,6 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
 class ToolCallHandler {
 
     static final int MAX_RESULT_CHARS = 30_000;
+    private static final String WEB_FETCH = "web_fetch";
     private static final int MAX_STORED_OUTPUT_CHARS = 20_000;
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration DEFAULT_COMMAND_TIMEOUT = Duration.ofMinutes(2);
@@ -138,6 +139,10 @@ class ToolCallHandler {
             preview.put("server", tool.getMcpServer());
             preview.put("tool", tool.getMcpTool());
             preview.put("arguments", arguments);
+        } else if (WEB_FETCH.equals(tool.getOperation())) {
+            preview = new LinkedHashMap<>();
+            preview.put("kind", "fetch");
+            preview.put("url", arguments.get("url"));
         } else if (ToolDefinition.WRITE.equals(tool.getKind())) {
             var dryRun = execution.execute(
                     request(scope, tool, arguments, true), statusListener(scope), scope.cancellation());

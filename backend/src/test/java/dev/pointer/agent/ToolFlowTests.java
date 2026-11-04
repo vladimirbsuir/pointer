@@ -98,6 +98,35 @@ class ToolFlowTests extends AgentIntegrationTest {
     }
 
     @Test
+    void webFetchAsksForApprovalWithUrlPreviewInAskMode() throws Exception {
+        var setup = setUp(false, "ask");
+        llm.enqueueToolCall("call_1", "web_fetch", "{\"url\":\"https://example.com/docs\"}");
+        llm.enqueueText("The docs say hi.");
+        var requests = new CopyOnWriteArrayList<JsonNode>();
+
+        try (var device =
+                executor(setup, requests, request -> succeeded(Map.of("status", 200, "content", "Hi from docs")))) {
+            send(setup, "Read the docs", null);
+
+            var requested = device.awaitEvent("approval.requested", TIMEOUT)
+                    .path("payload")
+                    .path("event");
+            assertThat(requested.path("preview").path("kind").asString()).isEqualTo("fetch");
+            assertThat(requested.path("preview").path("url").asString()).isEqualTo("https://example.com/docs");
+
+            resolve(setup, requested.path("approvalId").asString(), "approved", "once", null);
+            device.awaitEvent("turn.completed", TIMEOUT);
+        }
+
+        assertThat(requests)
+                .filteredOn(request -> request.path("operation").asString().equals("web_fetch"))
+                .singleElement()
+                .satisfies(request ->
+                        assertThat(request.path("dryRun").asBoolean()).isFalse());
+        assertThat(llm.requests().get(1)).contains("Hi from docs");
+    }
+
+    @Test
     void changedFileIsListedWithDiffAndCanBeReverted() throws Exception {
         var setup = withAutoApprove(setUp(false));
         llm.enqueueToolCall("call_1", "edit_file", "{\"path\":\"a.txt\",\"oldText\":\"one\",\"newText\":\"two\"}");

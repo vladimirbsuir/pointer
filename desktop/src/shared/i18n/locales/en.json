@@ -211,13 +211,15 @@
     "write_file": "Write {{target}}",
     "edit_file": "Edit {{target}}",
     "run_command": "Run {{target}}",
+    "web_fetch": "Fetch {{target}}",
     "other": "Use {{name}}",
     "lines": "{{count}} lines",
     "files": "{{count}} files",
     "matches": "{{count}} matches",
     "entries": "{{count}} entries",
     "exitCode": "exit {{code}}",
-    "mcp": "{{server}} · {{tool}}"
+    "mcp": "{{server}} · {{tool}}",
+    "httpStatus": "HTTP {{code}}"
   },
   "permissions": {
     "tools": "Tools",

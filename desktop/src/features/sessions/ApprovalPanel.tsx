@@ -40,6 +40,11 @@ export function ApprovalPanel({ sessionId, approvalId, preview }: ApprovalPanelP
       <p className="text-xs font-medium">{t("approval.title")}</p>
       {preview.kind === "diff" ? (
         <DiffView diff={String(preview.unifiedDiff ?? "")} />
+      ) : preview.kind === "fetch" ? (
+        <p className="overflow-auto rounded-md border bg-muted/40 p-2 font-mono text-xs break-all">
+          <span className="text-muted-foreground">GET </span>
+          {String(preview.url ?? "")}
+        </p>
       ) : preview.kind === "tool" ? (
         <div className="overflow-hidden rounded-md border bg-muted/40 font-mono text-xs">
           <p className="border-b px-2 py-1 text-muted-foreground">

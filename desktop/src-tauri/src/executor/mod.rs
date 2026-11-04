@@ -2,6 +2,7 @@ mod command;
 mod files;
 mod paths;
 mod search;
+mod web;
 mod worktree;
 
 pub use files::read_attachment;
@@ -178,6 +179,12 @@ async fn execute(
 ) -> Result<ExecOutcome, ExecError> {
     if request.operation == "mcp.call" {
         return call_mcp(mcp, &request, cancel).await;
+    }
+    if request.operation == "web_fetch" {
+        return tokio::select! {
+            result = web::web_fetch(&request) => result,
+            _ = cancel.wait_for(|cancelled| *cancelled) => Err(ExecError::with_status("cancelled", "cancelled", "Cancelled")),
+        };
     }
     if request.operation.starts_with("pointer.worktree_") {
         return tokio::task::spawn_blocking(move || {

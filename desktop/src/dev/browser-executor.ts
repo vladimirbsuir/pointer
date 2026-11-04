@@ -186,6 +186,14 @@ export function executeInBrowser(
       }
       return ok({ restored: true });
     }
+    case "web_fetch":
+      return ok({
+        url: String(args.url),
+        status: 200,
+        contentType: "text/html",
+        content: `(browser preview) simulated page at ${String(args.url)}`,
+        truncated: false,
+      });
     case "pointer.worktree_create":
       return ok({ baseBranch: "main" });
     case "pointer.worktree_status":

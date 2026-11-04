@@ -35,6 +35,7 @@ regex = "1.13.1"
 similar = "3.2.1"
 tauri-plugin-notification = "2"
 portable-pty = "0.9.0"
+html2text = "0.17.4"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }

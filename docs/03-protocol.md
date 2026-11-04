@@ -366,12 +366,14 @@ Arguments and results are what the model sees. The agent may receive a truncated
 | `write_file` | `path`, `content` | `created` (boolean) |
 | `edit_file` | `path`, `oldText`, `newText`, `replaceAll?` | `replacements` |
 | `run_command` | `command`, `workingDirectory?`, `timeoutMs?` | `exitCode`, `output` (combined, tail if truncated), `truncated` |
+| `web_fetch` | `url` (http or https), `maxChars?` (default 20000, at most 25000) | `url` (after redirects), `status`, `contentType`, `content` (HTML converted to text), `truncated` |
 
 Notes:
 
 - `edit_file` fails with `text_not_found` if `oldText` does not occur, and with `text_not_unique` if it occurs more than once and `replaceAll` is false.
 - `glob` and `grep` respect `.gitignore` and skip binary files.
 - `run_command` runs in PowerShell with the project root (or `workingDirectory` within it) as the current directory.
+- `web_fetch` runs on the device, so it reaches the same hosts as the user's browser, including local dev servers. It refuses non-text content with `unsupported_content`. It is offered in every mode and asks for approval by default, with a `fetch` preview holding the URL.
 
 MCP tools reach the executor as operation `mcp.call` with `server`, `tool` and `arguments`. The result is `content` (text blocks joined, other blocks as placeholders) and `structuredContent` when the server returns it. A result with `isError` becomes a failure with code `tool_error`.
 

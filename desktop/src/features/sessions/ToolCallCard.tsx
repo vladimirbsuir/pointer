@@ -8,6 +8,7 @@ import {
   FilePenIcon,
   FileTextIcon,
   FolderIcon,
+  GlobeIcon,
   Loader2Icon,
   SearchIcon,
   SquareTerminalIcon,
@@ -41,6 +42,7 @@ const icons: Record<string, typeof WrenchIcon> = {
   write_file: FilePenIcon,
   edit_file: FilePenIcon,
   run_command: SquareTerminalIcon,
+  web_fetch: GlobeIcon,
 };
 
 function argument(call: ToolCall, name: string) {
@@ -71,6 +73,8 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
         return t(`tools.${toolName}`, { target: argument(call, "pattern") });
       case "run_command":
         return t("tools.run_command", { target: argument(call, "command") });
+      case "web_fetch":
+        return t("tools.web_fetch", { target: argument(call, "url") });
       default:
         return mcpParts
           ? t("tools.mcp", { server: mcpParts[0], tool: mcpParts.slice(1).join("__") })
@@ -98,6 +102,8 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
         });
       case "run_command":
         return t("tools.exitCode", { code: String(result.exitCode ?? "?") });
+      case "web_fetch":
+        return t("tools.httpStatus", { code: String(result.status ?? "?") });
       default: {
         const change = call.fileChanges?.[0];
         return change ? `+${change.linesAdded} −${change.linesRemoved}` : null;
