@@ -39,7 +39,7 @@ gantt
 | M6 Highlights | mid May | RAG, custom tools, Telegram, remote execution | In progress: RAG implemented (November 2026) |
 | M7 Hardening and thesis | mid June | Cloud deployment, measurements, thesis text | Planned |
 
-Development runs ahead of the targets: M0 to M5 were implemented by early November 2026. "Implemented" means the features are built and covered by tests; done criteria that require a period of real use are confirmed separately.
+Development runs ahead of the targets: M0 to M5 were implemented by early November 2026. M6 is in progress in the order listed below: RAG is done, agent-proposed custom tools (TOOL-13) are next. "Implemented" means the features are built and covered by tests; done criteria that require a period of real use are confirmed separately.
 
 ## 3. Milestones
 
@@ -118,6 +118,7 @@ Ordered by value for the defense.
 
 - Deploy the backend to a cloud server with TLS.
 - Measurements for the thesis: time to first token overhead (NFR-2), reconnect behaviour (NFR-3), RAG evaluation results.
+- RAG findings from the first end-to-end run with Ollama `nomic-embed-text` (CPU): indexing this repository (289 files, 933 chunks) took about 5.5 minutes, dominated by the model; retrieval was accurate for most code questions but missed `SecretCipher` for "encrypt provider API keys". Candidates to evaluate: model-specific query and document prefixes (`search_query:` / `search_document:`), hybrid lexical and vector ranking.
 - Bug fixing from dogfooding, test coverage of core backend logic (NFR-10).
 - Known issue: turns interrupted by a backend restart are marked `interrupted` in the database without session events, so open clients show them as running until the session is reloaded.
 - Thesis write-up and defense materials.
