@@ -110,6 +110,7 @@ public class OpenAiCompatibleClient {
                 var reasoning = delta.path(field);
                 if (reasoning.isString() && !reasoning.asString().isEmpty()) {
                     listener.onReasoning(reasoning.asString());
+                    break;
                 }
             }
             for (var toolCall : delta.path("tool_calls")) {

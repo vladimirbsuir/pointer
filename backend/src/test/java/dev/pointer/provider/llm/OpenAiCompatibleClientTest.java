@@ -60,6 +60,20 @@ class OpenAiCompatibleClientTest {
     }
 
     @Test
+    void reasoningSentInBothFieldsIsReportedOnce() {
+        server.enqueueStream(
+                Duration.ZERO,
+                "{\"choices\":[{\"delta\":{\"reasoning_content\":\"The user\",\"reasoning\":\"The user\"}}]}",
+                "{\"choices\":[{\"delta\":{\"reasoning\":\" wants\"}}]}",
+                "[DONE]");
+        var listener = new RecordingListener();
+
+        client.stream(endpoint(null), request(), listener, new Cancellation());
+
+        assertThat(listener.reasoning).containsExactly("The user", " wants");
+    }
+
+    @Test
     void sendsApiKeyAndReportsUnauthorized() {
         server.requireApiKey("secret");
 
