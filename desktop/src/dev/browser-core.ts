@@ -63,6 +63,18 @@ async function request<T>(path: string, body: unknown, token?: string): Promise<
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
+const REFRESH_MARGIN_MS = 30_000;
+
+function tokenExpiresSoon(token: string) {
+  try {
+    const encoded = token.split(".")[1] ?? "";
+    const payload = JSON.parse(atob(encoded.replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload.exp !== "number" || payload.exp * 1000 < Date.now() + REFRESH_MARGIN_MS;
+  } catch {
+    return true;
+  }
+}
+
 function accept(response: AuthResponse) {
   localStorage.setItem(refreshKey, response.refreshToken);
   accessToken = response.accessToken;
@@ -228,7 +240,7 @@ export function installBrowserCore() {
             }),
           );
         case "auth_access_token":
-          if (!accessToken) {
+          if (!accessToken || tokenExpiresSoon(accessToken)) {
             await refresh();
           }
           return accessToken;
