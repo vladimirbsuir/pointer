@@ -25,6 +25,7 @@ import { McpSection } from "./McpSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { ProvidersSection } from "./ProvidersSection";
 import { ShortcutsList } from "./ShortcutsList";
+import { TelegramSection } from "./TelegramSection";
 
 type SettingsDialogProps = {
   open: boolean;
@@ -69,6 +70,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             <ProfileForm user={user} />
             <Separator />
             <GitHubSection user={user} />
+            <Separator />
+            <TelegramSection />
             <Separator />
             <PasswordForm user={user} />
           </TabsContent>

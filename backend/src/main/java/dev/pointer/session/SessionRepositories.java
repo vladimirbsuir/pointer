@@ -3,6 +3,7 @@ package dev.pointer.session;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -13,6 +14,8 @@ interface AgentSessionRepository extends JpaRepository<AgentSession, UUID> {
     List<AgentSession> findByUserIdAndProjectIdOrderByUpdatedAtDesc(UUID userId, UUID projectId);
 
     List<AgentSession> findByStatusIn(List<String> statuses);
+
+    List<AgentSession> findByUserIdAndArchivedAtIsNullOrderByUpdatedAtDesc(UUID userId, Limit limit);
 }
 
 interface TurnRepository extends JpaRepository<Turn, UUID> {

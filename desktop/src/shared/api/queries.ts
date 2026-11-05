@@ -18,6 +18,7 @@ export const queryClient = new QueryClient({
 export const queryKeys = {
   providers: ["providers"] as const,
   settings: ["settings"] as const,
+  telegram: ["telegram"] as const,
   commands: ["commands"] as const,
   customTools: ["customTools"] as const,
   customToolVersions: (toolId: string) => ["customTools", toolId, "versions"] as const,

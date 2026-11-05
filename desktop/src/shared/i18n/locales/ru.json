@@ -70,7 +70,19 @@
     "instructionsDescription": "Применяются ко всем сессиям во всех проектах, вместе с AGENTS.md или CLAUDE.md проекта.",
     "instructionsPlaceholder": "Например: отвечай по-русски, делай небольшие коммиты, используй pnpm.",
     "instructionsSaved": "Инструкции сохранены",
-    "shortcuts": "Горячие клавиши"
+    "shortcuts": "Горячие клавиши",
+    "telegram": "Telegram",
+    "telegramDescription": "Управляйте сессиями из Telegram: отправляйте задачи, следите за ходом работы и подтверждайте действия.",
+    "telegramDisabled": "На сервере не настроен Telegram-бот.",
+    "telegramNotLinked": "Не привязан",
+    "telegramLinked": "Привязан как {{name}}",
+    "telegramLinkedNoUsername": "Привязан",
+    "linkTelegram": "Привязать Telegram",
+    "unlinkTelegram": "Отвязать",
+    "telegramWaiting": "Нажмите «Старт» в открывшемся чате Telegram. Ссылка действует 10 минут.",
+    "telegramOpenLink": "Открыть ссылку ещё раз",
+    "telegramLinkedToast": "Telegram привязан",
+    "telegramUnlinkedToast": "Telegram отвязан"
   },
   "themes": {
     "system": "Системная",
@@ -148,7 +160,9 @@
     "attachment_not_found": "Вложение не найдено.",
     "embedding_model_not_configured": "Сначала выберите модель эмбеддингов в Настройки → Провайдеры.",
     "index_device_offline": "Откройте проект на этом компьютере, чтобы проиндексировать его.",
-    "index_running": "Проект уже индексируется."
+    "index_running": "Проект уже индексируется.",
+    "telegram_disabled": "На сервере не настроен Telegram-бот.",
+    "telegram_unavailable": "Telegram-бот ещё не готов. Попробуйте через несколько секунд."
   },
   "chat": {
     "empty": "Опишите задачу или задайте вопрос, чтобы начать.",

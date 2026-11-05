@@ -11,6 +11,8 @@ public interface DeviceChannel {
 
     boolean isConnected(UUID deviceId);
 
+    Optional<UUID> executorFor(UUID userId, UUID projectId);
+
     Optional<Set<String>> interpreters(UUID deviceId);
 
     void sendRequest(UUID deviceId, Map<String, Object> payload);

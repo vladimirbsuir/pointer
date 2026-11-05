@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -25,6 +26,7 @@ class SessionEventLog {
     private final JdbcClient jdbc;
     private final JsonMapper json;
     private final SessionEventBus bus;
+    private final ObjectProvider<SessionEventListener> listeners;
     private final Clock clock;
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -48,8 +50,13 @@ class SessionEventLog {
                 .param("occurredAt", Timestamp.from(occurredAt))
                 .update();
         var record = new SessionEventRecord(sessionId, seq, occurredAt, event);
-        afterCommit(() -> bus.publishEvent(userId, record));
+        afterCommit(() -> publish(userId, record));
         return record;
+    }
+
+    private void publish(UUID userId, SessionEventRecord record) {
+        bus.publishEvent(userId, record);
+        listeners.orderedStream().forEach(listener -> listener.onSessionEvent(userId, record));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

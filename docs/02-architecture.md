@@ -108,13 +108,14 @@ A module exposes a small public API (services, DTOs, domain events) and keeps ev
 | `worktree` | Session worktrees: creation, status, merge and discard through executor operations ([ADR 0011](adr/0011-session-worktrees.md)). |
 | `command` | User-defined slash commands. |
 | `customtool` | Agent-proposed custom tools: proposal validation, versions, approval outcome, management REST ([ADR 0014](adr/0014-agent-proposed-custom-tools.md)). |
+| `telegram` | Telegram remote control: account linking, long polling of the Bot API, commands, inline approvals, progress and answer notifications ([ADR 0015](adr/0015-telegram-remote-control.md)). |
 | `rag` | Semantic project index: scanning and chunking through the executor, embeddings through the user's provider, pgvector storage, the server-side `semantic_search` operation ([ADR 0013](adr/0013-semantic-code-index.md)). |
 | `gateway` | WebSocket endpoint: authentication, protocol parsing, routing to modules. |
 | `common` | Cross-cutting basics: error model, ids, clock, JSON. |
 
 DTOs are records; Lombok is limited to constructor injection and entity getters ([ADR 0012](adr/0012-lombok-for-boilerplate.md)).
 
-Highlight modules plug in without touching the agent loop: `rag` and `customtool` (implemented), `telegram`, `container` (server-side executor). Tools whose operation has a `ServerOperation` bean are executed by the backend instead of the device; `ExecutionService` routes them, and the registry hides them when they are unavailable for the project.
+Highlight modules plug in without touching the agent loop: `rag`, `customtool` and `telegram` (implemented), `container` (server-side executor). Tools whose operation has a `ServerOperation` bean are executed by the backend instead of the device; `ExecutionService` routes them, and the registry hides them when they are unavailable for the project.
 
 ### 4.2 Agent loop
 
@@ -359,7 +360,7 @@ Later, cloud: the backend as a container behind a reverse proxy with TLS, the sa
 
 | Feature | Extension point | Changes to the agent loop |
 |---|---|---|
-| Telegram control | New client of the `session` module: subscribes to events, calls the same services as REST. | None |
+| Telegram control | New client of the `session` module: a `SessionEventListener` notified after commit next to the WebSocket fan-out, calls the same services as REST. | None |
 | RAG | `rag` module with indexing triggered by executor file events; `semantic_search` tool in the registry. | None |
 | Custom tools | Registry entries with source `custom`, the server-side `propose_tool` approved like a tool call, the executor operation `custom_tool.run` running the approved script on the device. | Dispatch of `propose_tool`; the tool list is rebuilt before every model call |
 | Remote execution | `ContainerExecutor` implementing `Executor`. | None |

@@ -36,10 +36,10 @@ gantt
 | M3 Executor and tools | end of January | The agent reads, edits and runs commands with approvals | Implemented |
 | M4 Agent experience | early March | **MVP v0.1**, used daily for Pointer development | Implemented; the week of daily use is tracked by the author |
 | M5 MVP+ | end of March | Checkpoints, worktrees, MCP, terminal | Implemented (November 2026) |
-| M6 Highlights | mid May | RAG, custom tools, Telegram, remote execution | In progress: RAG and custom tools implemented (November 2026) |
+| M6 Highlights | mid May | RAG, custom tools, Telegram, remote execution | In progress: RAG, custom tools and Telegram implemented (November 2026) |
 | M7 Hardening and thesis | mid June | Cloud deployment, measurements, thesis text | Planned |
 
-Development runs ahead of the targets: M0 to M5 were implemented by early November 2026. M6 is in progress in the order listed below: RAG and agent-proposed custom tools (TOOL-13) are done, Telegram remote control is next. "Implemented" means the features are built and covered by tests; done criteria that require a period of real use are confirmed separately.
+Development runs ahead of the targets: M0 to M5 were implemented by early November 2026. M6 is in progress in the order listed below: RAG, agent-proposed custom tools (TOOL-13) and Telegram remote control are done, remote execution is next. "Implemented" means the features are built and covered by tests; done criteria that require a period of real use are confirmed separately.
 
 ## 3. Milestones
 
@@ -111,7 +111,7 @@ Ordered by value for the defense.
 
 1. **RAG with AST chunking** (CTX-7, TOOL-14): tree-sitter chunking in the core, embeddings through an OpenAI-compatible `/embeddings` endpoint, pgvector index, incremental reindexing, `semantic_search` tool. Implemented; the evaluation comparing answers with and without RAG is part of the M7 measurements.
 2. **Agent-proposed custom tools** (TOOL-13): scripts for an interpreter reported by the device, proposed through `propose_tool` and approved like a tool call, stored with versions and rollback, executed on the device as `custom_tool.run` ([ADR 0014](adr/0014-agent-proposed-custom-tools.md)). Implemented.
-3. **Telegram remote control** (REM-1, 2): account linking, session list, sending messages, progress updates, inline approval buttons.
+3. **Telegram remote control** (REM-1, 2): account linking through a one-time deep link, session list and new sessions, sending messages, a live progress message, final answers, inline approval and plan buttons, long polling of the Bot API ([ADR 0015](adr/0015-telegram-remote-control.md)). Implemented; a manual check with a real bot is pending.
 4. **Remote execution** (REM-3): container executor running a cloned GitHub repository, pushing a branch.
 
 ### M7 Hardening and thesis

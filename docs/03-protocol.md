@@ -478,6 +478,7 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 | Worktrees | `POST /sessions/{id}/worktree` (before the first message), `GET /sessions/{id}/worktree`, `POST /sessions/{id}/worktree/merge` with `message`, `POST /sessions/{id}/worktree/discard` |
 | Permissions | `GET /permissions`, `PUT /permissions`, `GET /projects/{id}/permissions`, `PUT /projects/{id}/permissions` |
 | Tools | `GET /tools` |
+| Telegram | `GET /telegram` (`enabled`, `botUsername`, `linked`, `telegramUsername`, `linkedAt`), `POST /telegram/link` (one-time deep link `url` and `expiresAt`), `DELETE /telegram/link` ([ADR 0015](adr/0015-telegram-remote-control.md)) |
 | Custom tools | `GET /custom-tools`, `PATCH /custom-tools/{id}` with `defaultPolicy`, `modes`, `enabled`, `DELETE /custom-tools/{id}`, `GET /custom-tools/{id}/versions`, `POST /custom-tools/{id}/versions/{version}/restore` |
 
 `POST /sessions/{id}/messages` accepts an `Idempotency-Key` header so a retried request never starts a second turn.

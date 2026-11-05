@@ -46,6 +46,11 @@ pointer:
     authorize-url: https://github.com/login/oauth/authorize
     token-url: https://github.com/login/oauth/access_token
     api-url: https://api.github.com
+  telegram:
+    bot-token: ${POINTER_TELEGRAM_BOT_TOKEN:}
+    api-url: ${POINTER_TELEGRAM_API_URL:https://api.telegram.org}
+    poll-timeout: 30s
+    link-code-ttl: 10m
 
 springdoc:
   default-produces-media-type: application/json

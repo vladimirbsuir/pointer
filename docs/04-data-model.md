@@ -414,11 +414,34 @@ Tables of the `rag` module ([ADR 0013](adr/0013-semantic-code-index.md)), access
 | `session_id`, `item_id` | uuid | The session and `tool_call` item that proposed it, set null on delete |
 | `created_at` | timestamptz | Approval time |
 
+### Telegram
+
+Remote control through a Telegram bot (REM-1, 2, [ADR 0015](adr/0015-telegram-remote-control.md)).
+
+`telegram_links`: one row per linked account.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK `users`, cascade, unique |
+| `chat_id` | bigint | Telegram private chat id, unique |
+| `telegram_username` | text | Nullable, shown in the desktop settings |
+| `selected_session_id` | uuid | FK `sessions`, set null on delete. Receives chat messages and live progress |
+| `linked_at` | timestamptz | |
+
+`telegram_link_codes`: at most one pending code per user.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK `users`, cascade, unique |
+| `code_hash` | text | SHA-256 of the code, unique |
+| `expires_at` | timestamptz | 10 minutes after creation; the code is deleted when used |
+
 ## 8. Planned for highlight features
 
 Sketched here so the core schema leaves room for them. Final definitions come with their milestones.
 
 | Table | Feature | Purpose |
 |---|---|---|
-| `telegram_links` | Telegram | `user_id`, `chat_id`, link code, linked time |
 | `remote_workspaces` | Remote execution | Container id, repository, branch, status for sessions on the container executor |

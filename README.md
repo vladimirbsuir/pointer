@@ -26,7 +26,7 @@ cd backend
 
 PostgreSQL from `infra/docker-compose.yml` starts automatically. The API runs on `http://localhost:8080`, Swagger UI on `/swagger-ui`.
 
-Local secrets go to `backend/.env` (see `backend/.env.example`). GitHub sign-in needs a GitHub OAuth App with the callback URL `http://127.0.0.1/callback`; put its client id and secret into `POINTER_GITHUB_CLIENT_ID` and `POINTER_GITHUB_CLIENT_SECRET`.
+Local secrets go to `backend/.env` (see `backend/.env.example`). GitHub sign-in needs a GitHub OAuth App with the callback URL `http://127.0.0.1/callback`; put its client id and secret into `POINTER_GITHUB_CLIENT_ID` and `POINTER_GITHUB_CLIENT_SECRET`. Telegram remote control needs a bot created with [@BotFather](https://t.me/BotFather); put its token into `POINTER_TELEGRAM_BOT_TOKEN` and link the account in Settings → Account → Telegram.
 
 ```bash
 ./gradlew spotlessApply build

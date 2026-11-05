@@ -54,6 +54,10 @@ public class ExecutionService {
         return channel.canExecute(deviceId, projectId);
     }
 
+    public Optional<UUID> executorFor(UUID userId, UUID projectId) {
+        return channel.executorFor(userId, projectId);
+    }
+
     public Optional<Set<String>> interpreters(UUID deviceId) {
         return deviceId == null ? Optional.empty() : channel.interpreters(deviceId);
     }

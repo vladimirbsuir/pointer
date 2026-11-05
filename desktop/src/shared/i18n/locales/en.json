@@ -70,7 +70,19 @@
     "instructionsDescription": "Applied to every session in every project, in addition to the project's AGENTS.md or CLAUDE.md.",
     "instructionsPlaceholder": "For example: answer in Russian, prefer small commits, use pnpm.",
     "instructionsSaved": "Instructions saved",
-    "shortcuts": "Keyboard shortcuts"
+    "shortcuts": "Keyboard shortcuts",
+    "telegram": "Telegram",
+    "telegramDescription": "Control sessions from Telegram: send tasks, watch progress and approve actions.",
+    "telegramDisabled": "The server has no Telegram bot configured.",
+    "telegramNotLinked": "Not linked",
+    "telegramLinked": "Linked as {{name}}",
+    "telegramLinkedNoUsername": "Linked",
+    "linkTelegram": "Link Telegram",
+    "unlinkTelegram": "Unlink",
+    "telegramWaiting": "Press Start in the Telegram chat that opened. The link is valid for 10 minutes.",
+    "telegramOpenLink": "Open the link again",
+    "telegramLinkedToast": "Telegram linked",
+    "telegramUnlinkedToast": "Telegram unlinked"
   },
   "themes": {
     "system": "System",
@@ -148,7 +160,9 @@
     "attachment_not_found": "The attachment was not found.",
     "embedding_model_not_configured": "Choose an embedding model in Settings → Providers first.",
     "index_device_offline": "Open the project on this computer to index it.",
-    "index_running": "The project is already being indexed."
+    "index_running": "The project is already being indexed.",
+    "telegram_disabled": "The server has no Telegram bot configured.",
+    "telegram_unavailable": "The Telegram bot is not ready yet. Try again in a few seconds."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",

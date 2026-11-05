@@ -84,6 +84,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/telegram/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createLink"];
+        delete: operations["unlink"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/worktree": {
         parameters: {
             query?: never;
@@ -612,6 +628,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/telegram": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["status_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/items": {
         parameters: {
             query?: never;
@@ -798,6 +830,11 @@ export interface components {
         ChangePasswordRequest: {
             currentPassword?: string;
             newPassword: string;
+        };
+        LinkCodeResponse: {
+            url?: string;
+            /** Format: date-time */
+            expiresAt?: string;
         };
         SessionResponse: {
             /** Format: uuid */
@@ -1121,6 +1158,14 @@ export interface components {
             modes?: string[];
             defaultPolicy?: string;
         };
+        TelegramStatus: {
+            enabled?: boolean;
+            botUsername?: string;
+            linked?: boolean;
+            telegramUsername?: string;
+            /** Format: date-time */
+            linkedAt?: string;
+        };
         SessionEventResponse: {
             /** Format: uuid */
             sessionId?: string;
@@ -1361,6 +1406,44 @@ export interface operations {
                 "application/json": components["schemas"]["ChangePasswordRequest"];
             };
         };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkCodeResponse"];
+                };
+            };
+        };
+    };
+    unlink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description No Content */
             204: {
@@ -2461,6 +2544,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ToolResponse"][];
+                };
+            };
+        };
+    };
+    status_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramStatus"];
                 };
             };
         };

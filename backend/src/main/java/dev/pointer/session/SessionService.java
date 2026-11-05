@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +53,13 @@ public class SessionService {
     public List<SessionDtos.SessionResponse> list(UUID userId, UUID projectId) {
         projectService.owned(userId, projectId);
         return sessions.findByUserIdAndProjectIdOrderByUpdatedAtDesc(userId, projectId).stream()
+                .map(session -> toResponse(session, currentSeq(session.getId())))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SessionDtos.SessionResponse> recent(UUID userId, int limit) {
+        return sessions.findByUserIdAndArchivedAtIsNullOrderByUpdatedAtDesc(userId, Limit.of(limit)).stream()
                 .map(session -> toResponse(session, currentSeq(session.getId())))
                 .toList();
     }
