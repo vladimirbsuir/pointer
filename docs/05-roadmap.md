@@ -111,7 +111,7 @@ Ordered by value for the defense.
 
 1. **RAG with AST chunking** (CTX-7, TOOL-14): tree-sitter chunking in the core, embeddings through an OpenAI-compatible `/embeddings` endpoint, pgvector index, incremental reindexing, `semantic_search` tool. Implemented; the evaluation comparing answers with and without RAG is part of the M7 measurements.
 2. **Agent-proposed custom tools** (TOOL-13): scripts for an interpreter reported by the device, proposed through `propose_tool` and approved like a tool call, stored with versions and rollback, executed on the device as `custom_tool.run` ([ADR 0014](adr/0014-agent-proposed-custom-tools.md)). Implemented.
-3. **Telegram remote control** (REM-1, 2): account linking through a one-time deep link, session list and new sessions, sending messages, a live progress message, final answers, inline approval and plan buttons, long polling of the Bot API ([ADR 0015](adr/0015-telegram-remote-control.md)). Implemented; a manual check with a real bot is pending.
+3. **Telegram remote control** (REM-1, 2): account linking through a one-time deep link, session list and new sessions, sending messages, a live progress message, final answers, inline approval and plan buttons, long polling of the Bot API ([ADR 0015](adr/0015-telegram-remote-control.md)). Implemented and checked manually with a real bot: linking, progress, approvals by button, by reply and from the desktop, plans, /stop, /new, answers from other sessions, failures and the Russian locale.
 4. **Remote execution** (REM-3): container executor running a cloned GitHub repository, pushing a branch.
 
 ### M7 Hardening and thesis
