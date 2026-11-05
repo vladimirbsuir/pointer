@@ -36,7 +36,7 @@ gantt
 | M3 Executor and tools | end of January | The agent reads, edits and runs commands with approvals | Implemented |
 | M4 Agent experience | early March | **MVP v0.1**, used daily for Pointer development | Implemented; the week of daily use is tracked by the author |
 | M5 MVP+ | end of March | Checkpoints, worktrees, MCP, terminal | Implemented (November 2026) |
-| M6 Highlights | mid May | RAG, custom tools, Telegram, remote execution | Implemented (November 2026); a manual check of remote execution against GitHub is pending |
+| M6 Highlights | mid May | RAG, custom tools, Telegram, remote execution | Implemented (November 2026) |
 | M7 Hardening and thesis | mid June | Cloud deployment, measurements, thesis text | Planned |
 
 Development runs ahead of the targets: M0 to M5 were implemented by early November 2026. M6 was implemented in the order listed below: RAG, agent-proposed custom tools (TOOL-13), Telegram remote control and remote execution. "Implemented" means the features are built and covered by tests; done criteria that require a period of real use are confirmed separately.
@@ -112,11 +112,12 @@ Ordered by value for the defense.
 1. **RAG with AST chunking** (CTX-7, TOOL-14): tree-sitter chunking in the core, embeddings through an OpenAI-compatible `/embeddings` endpoint, pgvector index, incremental reindexing, `semantic_search` tool. Implemented; the evaluation comparing answers with and without RAG is part of the M7 measurements.
 2. **Agent-proposed custom tools** (TOOL-13): scripts for an interpreter reported by the device, proposed through `propose_tool` and approved like a tool call, stored with versions and rollback, executed on the device as `custom_tool.run` ([ADR 0014](adr/0014-agent-proposed-custom-tools.md)). Implemented.
 3. **Telegram remote control** (REM-1, 2): account linking through a one-time deep link, session list and new sessions, sending messages, a live progress message, final answers, inline approval and plan buttons, long polling of the Bot API ([ADR 0015](adr/0015-telegram-remote-control.md)). Implemented and checked manually with a real bot: linking, progress, approvals by button, by reply and from the desktop, plans, /stop, /new, answers from other sessions, failures and the Russian locale.
-4. **Remote execution** (REM-3): a per-session Docker container with the headless runner, cloning the project's GitHub repository into a session branch, auto-approved tools inside the container, a commit and push after each turn that changed files, pull requests from the desktop, server sessions from Telegram `/new` when no computer is online ([ADR 0016](adr/0016-remote-execution-in-containers.md)). Implemented; a manual check against a real GitHub repository is pending.
+4. **Remote execution** (REM-3): a per-session Docker container with the headless runner, cloning the project's GitHub repository into a session branch, auto-approved tools inside the container, a commit and push after each turn that changed files, pull requests from the desktop, server sessions from Telegram `/new` when no computer is online ([ADR 0016](adr/0016-remote-execution-in-containers.md)). Implemented and checked manually against a real GitHub repository on the local Docker Desktop: clone into the session branch, auto-approved file edit and command, push after the turn.
 
 ### M7 Hardening and thesis
 
 - Deploy the backend to a cloud server with TLS.
+- Remote execution on the server: Docker access through a socket proxy limited to container and volume calls, a separate network for runner containers that reaches only the backend, the runner image published to GHCR by CI, and a limit on concurrently running containers sized to the server.
 - Measurements for the thesis: time to first token overhead (NFR-2), reconnect behaviour (NFR-3), RAG evaluation results.
 - RAG findings from the first end-to-end run with Ollama `nomic-embed-text` (CPU): indexing this repository (289 files, 933 chunks) took about 5.5 minutes, dominated by the model; retrieval was accurate for most code questions but missed `SecretCipher` for "encrypt provider API keys". Candidates to evaluate: model-specific query and document prefixes (`search_query:` / `search_document:`), hybrid lexical and vector ranking.
 - Bug fixing from dogfooding, test coverage of core backend logic (NFR-10).
