@@ -4,10 +4,12 @@ import dev.pointer.common.error.ApiException;
 import dev.pointer.provider.llm.Cancellation;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.Clock;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -74,15 +76,15 @@ public class ApprovalService {
                 } catch (TimeoutException exception) {
                     if (cancellation.isCancelled()) {
                         transactions.executeWithoutResult(status -> cancel(userId, sessionId, approvalId));
-                        return new Decision(Approval.CANCELLED, null, null);
+                        return Decision.cancellation();
                     }
                 }
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            return new Decision(Approval.CANCELLED, null, null);
+            return Decision.cancellation();
         } catch (ExecutionException exception) {
-            return new Decision(Approval.CANCELLED, null, null);
+            return Decision.cancellation();
         } finally {
             waiting.remove(approvalId);
         }
@@ -108,9 +110,12 @@ public class ApprovalService {
         payload.put("decision", status);
         payload.put("scope", scope);
         payload.put("message", request.message());
+        if (request.tool() != null && Approval.APPROVED.equals(status)) {
+            payload.put("tool", request.tool());
+        }
         eventLog.append(userId, sessionId, "approval.resolved", payload);
         writer.changeStatus(userId, sessionId, SessionStatus.RUNNING);
-        var decision = new Decision(status, scope, request.message());
+        var decision = new Decision(status, scope, request.message(), request.tool());
         eventLog.afterCommit(() -> {
             var future = waiting.get(approvalId);
             if (future != null) {
@@ -131,7 +136,11 @@ public class ApprovalService {
         });
     }
 
-    public record Decision(String status, String scope, String message) {
+    public record Decision(String status, String scope, String message, ToolOptions tool) {
+
+        static Decision cancellation() {
+            return new Decision(Approval.CANCELLED, null, null, null);
+        }
 
         public boolean approved() {
             return Approval.APPROVED.equals(status);
@@ -149,7 +158,13 @@ public class ApprovalService {
     public record ResolveApprovalRequest(
             @Pattern(regexp = "approved|denied") String decision,
             @Pattern(regexp = "once|session") String scope,
-            @Size(max = 2000) String message) {}
+            @Size(max = 2000) String message,
+            @Valid ToolOptions tool) {}
+
+    public record ToolOptions(
+            @Pattern(regexp = "user|project") String scope,
+            @Pattern(regexp = "allow|ask") String defaultPolicy,
+            @Size(max = 3) List<@Pattern(regexp = "ask|plan|agent") String> modes) {}
 }
 
 interface ApprovalRepository extends JpaRepository<Approval, UUID> {}

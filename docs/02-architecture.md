@@ -107,13 +107,14 @@ A module exposes a small public API (services, DTOs, domain events) and keeps ev
 | `review` | File change records, diffs, revert, rewind to a turn. |
 | `worktree` | Session worktrees: creation, status, merge and discard through executor operations ([ADR 0011](adr/0011-session-worktrees.md)). |
 | `command` | User-defined slash commands. |
+| `customtool` | Agent-proposed custom tools: proposal validation, versions, approval outcome, management REST ([ADR 0014](adr/0014-agent-proposed-custom-tools.md)). |
 | `rag` | Semantic project index: scanning and chunking through the executor, embeddings through the user's provider, pgvector storage, the server-side `semantic_search` operation ([ADR 0013](adr/0013-semantic-code-index.md)). |
 | `gateway` | WebSocket endpoint: authentication, protocol parsing, routing to modules. |
 | `common` | Cross-cutting basics: error model, ids, clock, JSON. |
 
 DTOs are records; Lombok is limited to constructor injection and entity getters ([ADR 0012](adr/0012-lombok-for-boilerplate.md)).
 
-Highlight modules plug in without touching the agent loop: `rag` (implemented), `customtool`, `telegram`, `container` (server-side executor). Tools whose operation has a `ServerOperation` bean are executed by the backend instead of the device; `ExecutionService` routes them, and the registry hides them when they are unavailable for the project.
+Highlight modules plug in without touching the agent loop: `rag` and `customtool` (implemented), `telegram`, `container` (server-side executor). Tools whose operation has a `ServerOperation` bean are executed by the backend instead of the device; `ExecutionService` routes them, and the registry hides them when they are unavailable for the project.
 
 ### 4.2 Agent loop
 
@@ -224,7 +225,7 @@ classDiagram
 ### 4.6 Tools and permissions
 
 - A tool definition stores: name, description, JSON Schema of arguments, kind (`read`, `write`, `execute`), executor operation, and in which modes it is available.
-- Built-in tools are seeded into the registry by migrations. Custom tools (HL) are added as registry entries of another source.
+- Built-in tools are seeded into the registry by migrations. MCP tools are reported by devices and custom tools are added when the user approves a proposal, each as registry entries of their own source.
 - Policy evaluation for a call:
   1. a session-level approval given earlier ("allow for this session");
   2. command rules for `run_command`, matched by prefix, project rules before global;
@@ -360,5 +361,5 @@ Later, cloud: the backend as a container behind a reverse proxy with TLS, the sa
 |---|---|---|
 | Telegram control | New client of the `session` module: subscribes to events, calls the same services as REST. | None |
 | RAG | `rag` module with indexing triggered by executor file events; `semantic_search` tool in the registry. | None |
-| Custom tools | Registry entries with source `custom`, an approval flow, an executor operation that runs the stored implementation. | None |
+| Custom tools | Registry entries with source `custom`, the server-side `propose_tool` approved like a tool call, the executor operation `custom_tool.run` running the approved script on the device. | Dispatch of `propose_tool`; the tool list is rebuilt before every model call |
 | Remote execution | `ContainerExecutor` implementing `Executor`. | None |

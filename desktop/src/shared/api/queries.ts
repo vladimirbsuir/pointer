@@ -1,7 +1,15 @@
 import { QueryClient, useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "./client";
 import { core } from "./core";
-import type { ProjectIndex, Project, Provider, Session, SlashCommand } from "./types";
+import type {
+  CustomTool,
+  CustomToolVersion,
+  ProjectIndex,
+  Project,
+  Provider,
+  Session,
+  SlashCommand,
+} from "./types";
 
 export const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -11,6 +19,8 @@ export const queryKeys = {
   providers: ["providers"] as const,
   settings: ["settings"] as const,
   commands: ["commands"] as const,
+  customTools: ["customTools"] as const,
+  customToolVersions: (toolId: string) => ["customTools", toolId, "versions"] as const,
   projects: ["projects"] as const,
   localProjects: ["localProjects"] as const,
   sessions: (projectId: string) => ["sessions", projectId] as const,
@@ -54,6 +64,24 @@ export function useSlashCommands() {
   return useQuery({
     queryKey: queryKeys.commands,
     queryFn: async () => (await unwrap(api().GET("/api/v1/commands"))) as SlashCommand[],
+  });
+}
+
+export function useCustomTools() {
+  return useQuery({
+    queryKey: queryKeys.customTools,
+    queryFn: async () => (await unwrap(api().GET("/api/v1/custom-tools"))) as CustomTool[],
+  });
+}
+
+export function useCustomToolVersions(toolId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.customToolVersions(toolId),
+    enabled,
+    queryFn: async () =>
+      (await unwrap(
+        api().GET("/api/v1/custom-tools/{toolId}/versions", { params: { path: { toolId } } }),
+      )) as CustomToolVersion[],
   });
 }
 

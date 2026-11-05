@@ -78,6 +78,7 @@ The first message after connecting must be `hello` from the client. The server a
   "clientVersion": "0.1.0",
   "platform": { "os": "windows", "osVersion": "10.0.26200", "shell": "powershell" },
   "capabilities": ["viewer", "executor", "relay"],
+  "interpreters": ["python", "node", "powershell"],
   "projects": ["prj_01JC..."],
   "undeliveredResults": [ ]
 }
@@ -86,6 +87,7 @@ The first message after connecting must be `hello` from the client. The server a
 | Field | Description |
 |---|---|
 | `capabilities` | `viewer`: receives session events. `executor`: performs executor operations. `relay`: performs LLM relay requests. |
+| `interpreters` | Script interpreters found on the device for custom tools: any of `python`, `node`, `powershell`, `bash` ([ADR 0014](adr/0014-agent-proposed-custom-tools.md)). Missing means none. |
 | `projects` | Projects mapped to a local path on this device. The device can execute only for these. |
 | `undeliveredResults` | `exec.result` payloads finished while disconnected (see 6.4). |
 
@@ -227,13 +229,15 @@ Item status: `in_progress`, `completed`, `failed`, `cancelled`.
 | `user_message` | `text`, `attachments` (`[{ "kind": "file", "path": "src/App.tsx", "content": "..." }]` or `{ "kind": "image", "attachmentId": "...", "mediaType": "image/png" }`), `mode`, `planItemId` (set when the message was created by approving a plan) |
 | `assistant_message` | `text`, `step` |
 | `reasoning` | `text` (when the provider streams reasoning) |
-| `tool_call` | `step`, `toolName`, `arguments`, `argumentsJson`, `providerCallId`, `toolStatus`, `result`, `error`, `output`, `fileChanges`, `resultText`, `approvalId`, `approvalPreview` |
+| `tool_call` | `step`, `toolName`, `arguments`, `argumentsJson`, `providerCallId`, `toolStatus`, `result`, `error`, `output`, `fileChanges`, `resultText`, `approvalId`, `approvalPreview`, `customToolVersion` (custom tools only) |
 | `plan` | `step`, `summary`, `steps` (`[{ "title": "...", "details": "..." }]`), `approval` (`pending`, `approved`, `rejected`), `providerCallId`, `argumentsJson`, `resultText` |
 | `compaction_summary` | `text`, `replacedItemCount` |
 
 A user message sent while a turn runs is created with `turnId: null` (queued). At the next step boundary it is attached to the running turn if it was sent in the same mode, otherwise it starts the next turn.
 
 A `plan` item is created when the model calls the server-side `propose_plan` tool in Plan mode; the turn then ends. Approving it switches the session to Agent mode and starts a turn. Any other user message rejects pending plans. See [ADR 0009](adr/0009-context-compaction-and-plan-approval.md).
+
+A call of the server-side `propose_tool` tool (Agent mode, offered when the executor device reports at least one interpreter) is a `tool_call` item that waits for an approval with preview kind `tool_proposal`. It is never auto-approved and never covered by session grants. When approved, its `result` holds `toolId`, `name`, `version` and `scope`, and the tool is offered from the next model call on. An invalid proposal fails with `invalid_proposal` without asking the user. See [ADR 0014](adr/0014-agent-proposed-custom-tools.md).
 
 A `compaction_summary` item is produced by a turn of kind `compaction` (manual) or inside a message turn before a model call (automatic). The model's context starts from the latest completed summary.
 
@@ -282,6 +286,29 @@ Approval `preview`:
 ```json
 { "kind": "tool", "server": "github", "tool": "create_issue", "arguments": { "title": "..." } }
 ```
+
+```json
+{ "kind": "custom_tool", "name": "count_todos", "version": 2, "interpreter": "python", "arguments": { "pattern": "TODO" } }
+```
+
+```json
+{
+  "kind": "tool_proposal",
+  "name": "count_todos",
+  "description": "Count TODO markers in the project",
+  "parameters": { "type": "object", "properties": { "pattern": { "type": "string" } } },
+  "interpreter": "python",
+  "body": "import json, sys\n...",
+  "scope": "project",
+  "scopeFixed": false,
+  "userScopeAvailable": true,
+  "version": 1,
+  "defaultPolicy": "ask",
+  "modes": ["agent"]
+}
+```
+
+For a new version of an existing tool the preview also holds `previous` with `version`, `description`, `parameters`, `interpreter` and `body` of the current version, and `scopeFixed` is true. Approving a `tool_proposal` may carry `tool` with `scope` (`user`, `project`), `defaultPolicy` (`ask`, `allow`) and `modes` (from `ask`, `plan`, `agent`; `agent` is always included). `approval.resolved` then echoes `tool`.
 
 ## 6. Execution
 
@@ -379,6 +406,8 @@ Notes:
 
 The index itself is managed over REST: `GET /projects/{id}/index` returns the status (`none`, `indexing`, `ready`, `failed`, counters, model, error), `POST /projects/{id}/index` with optional `rebuild` starts indexing on the requesting device (`202`; `400 embedding_model_not_configured`, `409 index_device_offline`, `409 index_running`), `DELETE /projects/{id}/index` removes it. The embedding model is the user setting `embeddingModelId`.
 
+Custom tools reach the executor as operation `custom_tool.run` with `interpreter`, `body` (the approved script of the current version) and `arguments`. The core writes the script to a temporary file and runs it with the project root (or worktree) as the working directory, the arguments as JSON on stdin and `POINTER_PROJECT_ROOT` in the environment, streaming output like `run_command`. Exit code 0 gives `output` (stdout), `stderr` when not empty, and `truncated`. Any other exit code fails with `tool_failed` and a message holding the exit code and the tails of stderr and stdout. An interpreter the device does not have is rejected with `interpreter_unavailable`.
+
 MCP tools reach the executor as operation `mcp.call` with `server`, `tool` and `arguments`. The result is `content` (text blocks joined, other blocks as placeholders) and `structuredContent` when the server returns it. A result with `isError` becomes a failure with code `tool_error`.
 
 ### 7.2 Internal operations
@@ -444,11 +473,12 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 | Sessions | `GET /projects/{id}/sessions`, `POST /projects/{id}/sessions`, `GET /sessions/{id}`, `PATCH /sessions/{id}`, `DELETE /sessions/{id}`, `GET /sessions/{id}/items`, `GET /sessions/{id}/events?afterSeq=` |
 | Attachments | `POST /sessions/{id}/attachments` (raw PNG, JPEG, GIF or WebP body, at most 5 MB), `GET /sessions/{id}/attachments/{attachmentId}` |
 | Turns | `POST /sessions/{id}/messages`, `POST /sessions/{id}/cancel`, `POST /sessions/{id}/compact`, `POST /sessions/{id}/plans/{itemId}/approve` |
-| Approvals | `POST /sessions/{id}/approvals/{approvalId}` with `decision`, `scope`, `message` |
+| Approvals | `POST /sessions/{id}/approvals/{approvalId}` with `decision`, `scope`, `message`, and `tool` for tool proposals |
 | Review | `GET /sessions/{id}/changes`, `GET /sessions/{id}/changes/file?path=`, `POST /sessions/{id}/changes/revert` with `path` and `force`, `POST /sessions/{id}/rewind` with `turnId`, `restoreFiles` and `force` |
 | Worktrees | `POST /sessions/{id}/worktree` (before the first message), `GET /sessions/{id}/worktree`, `POST /sessions/{id}/worktree/merge` with `message`, `POST /sessions/{id}/worktree/discard` |
 | Permissions | `GET /permissions`, `PUT /permissions`, `GET /projects/{id}/permissions`, `PUT /projects/{id}/permissions` |
 | Tools | `GET /tools` |
+| Custom tools | `GET /custom-tools`, `PATCH /custom-tools/{id}` with `defaultPolicy`, `modes`, `enabled`, `DELETE /custom-tools/{id}`, `GET /custom-tools/{id}/versions`, `POST /custom-tools/{id}/versions/{version}/restore` |
 
 `POST /sessions/{id}/messages` accepts an `Idempotency-Key` header so a retried request never starts a second turn.
 

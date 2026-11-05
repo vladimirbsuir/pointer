@@ -2,6 +2,8 @@ package dev.pointer.gateway;
 
 import dev.pointer.execution.DeviceChannel;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -25,6 +27,13 @@ class GatewayDeviceChannel implements DeviceChannel {
     @Override
     public boolean isConnected(UUID deviceId) {
         return registry.device(deviceId).isPresent();
+    }
+
+    @Override
+    public Optional<Set<String>> interpreters(UUID deviceId) {
+        return registry.device(deviceId)
+                .filter(connection -> connection.hasCapability(EXECUTOR))
+                .map(GatewayConnection::interpreters);
     }
 
     @Override

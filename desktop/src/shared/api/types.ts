@@ -52,6 +52,33 @@ export type SlashCommand = {
   updatedAt: string;
 };
 
+export type CustomTool = {
+  id: string;
+  name: string;
+  description: string;
+  scope: "user" | "project";
+  projectId: string | null;
+  interpreter: string;
+  parameters: Record<string, unknown>;
+  version: number;
+  defaultPolicy: "allow" | "ask" | "deny";
+  modes: SessionMode[];
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CustomToolVersion = {
+  version: number;
+  description: string;
+  parameters: Record<string, unknown>;
+  interpreter: string;
+  body: string;
+  sessionId: string | null;
+  createdAt: string;
+  current: boolean;
+};
+
 export type SessionWorktree = {
   branch: string;
   baseBranch: string;

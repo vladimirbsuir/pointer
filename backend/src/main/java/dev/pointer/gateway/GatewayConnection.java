@@ -28,6 +28,7 @@ final class GatewayConnection {
     private volatile UUID deviceId;
     private volatile Set<String> capabilities = Set.of();
     private volatile Set<UUID> projects = Set.of();
+    private volatile Set<String> interpreters = Set.of();
     private volatile boolean ready;
 
     GatewayConnection(WebSocketSession session, JsonMapper json, UUID userId, UUID tokenDeviceId, Instant expiresAt) {
@@ -74,9 +75,14 @@ final class GatewayConnection {
         this.tokenExpiresAt = expiresAt;
     }
 
-    void markReady(UUID deviceId, Set<String> capabilities, Set<UUID> projects) {
+    Set<String> interpreters() {
+        return interpreters;
+    }
+
+    void markReady(UUID deviceId, Set<String> capabilities, Set<UUID> projects, Set<String> interpreters) {
         this.deviceId = deviceId;
         this.capabilities = Set.copyOf(capabilities);
+        this.interpreters = Set.copyOf(interpreters);
         this.projects = Set.copyOf(projects);
         this.ready = true;
     }

@@ -19,8 +19,13 @@ public class ToolRegistry {
     @Transactional(readOnly = true)
     public List<ToolDefinition> available(UUID userId, UUID projectId, UUID deviceId) {
         var reported = mcpTools.reportedBy(deviceId);
+        var interpreters = execution.interpreters(deviceId);
         return tools.findAvailable(userId, projectId).stream()
                 .filter(tool -> !tool.isMcp() || reported.contains(tool.getName()))
+                .filter(tool -> !tool.isCustom()
+                        || interpreters
+                                .map(found -> found.contains(tool.getInterpreter()))
+                                .orElse(true))
                 .filter(tool -> execution.isOperationAvailable(tool.getOperation(), projectId))
                 .toList();
     }

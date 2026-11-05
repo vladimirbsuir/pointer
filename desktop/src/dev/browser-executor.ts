@@ -247,6 +247,12 @@ export function executeInBrowser(
       return ok({ merged: true, commits: 2 });
     case "pointer.worktree_discard":
       return ok({ discarded: true });
+    case "custom_tool.run":
+      return ok({
+        output: `(browser preview) simulated ${String(args.interpreter)} tool with ${JSON.stringify(args.arguments ?? {})}
+`,
+        truncated: false,
+      });
     case "run_command":
       return ok({
         exitCode: 0,

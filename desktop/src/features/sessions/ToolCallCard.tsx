@@ -10,6 +10,7 @@ import {
   FileTextIcon,
   FolderIcon,
   GlobeIcon,
+  HammerIcon,
   Loader2Icon,
   SearchIcon,
   SquareTerminalIcon,
@@ -45,6 +46,7 @@ const icons: Record<string, typeof WrenchIcon> = {
   run_command: SquareTerminalIcon,
   web_fetch: GlobeIcon,
   semantic_search: DatabaseZapIcon,
+  propose_tool: HammerIcon,
 };
 
 function searchResultsText(results: unknown) {
@@ -92,6 +94,8 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
         return t("tools.web_fetch", { target: argument(call, "url") });
       case "semantic_search":
         return t("tools.semantic_search", { target: argument(call, "query") });
+      case "propose_tool":
+        return t("tools.propose_tool", { target: argument(call, "name") });
       default:
         return mcpParts
           ? t("tools.mcp", { server: mcpParts[0], tool: mcpParts.slice(1).join("__") })
@@ -125,6 +129,8 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
         return t("tools.matches", {
           count: (result.results as unknown[] | undefined)?.length ?? 0,
         });
+      case "propose_tool":
+        return `v${String(result.version ?? "?")}`;
       default: {
         const change = call.fileChanges?.[0];
         return change ? `+${change.linesAdded} −${change.linesRemoved}` : null;
@@ -132,7 +138,9 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
     }
   })();
 
+  const proposedBody = toolName === "propose_tool" ? argument(call, "body") : "";
   const output =
+    (proposedBody || undefined) ??
     searchResultsText(call.result?.results) ??
     call.output ??
     call.liveOutput ??

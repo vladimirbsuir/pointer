@@ -110,6 +110,7 @@ function connect() {
       deviceName: "Browser preview",
       clientVersion: "dev",
       capabilities: ["viewer", "executor"],
+      interpreters: ["python", "powershell"],
       projects: Object.keys(localProjects()),
     });
   ws.onmessage = (event) => {

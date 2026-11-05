@@ -372,6 +372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/custom-tools/{toolId}/versions/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/commands": {
         parameters: {
             query?: never;
@@ -564,6 +580,22 @@ export interface paths {
         patch: operations["update_4"];
         trace?: never;
     };
+    "/api/v1/custom-tools/{toolId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete_5"];
+        options?: never;
+        head?: never;
+        patch: operations["update_5"];
+        trace?: never;
+    };
     "/api/v1/tools": {
         parameters: {
             query?: never;
@@ -652,6 +684,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_5"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-tools/{toolId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["versions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -833,6 +897,12 @@ export interface components {
             decision?: string;
             scope?: string;
             message?: string;
+            tool?: components["schemas"]["ToolOptions"];
+        };
+        ToolOptions: {
+            scope?: string;
+            defaultPolicy?: string;
+            modes?: string[];
         };
         CreateProviderRequest: {
             name: string;
@@ -918,6 +988,28 @@ export interface components {
             error?: string;
             /** Format: date-time */
             indexedAt?: string;
+        };
+        CustomToolResponse: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            description?: string;
+            scope?: string;
+            /** Format: uuid */
+            projectId?: string;
+            interpreter?: string;
+            parameters?: {
+                [key: string]: unknown;
+            };
+            /** Format: int32 */
+            version?: number;
+            defaultPolicy?: string;
+            modes?: string[];
+            enabled?: boolean;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
         };
         DeviceInfo: {
             /** Format: uuid */
@@ -1017,6 +1109,11 @@ export interface components {
             displayName?: string;
             locale?: string;
         };
+        UpdateCustomToolRequest: {
+            defaultPolicy?: string;
+            modes?: string[];
+            enabled?: boolean;
+        };
         ToolResponse: {
             name?: string;
             description?: string;
@@ -1042,6 +1139,21 @@ export interface components {
             after?: string;
             unavailable?: boolean;
             reverted?: boolean;
+        };
+        VersionResponse: {
+            /** Format: int32 */
+            version?: number;
+            description?: string;
+            parameters?: {
+                [key: string]: unknown;
+            };
+            interpreter?: string;
+            body?: string;
+            /** Format: uuid */
+            sessionId?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            current?: boolean;
         };
         AuthorizeUrlResponse: {
             url?: string;
@@ -1826,6 +1938,29 @@ export interface operations {
             };
         };
     };
+    restore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                toolId: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolResponse"];
+                };
+            };
+        };
+    };
     list_3: {
         parameters: {
             query?: never;
@@ -2264,6 +2399,52 @@ export interface operations {
             };
         };
     };
+    delete_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                toolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                toolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCustomToolRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolResponse"];
+                };
+            };
+        };
+    };
     tools: {
         parameters: {
             query?: never;
@@ -2397,6 +2578,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": string;
+                };
+            };
+        };
+    };
+    list_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolResponse"][];
+                };
+            };
+        };
+    };
+    versions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                toolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionResponse"][];
                 };
             };
         };

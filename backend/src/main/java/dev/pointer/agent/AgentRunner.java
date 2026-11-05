@@ -1,6 +1,7 @@
 package dev.pointer.agent;
 
 import dev.pointer.common.error.ApiException;
+import dev.pointer.customtool.ProposeTool;
 import dev.pointer.execution.ExecutionListener;
 import dev.pointer.execution.ExecutionRequest;
 import dev.pointer.execution.ExecutionService;
@@ -50,6 +51,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private static final Logger log = LoggerFactory.getLogger(AgentRunner.class);
     private static final int MAX_TITLE_LENGTH = 80;
     private static final int MAX_STEPS = 50;
+    private static final String AGENT = "agent";
     private static final int DEFAULT_CONTEXT_WINDOW = 128_000;
     private static final double AUTO_COMPACT_RATIO = 0.8;
     private static final String PROJECT_CONTEXT_OPERATION = "pointer.project_context";
@@ -155,9 +157,6 @@ public class AgentRunner implements LiveItemSnapshots {
                 var reason = turn.cancellation.isCancelled() ? Turn.CANCELLED : Turn.COMPLETED;
                 return writer.finishTurn(userId, sessionId, turnId, reason, null);
             }
-            var tools = model.supportsTools()
-                    ? toolDefinitions(userId, context.projectId(), context.executorDeviceId(), context.mode())
-                    : List.<ChatRequest.ToolDefinition>of();
             var contextWindow = model.contextWindow() == null ? DEFAULT_CONTEXT_WINDOW : model.contextWindow();
             long contextTokens = context.contextTokens();
             String reason = null;
@@ -185,6 +184,9 @@ public class AgentRunner implements LiveItemSnapshots {
                 if (firstMessages == null) {
                     firstMessages = messages;
                 }
+                var tools = model.supportsTools()
+                        ? toolDefinitions(userId, context.projectId(), context.executorDeviceId(), context.mode())
+                        : List.<ChatRequest.ToolDefinition>of();
                 var listener = new TurnListener(userId, sessionId, turnId, step, turn, Item.ASSISTANT_MESSAGE);
                 client.stream(
                         model.endpoint(),
@@ -206,6 +208,8 @@ public class AgentRunner implements LiveItemSnapshots {
                         }
                         if (PlanTool.NAME.equals(call.name()) && "plan".equals(context.mode())) {
                             planProposed |= toolCalls.proposePlan(scope, step, call.id(), call.arguments.toString());
+                        } else if (ProposeTool.NAME.equals(call.name()) && AGENT.equals(context.mode())) {
+                            toolCalls.proposeTool(scope, step, call.id(), call.arguments.toString());
                         } else {
                             toolCalls.handle(scope, step, call.id(), call.name(), call.arguments.toString());
                         }
@@ -245,6 +249,12 @@ public class AgentRunner implements LiveItemSnapshots {
                 .forEach(definitions::add);
         if ("plan".equals(mode)) {
             definitions.add(PlanTool.DEFINITION);
+        }
+        if (AGENT.equals(mode)) {
+            execution
+                    .interpreters(deviceId)
+                    .filter(interpreters -> !interpreters.isEmpty())
+                    .ifPresent(interpreters -> definitions.add(ProposeTool.definition(interpreters)));
         }
         return definitions;
     }

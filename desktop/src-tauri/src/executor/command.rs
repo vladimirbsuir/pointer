@@ -3,7 +3,7 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use serde_json::json;
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use tokio::sync::{mpsc, watch};
 
@@ -20,11 +20,54 @@ pub enum Finish {
     Cancelled,
 }
 
+#[derive(Default)]
+pub struct Tail {
+    text: String,
+    dropped: usize,
+}
+
+impl Tail {
+    fn push(&mut self, text: &str) {
+        self.text.push_str(text);
+        if self.text.len() > MAX_OUTPUT_BYTES {
+            let mut cut = self.text.len() - MAX_OUTPUT_BYTES;
+            while !self.text.is_char_boundary(cut) {
+                cut += 1;
+            }
+            self.dropped += cut;
+            self.text.drain(..cut);
+        }
+    }
+
+    pub fn truncated(&self) -> bool {
+        self.dropped > 0
+    }
+
+    pub fn into_text(self) -> String {
+        if self.dropped > 0 {
+            format!(
+                "[{} bytes of earlier output omitted]
+{}",
+                self.dropped, self.text
+            )
+        } else {
+            self.text
+        }
+    }
+}
+
+pub struct ProcessRun {
+    pub finish: Finish,
+    pub combined: Tail,
+    pub stdout: Tail,
+    pub stderr: Tail,
+}
+
 pub async fn run_command(
     root: &Path,
     request: &Request,
-    mut output: impl FnMut(&str, String),
-    mut cancel: watch::Receiver<bool>,
+    output: impl FnMut(&str, String),
+    cancel: watch::Receiver<bool>,
 ) -> Result<ExecOutcome, ExecError> {
     let command = request.required_str("command")?;
     let directory = resolve(root, request.str_arg("workingDirectory").unwrap_or("."))?;
@@ -32,8 +75,49 @@ pub async fn run_command(
     process
         .args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"])
         .arg(format!("{UTF8_PREAMBLE}{command}"))
-        .current_dir(&directory)
-        .stdin(Stdio::null())
+        .current_dir(&directory);
+    let run = run_process(process, None, request.timeout_ms, output, cancel).await?;
+    let truncated = run.combined.truncated();
+    let output_text = run.combined.into_text();
+    match run.finish {
+        Finish::Exited(code) => Ok(ExecOutcome::result(json!({
+            "exitCode": code,
+            "output": output_text,
+            "truncated": truncated,
+        }))),
+        Finish::TimedOut => Err(timed_out(request.timeout_ms, &output_text)),
+        Finish::Cancelled => Err(cancelled()),
+    }
+}
+
+pub fn timed_out(timeout_ms: u64, output: &str) -> ExecError {
+    ExecError::with_status(
+        "timeout",
+        "timeout",
+        format!(
+            "The command did not finish in {timeout_ms} ms. Output so far:
+{output}"
+        ),
+    )
+}
+
+pub fn cancelled() -> ExecError {
+    ExecError::with_status("cancelled", "cancelled", "The command was cancelled")
+}
+
+pub async fn run_process(
+    mut process: Command,
+    stdin: Option<Vec<u8>>,
+    timeout_ms: u64,
+    mut output: impl FnMut(&str, String),
+    mut cancel: watch::Receiver<bool>,
+) -> Result<ProcessRun, ExecError> {
+    process
+        .stdin(if stdin.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
@@ -44,6 +128,12 @@ pub async fn run_command(
         .map_err(|error| ExecError::failed("spawn_failed", error.to_string()))?;
     let pid = child.id();
 
+    if let (Some(mut writer), Some(input)) = (child.stdin.take(), stdin) {
+        tokio::spawn(async move {
+            let _ = writer.write_all(&input).await;
+            let _ = writer.shutdown().await;
+        });
+    }
     let (sender, mut receiver) = mpsc::unbounded_channel::<(&'static str, String)>();
     if let Some(stdout) = child.stdout.take() {
         tokio::spawn(pump(stdout, "stdout", sender.clone()));
@@ -53,10 +143,11 @@ pub async fn run_command(
     }
     drop(sender);
 
-    let timeout = tokio::time::sleep(Duration::from_millis(request.timeout_ms));
+    let timeout = tokio::time::sleep(Duration::from_millis(timeout_ms));
     tokio::pin!(timeout);
-    let mut combined = String::new();
-    let mut dropped = 0usize;
+    let mut combined = Tail::default();
+    let mut stdout = Tail::default();
+    let mut stderr = Tail::default();
     let mut streams_open = true;
     let mut exit = None;
 
@@ -64,7 +155,12 @@ pub async fn run_command(
         tokio::select! {
             chunk = receiver.recv(), if streams_open => match chunk {
                 Some((stream, text)) => {
-                    append_tail(&mut combined, &mut dropped, &text);
+                    combined.push(&text);
+                    if stream == "stdout" {
+                        stdout.push(&text);
+                    } else {
+                        stderr.push(&text);
+                    }
                     output(stream, text);
                 }
                 None => streams_open = false,
@@ -88,31 +184,12 @@ pub async fn run_command(
         kill_tree(pid).await;
         let _ = child.kill().await;
     }
-    let output_text = if dropped > 0 {
-        format!("[{dropped} bytes of earlier output omitted]\n{combined}")
-    } else {
-        combined
-    };
-    match finish {
-        Finish::Exited(code) => Ok(ExecOutcome::result(json!({
-            "exitCode": code,
-            "output": output_text,
-            "truncated": dropped > 0,
-        }))),
-        Finish::TimedOut => Err(ExecError::with_status(
-            "timeout",
-            "timeout",
-            format!(
-                "The command did not finish in {} ms. Output so far:\n{output_text}",
-                request.timeout_ms
-            ),
-        )),
-        Finish::Cancelled => Err(ExecError::with_status(
-            "cancelled",
-            "cancelled",
-            "The command was cancelled",
-        )),
-    }
+    Ok(ProcessRun {
+        finish,
+        combined,
+        stdout,
+        stderr,
+    })
 }
 
 async fn pump(
@@ -141,18 +218,6 @@ async fn pump(
     }
     if !pending.is_empty() {
         let _ = sender.send((stream, String::from_utf8_lossy(&pending).into_owned()));
-    }
-}
-
-fn append_tail(combined: &mut String, dropped: &mut usize, text: &str) {
-    combined.push_str(text);
-    if combined.len() > MAX_OUTPUT_BYTES {
-        let mut cut = combined.len() - MAX_OUTPUT_BYTES;
-        while !combined.is_char_boundary(cut) {
-            cut += 1;
-        }
-        *dropped += cut;
-        combined.drain(..cut);
     }
 }
 

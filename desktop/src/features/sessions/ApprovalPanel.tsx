@@ -7,6 +7,7 @@ import { errorMessage } from "@/shared/i18n/errors";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { DiffView } from "./DiffView";
+import { ToolProposalPanel, type ToolProposalPreview } from "./ToolProposalPanel";
 
 type ApprovalPanelProps = {
   sessionId: string;
@@ -35,6 +36,16 @@ export function ApprovalPanel({ sessionId, approvalId, preview }: ApprovalPanelP
     }
   };
 
+  if (preview.kind === "tool_proposal") {
+    return (
+      <ToolProposalPanel
+        sessionId={sessionId}
+        approvalId={approvalId}
+        preview={preview as unknown as ToolProposalPreview}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs font-medium">{t("approval.title")}</p>
@@ -45,6 +56,19 @@ export function ApprovalPanel({ sessionId, approvalId, preview }: ApprovalPanelP
           <span className="text-muted-foreground">GET </span>
           {String(preview.url ?? "")}
         </p>
+      ) : preview.kind === "custom_tool" ? (
+        <div className="overflow-hidden rounded-md border bg-muted/40 font-mono text-xs">
+          <p className="border-b px-2 py-1 text-muted-foreground">
+            {t("customTools.call", {
+              name: String(preview.name),
+              version: String(preview.version),
+              interpreter: String(preview.interpreter),
+            })}
+          </p>
+          <pre className="max-h-60 overflow-auto p-2">
+            {JSON.stringify(preview.arguments ?? {}, null, 2)}
+          </pre>
+        </div>
       ) : preview.kind === "tool" ? (
         <div className="overflow-hidden rounded-md border bg-muted/40 font-mono text-xs">
           <p className="border-b px-2 py-1 text-muted-foreground">

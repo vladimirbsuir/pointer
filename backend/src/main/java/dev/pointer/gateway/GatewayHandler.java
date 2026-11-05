@@ -169,7 +169,9 @@ class GatewayHandler extends TextWebSocketHandler {
         }
         var capabilities = new HashSet<String>();
         payload.path("capabilities").forEach(capability -> capabilities.add(capability.asString()));
-        connection.markReady(deviceId, capabilities, uuids(payload.path("projects")));
+        var interpreters = new HashSet<String>();
+        payload.path("interpreters").forEach(interpreter -> interpreters.add(interpreter.asString()));
+        connection.markReady(deviceId, capabilities, uuids(payload.path("projects")), interpreters);
         registry.registerDevice(connection);
         var welcome = new LinkedHashMap<String, Object>();
         welcome.put("connectionId", connection.id());

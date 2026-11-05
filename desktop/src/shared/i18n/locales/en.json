@@ -244,7 +244,8 @@
     "exitCode": "exit {{code}}",
     "mcp": "{{server}} · {{tool}}",
     "httpStatus": "HTTP {{code}}",
-    "semantic_search": "Semantic search \"{{target}}\""
+    "semantic_search": "Semantic search \"{{target}}\"",
+    "propose_tool": "Propose tool {{target}}"
   },
   "permissions": {
     "tools": "Tools",
@@ -378,5 +379,32 @@
     "update": "Update",
     "rebuild": "Rebuild",
     "delete": "Delete"
+  },
+  "customTools": {
+    "title": "Tools",
+    "description": "Tools the agent proposed and you approved. They run on this computer with the project folder as the working directory, like commands.",
+    "empty": "No custom tools yet. In Agent mode the agent can propose one when it repeats the same work.",
+    "proposalTitle": "The agent proposes a new tool",
+    "newVersionTitle": "The agent proposes a new version",
+    "warning": "The script runs on your computer with the same access as a terminal command. Read it before approving.",
+    "changesSince": "Changes since version {{version}}",
+    "showScript": "Show script and arguments",
+    "hideScript": "Hide script",
+    "scope": "Available",
+    "scopes": {
+      "project": "In this project",
+      "user": "In all projects"
+    },
+    "calls": "Calls",
+    "readModes": "Also in Ask and Plan modes",
+    "approve": "Approve tool",
+    "approveVersion": "Approve version",
+    "reject": "Reject",
+    "call": "{{name}} v{{version}} · {{interpreter}}",
+    "versions": "Versions",
+    "current": "Current",
+    "restore": "Restore",
+    "enabled": "Enabled",
+    "delete": "Delete tool"
   }
 }

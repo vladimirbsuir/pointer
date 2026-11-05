@@ -1,5 +1,6 @@
 mod chunker;
 mod command;
+mod custom_tool;
 mod files;
 mod index;
 mod paths;
@@ -7,6 +8,7 @@ mod search;
 mod web;
 mod worktree;
 
+pub use custom_tool::Interpreters;
 pub use files::read_attachment;
 pub use search::suggest_files;
 pub use worktree::Worktree;
@@ -17,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::{Map, Value, json};
-use tokio::sync::watch;
+use tokio::sync::{OnceCell, watch};
 
 use crate::mcp::McpHub;
 
@@ -112,9 +114,14 @@ impl Workspace {
 #[derive(Default)]
 pub struct Executor {
     running: Mutex<HashMap<String, watch::Sender<bool>>>,
+    interpreters: OnceCell<Interpreters>,
 }
 
 impl Executor {
+    pub async fn interpreters(&self) -> &Interpreters {
+        self.interpreters.get_or_init(Interpreters::probe).await
+    }
+
     pub fn handle(
         self: &Arc<Self>,
         payload: Value,
@@ -141,7 +148,14 @@ impl Executor {
             };
             let outcome = match workspace {
                 Some(workspace) => {
-                    execute(workspace, request, &call_id, &mcp, emit.clone(), cancel).await
+                    let interpreters = executor.interpreters().await;
+                    let context = Context {
+                        call_id: &call_id,
+                        mcp: &mcp,
+                        interpreters,
+                        emit: emit.clone(),
+                    };
+                    execute(workspace, request, context, cancel).await
                 }
                 None => Err(ExecError::rejected(
                     "project_not_mapped",
@@ -171,16 +185,34 @@ impl Executor {
     }
 }
 
+struct Context<'a> {
+    call_id: &'a str,
+    mcp: &'a McpHub,
+    interpreters: &'a Interpreters,
+    emit: Emit,
+}
+
+impl Context<'_> {
+    fn output_sink(&self) -> impl FnMut(&str, String) + use<> {
+        let call_id = self.call_id.to_string();
+        let emit = self.emit.clone();
+        move |stream, data| {
+            emit(
+                "exec.output",
+                json!({ "callId": call_id, "stream": stream, "data": data }),
+            )
+        }
+    }
+}
+
 async fn execute(
     workspace: Workspace,
     request: Request,
-    call_id: &str,
-    mcp: &McpHub,
-    emit: Emit,
+    context: Context<'_>,
     mut cancel: watch::Receiver<bool>,
 ) -> Result<ExecOutcome, ExecError> {
     if request.operation == "mcp.call" {
-        return call_mcp(mcp, &request, cancel).await;
+        return call_mcp(context.mcp, &request, cancel).await;
     }
     if request.operation == "web_fetch" {
         return tokio::select! {
@@ -197,16 +229,15 @@ async fn execute(
     }
     let root = workspace.root()?;
     if request.operation == "run_command" {
-        let call_id = call_id.to_string();
-        return command::run_command(
+        return command::run_command(&root, &request, context.output_sink(), cancel).await;
+    }
+    if request.operation == "custom_tool.run" {
+        return custom_tool::run(
             &root,
             &request,
-            move |stream, data| {
-                emit(
-                    "exec.output",
-                    json!({ "callId": call_id, "stream": stream, "data": data }),
-                )
-            },
+            context.call_id,
+            context.interpreters,
+            context.output_sink(),
             cancel,
         )
         .await;

@@ -1,5 +1,7 @@
 package dev.pointer.agent;
 
+import dev.pointer.customtool.CustomToolService;
+import dev.pointer.customtool.ProposeTool;
 import dev.pointer.execution.ExecutionListener;
 import dev.pointer.execution.ExecutionRequest;
 import dev.pointer.execution.ExecutionResult;
@@ -47,6 +49,7 @@ class ToolCallHandler {
     private final SessionService sessionService;
     private final SessionEventBus bus;
     private final JsonMapper json;
+    private final CustomToolService customTools;
 
     void handle(TurnScope scope, int step, String providerCallId, String toolName, String argumentsJson) {
         var arguments = parseArguments(argumentsJson);
@@ -85,7 +88,71 @@ class ToolCallHandler {
         if (PermissionService.ASK.equals(policy) && !askForApproval(scope, itemId, tool, arguments)) {
             return;
         }
+        if (tool.isCustom()) {
+            writer.updateItem(
+                    scope.userId(), scope.sessionId(), itemId, Map.of("customToolVersion", tool.getVersion()));
+        }
         execute(scope, itemId, tool, arguments);
+    }
+
+    void proposeTool(TurnScope scope, int step, String providerCallId, String argumentsJson) {
+        var arguments = parseArguments(argumentsJson);
+        var payload = new LinkedHashMap<String, Object>();
+        payload.put("step", step);
+        payload.put("toolName", ProposeTool.NAME);
+        payload.put("arguments", arguments == null ? Map.of() : arguments);
+        payload.put("argumentsJson", argumentsJson == null || argumentsJson.isBlank() ? "{}" : argumentsJson);
+        payload.put("providerCallId", providerCallId);
+        payload.put("toolStatus", "pending");
+        var item = writer.createItem(scope.userId(), scope.sessionId(), scope.turnId(), Item.TOOL_CALL, payload);
+        var itemId = (UUID) item.get("id");
+        if (arguments == null) {
+            fail(scope, itemId, "invalid_arguments", "Tool arguments are not valid JSON");
+            return;
+        }
+        CustomToolService.PreparedProposal prepared;
+        try {
+            prepared = customTools.prepare(scope.userId(), scope.projectId(), arguments);
+        } catch (CustomToolService.InvalidProposalException exception) {
+            fail(scope, itemId, "invalid_proposal", exception.getMessage());
+            return;
+        }
+        var preview = prepared.preview();
+        writer.updateItem(scope.userId(), scope.sessionId(), itemId, Map.of("toolStatus", "awaiting_approval"));
+        var approvalId = approvals.request(scope.userId(), scope.sessionId(), itemId, preview);
+        writer.updateItem(
+                scope.userId(),
+                scope.sessionId(),
+                itemId,
+                Map.of("approvalId", approvalId, "approvalPreview", preview));
+        var decision = approvals.await(scope.userId(), scope.sessionId(), approvalId, scope.cancellation());
+        if (decision.cancelled()) {
+            writer.completeItem(
+                    scope.userId(), scope.sessionId(), itemId, Item.CANCELLED, Map.of("toolStatus", "cancelled"));
+            return;
+        }
+        if (!decision.approved()) {
+            var reason = decision.message() == null || decision.message().isBlank()
+                    ? "The user rejected the proposed tool."
+                    : "The user rejected the proposed tool with the message: " + decision.message();
+            deny(scope, itemId, reason);
+            return;
+        }
+        var approved = customTools.approve(
+                scope.userId(), scope.projectId(), scope.sessionId(), itemId, prepared, decision.tool());
+        var result = new LinkedHashMap<String, Object>();
+        result.put("toolId", approved.toolId());
+        result.put("name", approved.name());
+        result.put("version", approved.version());
+        result.put("scope", approved.scope());
+        var resultText = "The user approved " + approved.name() + " version " + approved.version() + " ("
+                + approved.scope() + " scope). It is available as a tool from the next step on.";
+        writer.completeItem(
+                scope.userId(),
+                scope.sessionId(),
+                itemId,
+                Item.COMPLETED,
+                Map.of("toolStatus", "succeeded", "result", result, "resultText", resultText));
     }
 
     boolean proposePlan(TurnScope scope, int step, String providerCallId, String argumentsJson) {
@@ -114,7 +181,14 @@ class ToolCallHandler {
 
     private boolean askForApproval(TurnScope scope, UUID itemId, ToolDefinition tool, Map<String, Object> arguments) {
         Map<String, Object> preview;
-        if (tool.isMcp()) {
+        if (tool.isCustom()) {
+            preview = new LinkedHashMap<>();
+            preview.put("kind", "custom_tool");
+            preview.put("name", tool.getName());
+            preview.put("version", tool.getVersion());
+            preview.put("interpreter", tool.getInterpreter());
+            preview.put("arguments", arguments);
+        } else if (tool.isMcp()) {
             preview = new LinkedHashMap<>();
             preview.put("kind", "tool");
             preview.put("server", tool.getMcpServer());
@@ -258,10 +332,15 @@ class ToolCallHandler {
 
     private ExecutionRequest request(
             TurnScope scope, ToolDefinition tool, Map<String, Object> arguments, boolean dryRun) {
-        var executorArguments = tool.isMcp()
-                ? Map.<String, Object>of(
-                        "server", tool.getMcpServer(), "tool", tool.getMcpTool(), "arguments", arguments)
-                : arguments;
+        Map<String, Object> executorArguments;
+        if (tool.isMcp()) {
+            executorArguments =
+                    Map.of("server", tool.getMcpServer(), "tool", tool.getMcpTool(), "arguments", arguments);
+        } else if (tool.isCustom()) {
+            executorArguments = customTools.executionArguments(tool, arguments);
+        } else {
+            executorArguments = arguments;
+        }
         return new ExecutionRequest(
                 scope.sessionId(),
                 scope.projectId(),
@@ -288,7 +367,7 @@ class ToolCallHandler {
     }
 
     private static Duration timeoutFor(ToolDefinition tool, Map<String, Object> arguments) {
-        if (tool.isMcp()) {
+        if (tool.isMcp() || tool.isCustom()) {
             return DEFAULT_COMMAND_TIMEOUT;
         }
         if (!ToolDefinition.EXECUTE.equals(tool.getKind())) {

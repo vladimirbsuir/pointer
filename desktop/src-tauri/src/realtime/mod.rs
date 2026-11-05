@@ -253,6 +253,7 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
             "clientVersion": CLIENT_VERSION,
             "platform": device.platform,
             "capabilities": ["viewer", "relay", "executor"],
+            "interpreters": realtime.executor.interpreters().await.names(),
             "projects": projects.project_ids(),
             "undeliveredResults": realtime.take_undelivered(),
         }),

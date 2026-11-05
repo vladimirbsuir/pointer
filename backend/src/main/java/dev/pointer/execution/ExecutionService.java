@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -51,6 +52,10 @@ public class ExecutionService {
 
     public boolean canExecute(UUID deviceId, UUID projectId) {
         return channel.canExecute(deviceId, projectId);
+    }
+
+    public Optional<Set<String>> interpreters(UUID deviceId) {
+        return deviceId == null ? Optional.empty() : channel.interpreters(deviceId);
     }
 
     public boolean isOperationAvailable(String operation, UUID projectId) {

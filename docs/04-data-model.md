@@ -199,11 +199,12 @@ The tool registry (TOOL-8).
 | `operation` | text | Executor operation to invoke |
 | `modes` | text[] | Modes where the tool is available |
 | `default_policy` | text | `allow`, `ask`, `deny` |
-| `source` | text | `builtin`, `mcp` (reported by a device, see [ADR 0010](adr/0010-mcp-servers-on-the-device.md)), later `custom` |
+| `source` | text | `builtin`, `mcp` (reported by a device, see [ADR 0010](adr/0010-mcp-servers-on-the-device.md)), `custom` (proposed by the agent, see [ADR 0014](adr/0014-agent-proposed-custom-tools.md)) |
 | `mcp_server`, `mcp_tool` | text | Original server and tool names of an MCP tool, null otherwise |
+| `interpreter` | text | `python`, `node`, `powershell` or `bash` for custom tools, null otherwise |
 | `owner_user_id` | uuid | Null for built-in tools |
 | `project_id` | uuid | Null unless a project-scoped custom tool |
-| `version` | integer | |
+| `version` | integer | Current version of a custom tool, 1 otherwise |
 | `enabled` | boolean | |
 | `created_at`, `updated_at` | timestamptz | |
 
@@ -399,12 +400,25 @@ Tables of the `rag` module ([ADR 0013](adr/0013-semantic-code-index.md)), access
 
 `code_chunks`: `id`, `project_id`, `path`, `symbol` (nullable, e.g. `SessionService.create`), `kind` (syntax node kind, `group` or `lines`), `start_line`, `end_line`, `content`, `embedding vector` without a fixed dimension. Index on (`project_id`, `path`); search is an exact cosine scan per project.
 
+### Custom tools
+
+`custom_tool_versions` holds every approved version of a custom tool (TOOL-13); the `tools` row holds the description, schema and interpreter of the current version.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `tool_id` | uuid | FK `tools`, cascade |
+| `version` | integer | Unique per tool, starting at 1 |
+| `description`, `parameters_schema`, `interpreter` | | As approved |
+| `body` | text | The script, at most 64 KiB |
+| `session_id`, `item_id` | uuid | The session and `tool_call` item that proposed it, set null on delete |
+| `created_at` | timestamptz | Approval time |
+
 ## 8. Planned for highlight features
 
 Sketched here so the core schema leaves room for them. Final definitions come with their milestones.
 
 | Table | Feature | Purpose |
 |---|---|---|
-| `custom_tool_implementations` | Custom tools | Implementation kind and body for `tools` rows with `source = 'custom'`, plus the proposing session |
 | `telegram_links` | Telegram | `user_id`, `chat_id`, link code, linked time |
 | `remote_workspaces` | Remote execution | Container id, repository, branch, status for sessions on the container executor |

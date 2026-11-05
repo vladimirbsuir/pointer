@@ -22,6 +22,8 @@ public class ToolDefinition extends BaseEntity {
     public static final String EXECUTE = "execute";
     public static final String MCP = "mcp";
     public static final String MCP_OPERATION = "mcp.call";
+    public static final String CUSTOM = "custom";
+    public static final String CUSTOM_OPERATION = "custom_tool.run";
 
     private String name;
     private String description;
@@ -39,6 +41,7 @@ public class ToolDefinition extends BaseEntity {
     private String source;
     private String mcpServer;
     private String mcpTool;
+    private String interpreter;
     private UUID ownerUserId;
     private UUID projectId;
     private int version;
@@ -76,6 +79,36 @@ public class ToolDefinition extends BaseEntity {
         return definition;
     }
 
+    static ToolDefinition custom(
+            UUID ownerUserId, UUID projectId, String name, CustomToolSpec spec, int version, Instant now) {
+        var definition = new ToolDefinition(Ids.newId());
+        definition.name = name;
+        definition.kind = EXECUTE;
+        definition.operation = CUSTOM_OPERATION;
+        definition.source = CUSTOM;
+        definition.ownerUserId = ownerUserId;
+        definition.projectId = projectId;
+        definition.enabled = true;
+        definition.createdAt = now;
+        definition.applyCustomVersion(spec, version, now);
+        return definition;
+    }
+
+    void applyCustomVersion(CustomToolSpec spec, int version, Instant now) {
+        this.description = spec.description();
+        this.parametersSchema = spec.parametersSchema();
+        this.interpreter = spec.interpreter();
+        this.version = version;
+        this.updatedAt = now;
+    }
+
+    void applyCustomSettings(String defaultPolicy, List<String> modes, boolean enabled, Instant now) {
+        this.defaultPolicy = defaultPolicy;
+        this.modes = List.copyOf(modes);
+        this.enabled = enabled;
+        this.updatedAt = now;
+    }
+
     void refreshMcp(String description, Map<String, Object> parametersSchema, boolean readOnly, Instant now) {
         this.description = description == null || description.isBlank()
                 ? "Tool " + mcpTool + " from the MCP server " + mcpServer
@@ -88,6 +121,10 @@ public class ToolDefinition extends BaseEntity {
 
     public boolean isMcp() {
         return MCP.equals(source);
+    }
+
+    public boolean isCustom() {
+        return CUSTOM.equals(source);
     }
 
     public boolean availableIn(String mode) {

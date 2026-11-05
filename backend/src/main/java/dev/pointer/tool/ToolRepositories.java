@@ -26,6 +26,22 @@ interface ToolRepository extends JpaRepository<ToolDefinition, UUID> {
 
     @Query("select t from ToolDefinition t where t.ownerUserId = :userId and t.source = 'mcp'")
     List<ToolDefinition> findMcp(UUID userId);
+
+    @Query("""
+            select t from ToolDefinition t where t.name = :name
+            and (t.ownerUserId is null or (t.ownerUserId = :userId and t.source = 'mcp'))
+            """)
+    List<ToolDefinition> findNonCustomByName(UUID userId, String name);
+
+    @Query("""
+            select t from ToolDefinition t where t.source = 'custom' and t.ownerUserId = :userId
+            and (t.projectId is null or t.projectId = :projectId)
+            order by t.name
+            """)
+    List<ToolDefinition> findCustomVisible(UUID userId, UUID projectId);
+
+    @Query("select t from ToolDefinition t where t.source = 'custom' and t.ownerUserId = :userId order by t.name")
+    List<ToolDefinition> findCustom(UUID userId);
 }
 
 @Entity
@@ -157,4 +173,8 @@ class SessionGrant extends BaseEntity {
 interface SessionGrantRepository extends JpaRepository<SessionGrant, UUID> {
 
     List<SessionGrant> findBySessionId(UUID sessionId);
+
+    @Modifying
+    @Query("delete from SessionGrant g where g.toolId = :toolId")
+    void deleteByToolId(UUID toolId);
 }
