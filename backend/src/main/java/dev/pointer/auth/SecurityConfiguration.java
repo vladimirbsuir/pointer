@@ -1,6 +1,7 @@
 package dev.pointer.auth;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import dev.pointer.common.security.AuthPrincipal;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import javax.crypto.SecretKey;
@@ -8,10 +9,12 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -20,6 +23,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -38,6 +42,7 @@ class SecurityConfiguration {
         "/api/v1/auth/logout",
         "/api/v1/auth/github/authorize-url",
         "/api/v1/auth/github/callback",
+        "/api/v1/runner/token",
         "/actuator/health",
         "/v3/api-docs/**",
         "/swagger-ui/**",
@@ -52,10 +57,21 @@ class SecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests.requestMatchers(PUBLIC_PATHS)
                         .permitAll()
+                        .requestMatchers("/ws")
+                        .authenticated()
                         .anyRequest()
-                        .authenticated())
+                        .access((authentication, context) ->
+                                new AuthorizationDecision(isUserToken(authentication.get()))))
                 .oauth2ResourceServer(server -> server.jwt(Customizer.withDefaults()))
                 .build();
+    }
+
+    private static boolean isUserToken(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        return !(authentication instanceof JwtAuthenticationToken token
+                && Boolean.TRUE.equals(token.getToken().getClaimAsBoolean(AuthPrincipal.RUNNER_CLAIM)));
     }
 
     @Bean

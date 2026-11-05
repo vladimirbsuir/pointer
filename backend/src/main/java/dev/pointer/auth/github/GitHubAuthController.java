@@ -33,8 +33,9 @@ class GitHubAuthController {
     AuthorizeUrlResponse authorizeUrl(
             @RequestParam @NotBlank String codeChallenge,
             @RequestParam @NotBlank @Size(max = 200) String state,
-            @RequestParam @NotBlank String redirectUri) {
-        return new AuthorizeUrlResponse(service.authorizationUrl(codeChallenge, state, redirectUri));
+            @RequestParam @NotBlank String redirectUri,
+            @RequestParam(defaultValue = "false") boolean repositories) {
+        return new AuthorizeUrlResponse(service.authorizationUrl(codeChallenge, state, redirectUri, repositories));
     }
 
     @PostMapping("/callback")

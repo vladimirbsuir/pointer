@@ -190,6 +190,8 @@ pub fn project_context(root: &Path) -> Result<ExecOutcome, ExecError> {
         "rulesFile": rules,
         "gitBranch": branch,
         "isGitRepository": head.is_some(),
+        "os": crate::command::OS_NAME,
+        "shell": crate::command::SHELL_NAME,
     })))
 }
 

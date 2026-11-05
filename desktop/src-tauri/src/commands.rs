@@ -72,13 +72,21 @@ pub async fn auth_sign_in_with_github(
     session: State<'_, AuthSession>,
     locale: String,
 ) -> AppResult<Value> {
-    let code = authorize_with_github(session.api(), |url| open_in_browser(&app, url)).await?;
+    let code =
+        authorize_with_github(session.api(), false, |url| open_in_browser(&app, url)).await?;
     signed_in(&app, session.sign_in_with_github(&code, &locale).await)
 }
 
 #[tauri::command]
-pub async fn auth_link_github(app: AppHandle, session: State<'_, AuthSession>) -> AppResult<Value> {
-    let code = authorize_with_github(session.api(), |url| open_in_browser(&app, url)).await?;
+pub async fn auth_link_github(
+    app: AppHandle,
+    session: State<'_, AuthSession>,
+    repositories: Option<bool>,
+) -> AppResult<Value> {
+    let code = authorize_with_github(session.api(), repositories.unwrap_or(false), |url| {
+        open_in_browser(&app, url)
+    })
+    .await?;
     session.link_github(&code).await
 }
 
@@ -116,7 +124,7 @@ pub async fn project_files(
 ) -> AppResult<Vec<String>> {
     let root = linked_root(&projects, &project_id)?;
     tauri::async_runtime::spawn_blocking(move || {
-        crate::executor::suggest_files(&root, &query, MAX_FILE_SUGGESTIONS)
+        pointer_executor::suggest_files(&root, &query, MAX_FILE_SUGGESTIONS)
     })
     .await
     .map_err(|error| AppError::new("internal_error", error.to_string()))?
@@ -130,7 +138,7 @@ pub async fn project_read_file(
     path: String,
 ) -> AppResult<String> {
     let root = linked_root(&projects, &project_id)?;
-    tauri::async_runtime::spawn_blocking(move || crate::executor::read_attachment(&root, &path))
+    tauri::async_runtime::spawn_blocking(move || pointer_executor::read_attachment(&root, &path))
         .await
         .map_err(|error| AppError::new("internal_error", error.to_string()))?
         .map_err(|error| AppError::new(error.code, error.message))
@@ -205,6 +213,15 @@ fn linked_root(projects: &ProjectMap, project_id: &str) -> AppResult<std::path::
             "Link the project to a folder on this computer first",
         )
     })
+}
+
+#[tauri::command]
+pub fn project_repository(
+    projects: State<'_, ProjectMap>,
+    project_id: String,
+) -> AppResult<Option<String>> {
+    let root = linked_root(&projects, &project_id)?;
+    Ok(crate::projects::github_repository(&root))
 }
 
 #[tauri::command]

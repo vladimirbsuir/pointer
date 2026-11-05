@@ -32,6 +32,7 @@ class GatewayDeviceChannel implements DeviceChannel {
     @Override
     public Optional<UUID> executorFor(UUID userId, UUID projectId) {
         return registry.forUser(userId).stream()
+                .filter(connection -> !connection.isRunner())
                 .filter(connection -> connection.hasCapability(EXECUTOR))
                 .filter(connection -> connection.projects().contains(projectId))
                 .map(GatewayConnection::deviceId)

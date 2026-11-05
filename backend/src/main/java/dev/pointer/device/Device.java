@@ -16,6 +16,9 @@ import org.hibernate.type.SqlTypes;
 @Getter
 public class Device extends BaseEntity {
 
+    public static final String DESKTOP = "desktop";
+    public static final String RUNNER = "runner";
+
     private UUID userId;
     private String name;
 
@@ -23,6 +26,8 @@ public class Device extends BaseEntity {
     private Map<String, Object> platform;
 
     private String clientVersion;
+    private String kind;
+    private String runnerSecretHash;
     private Instant lastSeenAt;
     private Instant revokedAt;
     private Instant createdAt;
@@ -34,7 +39,35 @@ public class Device extends BaseEntity {
         super(id);
         this.userId = userId;
         this.createdAt = now;
+        this.kind = DESKTOP;
         update(userId, info, now);
+    }
+
+    static Device runner(UUID id, UUID userId, String name, String secretHash, Instant now) {
+        var device = new Device(id, userId, new DeviceInfo(id, name, Map.of("os", "linux"), null), now);
+        device.kind = RUNNER;
+        device.runnerSecretHash = secretHash;
+        return device;
+    }
+
+    void rotateRunnerSecret(String secretHash, Instant now) {
+        this.runnerSecretHash = secretHash;
+        this.revokedAt = null;
+        this.updatedAt = now;
+    }
+
+    void revoke(Instant now) {
+        this.revokedAt = now;
+        this.runnerSecretHash = null;
+        this.updatedAt = now;
+    }
+
+    void touch(Instant now) {
+        this.lastSeenAt = now;
+    }
+
+    public boolean isRunner() {
+        return RUNNER.equals(kind);
     }
 
     void update(UUID userId, DeviceInfo info, Instant now) {

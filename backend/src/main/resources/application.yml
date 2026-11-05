@@ -46,6 +46,18 @@ pointer:
     authorize-url: https://github.com/login/oauth/authorize
     token-url: https://github.com/login/oauth/access_token
     api-url: https://api.github.com
+  container:
+    enabled: ${POINTER_CONTAINER_ENABLED:false}
+    docker-host: ${POINTER_DOCKER_HOST:}
+    image: ${POINTER_RUNNER_IMAGE:pointer-runner:latest}
+    api-url: ${POINTER_RUNNER_API_URL:http://host.docker.internal:8080}
+    network: ${POINTER_RUNNER_NETWORK:}
+    cpus: 2
+    memory: 4GB
+    pids-limit: 512
+    idle-timeout: 30m
+    prepare-timeout: 10m
+    github-api-url: ${pointer.github.api-url}
   telegram:
     bot-token: ${POINTER_TELEGRAM_BOT_TOKEN:}
     api-url: ${POINTER_TELEGRAM_API_URL:https://api.telegram.org}

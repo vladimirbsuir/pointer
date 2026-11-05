@@ -5,6 +5,8 @@ import static dev.pointer.telegram.TelegramTexts.text;
 
 import dev.pointer.agent.AgentRunner;
 import dev.pointer.common.error.ApiException;
+import dev.pointer.container.RemoteDtos;
+import dev.pointer.container.RemoteSessionService;
 import dev.pointer.execution.ExecutionService;
 import dev.pointer.project.ProjectService;
 import dev.pointer.session.ApprovalService;
@@ -37,6 +39,7 @@ class TelegramBot {
     private final ApprovalService approvals;
     private final ExecutionService execution;
     private final AgentRunner runner;
+    private final RemoteSessionService remote;
 
     void handle(TelegramTypes.Update update) {
         if (update.message() != null) {
@@ -138,7 +141,8 @@ class TelegramBot {
         var marker = chat.link.isSelected(session.id()) ? "▶ " : "";
         var title = TelegramFormat.shorten(directory.title(chat.locale, session), BUTTON_TITLE_LIMIT);
         var status = statusIcon(session.status());
-        return marker + status + title + (projectName == null ? "" : " · " + projectName);
+        var server = remote.isRemote(session.id()) ? "☁ " : "";
+        return marker + status + server + title + (projectName == null ? "" : " · " + projectName);
     }
 
     private static String statusIcon(String status) {
@@ -264,6 +268,17 @@ class TelegramBot {
     private String newSession(Chat chat, UUID projectId) {
         var project = projects.owned(chat.link.userId(), projectId);
         var deviceId = execution.executorFor(chat.link.userId(), projectId);
+        if (deviceId.isEmpty() && remote.isEnabled() && project.getRepository() != null) {
+            var created = remote.create(
+                    chat.link.userId(), projectId, new RemoteDtos.CreateRemoteSessionRequest(null, null, null, null));
+            links.select(chat.link.userId(), created.session().id());
+            chat.reply(text(
+                    chat.locale,
+                    "sessionCreatedOnServer",
+                    "<b>" + escape(project.getName()) + "</b>",
+                    "<code>" + escape(created.workspace().branch()) + "</code>"));
+            return null;
+        }
         if (deviceId.isEmpty()) {
             chat.reply(text(chat.locale, "noDevice", "<b>" + escape(project.getName()) + "</b>"));
             return null;

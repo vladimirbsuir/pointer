@@ -38,6 +38,9 @@ final class TelegramTexts {
                     "noDevice",
                     "No online computer has {0} open. Start Pointer on your computer and open the project, then try again."),
             Map.entry("sessionCreated", "New session in {0}. Send your task."),
+            Map.entry(
+                    "sessionCreatedOnServer",
+                    "No computer with {0} is online, so the session runs on the server in branch {1}. Send your task."),
             Map.entry("sessionSelected", "Selected <b>{0}</b> · {1} · {2}"),
             Map.entry("lastAnswer", "Last answer:"),
             Map.entry("noSessionSelected", "Choose a session with /sessions or start one with /new."),
@@ -115,6 +118,9 @@ final class TelegramTexts {
                     "noDevice",
                     "Ни на одном включённом компьютере не открыт {0}. Запустите Pointer, откройте проект и попробуйте снова."),
             Map.entry("sessionCreated", "Новая сессия в {0}. Отправьте задачу."),
+            Map.entry(
+                    "sessionCreatedOnServer",
+                    "Ни один компьютер с {0} не в сети, поэтому сессия работает на сервере в ветке {1}. Отправьте задачу."),
             Map.entry("sessionSelected", "Выбрана <b>{0}</b> · {1} · {2}"),
             Map.entry("lastAnswer", "Последний ответ:"),
             Map.entry("noSessionSelected", "Выберите сессию через /sessions или начните новую через /new."),

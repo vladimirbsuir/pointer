@@ -2,6 +2,7 @@ package dev.pointer.project;
 
 import dev.pointer.common.error.ApiException;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.Clock;
 import java.time.Instant;
@@ -27,7 +28,11 @@ public class ProjectService {
 
     @Transactional
     public ProjectResponse create(UUID userId, CreateProjectRequest request) {
-        return toResponse(projects.save(new Project(userId, request.name().strip(), clock.instant())));
+        var project = new Project(userId, request.name().strip(), clock.instant());
+        if (request.repository() != null && !request.repository().isBlank()) {
+            project.changeRepository(request.repository().strip(), clock.instant());
+        }
+        return toResponse(projects.save(project));
     }
 
     @Transactional
@@ -35,6 +40,10 @@ public class ProjectService {
         var project = owned(userId, projectId);
         if (request.name() != null) {
             project.rename(request.name().strip(), clock.instant());
+        }
+        if (request.repository() != null) {
+            project.changeRepository(
+                    request.repository().isBlank() ? null : request.repository().strip(), clock.instant());
         }
         if (request.archived() != null) {
             project.archive(request.archived(), clock.instant());
@@ -54,14 +63,27 @@ public class ProjectService {
     }
 
     private static ProjectResponse toResponse(Project project) {
-        return new ProjectResponse(project.getId(), project.getName(), project.getArchivedAt(), project.getCreatedAt());
+        return new ProjectResponse(
+                project.getId(),
+                project.getName(),
+                project.getRepository(),
+                project.getArchivedAt(),
+                project.getCreatedAt());
     }
 
-    public record ProjectResponse(UUID id, String name, Instant archivedAt, Instant createdAt) {}
+    public static final String REPOSITORY_PATTERN = "^$|^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$";
+
+    public record ProjectResponse(UUID id, String name, String repository, Instant archivedAt, Instant createdAt) {}
 
     public record CreateProjectRequest(
-            @NotBlank @Size(max = 200) String name) {}
+            @NotBlank @Size(max = 200) String name,
+
+            @Size(max = 200) @Pattern(regexp = REPOSITORY_PATTERN) String repository) {}
 
     public record UpdateProjectRequest(
-            @Size(min = 1, max = 200) String name, Boolean archived) {}
+            @Size(min = 1, max = 200) String name,
+
+            @Size(max = 200) @Pattern(regexp = REPOSITORY_PATTERN) String repository,
+
+            Boolean archived) {}
 }

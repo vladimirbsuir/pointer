@@ -151,6 +151,36 @@ class GitHubAuthTests extends IntegrationTest {
     }
 
     @Test
+    void repositoryAccessIsGrantedOnTopOfAnExistingLink() {
+        client.get()
+                .uri(uri -> uri.path("/api/v1/auth/github/authorize-url")
+                        .queryParam("codeChallenge", CODE_CHALLENGE)
+                        .queryParam("state", "state-123")
+                        .queryParam("redirectUri", REDIRECT_URI)
+                        .queryParam("repositories", true)
+                        .build())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.url")
+                .value(String.class, url -> assertThat(url).contains("repo"));
+        var auth = register(uniqueEmail());
+        var id = GITHUB_IDS.incrementAndGet();
+        var code = stubGitHubAccount(id, "builder", null, uniqueEmail());
+        link(auth, code).jsonPath("$.github.repositoryAccess").isEqualTo(false);
+
+        var repositoryCode = "repo-code-" + id;
+        when(gitHub.exchangeCode(eq(repositoryCode), anyString(), anyString()))
+                .thenReturn(new GitHubClient.TokenGrant("token-" + id, "read:user,repo,user:email"));
+        link(auth, repositoryCode)
+                .jsonPath("$.github.login")
+                .isEqualTo("builder")
+                .jsonPath("$.github.repositoryAccess")
+                .isEqualTo(true);
+    }
+
+    @Test
     void gitHubAccountLinkedToOneUserCannotBeLinkedToAnother() {
         var code = stubGitHubAccount(GITHUB_IDS.incrementAndGet(), "taken", null, uniqueEmail());
         callback(code).expectStatus().isOk();
@@ -168,10 +198,22 @@ class GitHubAuthTests extends IntegrationTest {
                 .isEqualTo("identity_in_use");
     }
 
+    private RestTestClient.BodyContentSpec link(AuthResponse auth, String code) {
+        return client.post()
+                .uri("/api/v1/auth/github/link")
+                .header(HttpHeaders.AUTHORIZATION, bearer(auth))
+                .body(Map.of("code", code, "codeVerifier", "verifier", "redirectUri", REDIRECT_URI))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody();
+    }
+
     private String stubGitHubAccount(long id, String login, String name, String email) {
         var code = "code-" + id;
         var token = "token-" + id;
-        when(gitHub.exchangeCode(eq(code), anyString(), anyString())).thenReturn(token);
+        when(gitHub.exchangeCode(eq(code), anyString(), anyString()))
+                .thenReturn(new GitHubClient.TokenGrant(token, "read:user,user:email"));
         when(gitHub.fetchUser(token)).thenReturn(new GitHubClient.GitHubUser(id, login, name));
         when(gitHub.fetchPrimaryVerifiedEmail(token)).thenReturn(Optional.ofNullable(email));
         return code;

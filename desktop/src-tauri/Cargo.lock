@@ -2939,18 +2939,14 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "futures-util",
- "globset",
- "html2text",
- "ignore",
  "keyring",
+ "pointer-executor",
  "portable-pty",
  "rand",
- "regex",
  "reqwest",
  "serde",
  "serde_json",
  "sha2 0.11.1",
- "similar",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -2961,6 +2957,26 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tree-sitter",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "pointer-executor"
+version = "0.1.0"
+dependencies = [
+ "globset",
+ "html2text",
+ "ignore",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "similar",
+ "tempfile",
+ "tokio",
+ "tree-sitter",
  "tree-sitter-go",
  "tree-sitter-java",
  "tree-sitter-javascript",
@@ -2969,6 +2985,21 @@ dependencies = [
  "tree-sitter-typescript",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "pointer-runner"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "futures-util",
+ "pointer-executor",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite",
 ]
 
 [[package]]

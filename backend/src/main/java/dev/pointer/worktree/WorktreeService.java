@@ -70,7 +70,7 @@ public class WorktreeService {
 
     @TransactionalEventListener
     void onSessionDeleted(SessionService.SessionDeleted deleted) {
-        if (!execution.canExecute(deleted.deviceId(), deleted.projectId())) {
+        if (deleted.worktree() == null || !execution.canExecute(deleted.deviceId(), deleted.projectId())) {
             return;
         }
         Thread.ofVirtual().start(() -> {

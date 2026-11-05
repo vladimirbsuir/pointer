@@ -7,6 +7,41 @@ use crate::error::{AppError, AppResult};
 
 const PROJECTS_FILE: &str = "projects.json";
 
+pub fn github_repository(root: &Path) -> Option<String> {
+    let config = fs::read_to_string(root.join(".git").join("config")).ok()?;
+    origin_url(&config).and_then(|url| repository_from_url(&url))
+}
+
+fn origin_url(config: &str) -> Option<String> {
+    let mut in_origin = false;
+    for line in config.lines().map(str::trim) {
+        if line.starts_with('[') {
+            in_origin = line == "[remote \"origin\"]";
+            continue;
+        }
+        if in_origin
+            && let Some(value) = line.strip_prefix("url")
+            && let Some(url) = value.trim_start().strip_prefix('=')
+        {
+            return Some(url.trim().to_string());
+        }
+    }
+    None
+}
+
+fn repository_from_url(url: &str) -> Option<String> {
+    let path = url
+        .strip_prefix("https://github.com/")
+        .or_else(|| url.strip_prefix("http://github.com/"))
+        .or_else(|| url.strip_prefix("git@github.com:"))
+        .or_else(|| url.strip_prefix("ssh://git@github.com/"))?;
+    let path = path.trim_end_matches('/').trim_end_matches(".git");
+    let mut parts = path.split('/');
+    let owner = parts.next().filter(|part| !part.is_empty())?;
+    let name = parts.next().filter(|part| !part.is_empty())?;
+    parts.next().is_none().then(|| format!("{owner}/{name}"))
+}
+
 pub struct ProjectMap {
     file: PathBuf,
     paths: Mutex<HashMap<String, String>>,
@@ -70,5 +105,33 @@ impl ProjectMap {
         change(&mut paths);
         fs::write(&self.file, serde_json::to_string_pretty(&*paths)?)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_github_repository_from_origin() {
+        let config = "[core]
+	bare = false
+[remote \"upstream\"]
+	url = https://github.com/other/repo.git
+[remote \"origin\"]
+	url = git@github.com:octo/demo.git
+";
+        assert_eq!(
+            origin_url(config).and_then(|url| repository_from_url(&url)),
+            Some("octo/demo".to_string())
+        );
+        assert_eq!(
+            repository_from_url("https://github.com/octo/demo"),
+            Some("octo/demo".to_string())
+        );
+        assert_eq!(
+            repository_from_url("https://gitlab.com/octo/demo.git"),
+            None
+        );
     }
 }

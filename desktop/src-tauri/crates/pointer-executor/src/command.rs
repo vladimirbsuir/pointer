@@ -71,11 +71,8 @@ pub async fn run_command(
 ) -> Result<ExecOutcome, ExecError> {
     let command = request.required_str("command")?;
     let directory = resolve(root, request.str_arg("workingDirectory").unwrap_or("."))?;
-    let mut process = Command::new("powershell.exe");
-    process
-        .args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"])
-        .arg(format!("{UTF8_PREAMBLE}{command}"))
-        .current_dir(&directory);
+    let mut process = shell_command(command);
+    process.current_dir(&directory);
     let run = run_process(process, None, request.timeout_ms, output, cancel).await?;
     let truncated = run.combined.truncated();
     let output_text = run.combined.into_text();
@@ -88,6 +85,31 @@ pub async fn run_command(
         Finish::TimedOut => Err(timed_out(request.timeout_ms, &output_text)),
         Finish::Cancelled => Err(cancelled()),
     }
+}
+
+#[cfg(windows)]
+pub const OS_NAME: &str = "Windows";
+#[cfg(windows)]
+pub const SHELL_NAME: &str = "PowerShell";
+#[cfg(not(windows))]
+pub const OS_NAME: &str = "Linux";
+#[cfg(not(windows))]
+pub const SHELL_NAME: &str = "bash";
+
+#[cfg(windows)]
+fn shell_command(command: &str) -> Command {
+    let mut process = Command::new("powershell.exe");
+    process
+        .args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"])
+        .arg(format!("{UTF8_PREAMBLE}{command}"));
+    process
+}
+
+#[cfg(not(windows))]
+fn shell_command(command: &str) -> Command {
+    let mut process = Command::new("bash");
+    process.arg("-c").arg(command);
+    process
 }
 
 pub fn timed_out(timeout_ms: u64, output: &str) -> ExecError {
@@ -123,6 +145,8 @@ pub async fn run_process(
         .kill_on_drop(true);
     #[cfg(windows)]
     process.creation_flags(CREATE_NO_WINDOW);
+    #[cfg(not(windows))]
+    process.process_group(0);
     let mut child = process
         .spawn()
         .map_err(|error| ExecError::failed("spawn_failed", error.to_string()))?;
@@ -221,6 +245,20 @@ async fn pump(
     }
 }
 
+#[cfg(not(windows))]
+async fn kill_tree(pid: Option<u32>) {
+    let Some(pid) = pid else {
+        return;
+    };
+    let _ = Command::new("kill")
+        .args(["-KILL", &format!("-{pid}")])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await;
+}
+
+#[cfg(windows)]
 async fn kill_tree(pid: Option<u32>) {
     let Some(pid) = pid else {
         return;
@@ -240,6 +278,15 @@ mod tests {
     use super::*;
     use serde_json::{Value, json};
 
+    #[cfg(windows)]
+    const PRINT_AND_EXIT: &str = "Write-Output 'привет'; exit 3";
+    #[cfg(not(windows))]
+    const PRINT_AND_EXIT: &str = "echo 'привет'; exit 3";
+    #[cfg(windows)]
+    const SLEEP: &str = "Start-Sleep -Seconds 30";
+    #[cfg(not(windows))]
+    const SLEEP: &str = "sleep 30";
+
     fn request(args: Value, timeout_ms: u64) -> Request {
         Request {
             operation: "run_command".into(),
@@ -257,7 +304,7 @@ mod tests {
 
         let outcome = run_command(
             root.path(),
-            &request(json!({"command": "Write-Output 'привет'; exit 3"}), 30_000),
+            &request(json!({"command": PRINT_AND_EXIT}), 30_000),
             |_, text| streamed.push_str(&text),
             cancel,
         )
@@ -281,7 +328,7 @@ mod tests {
 
         let error = run_command(
             root.path(),
-            &request(json!({"command": "Start-Sleep -Seconds 30"}), 1_500),
+            &request(json!({"command": SLEEP}), 1_500),
             |_, _| {},
             cancel,
         )
@@ -303,7 +350,7 @@ mod tests {
         let started = std::time::Instant::now();
         let error = run_command(
             root.path(),
-            &request(json!({"command": "Start-Sleep -Seconds 30"}), 60_000),
+            &request(json!({"command": SLEEP}), 60_000),
             |_, _| {},
             cancel,
         )

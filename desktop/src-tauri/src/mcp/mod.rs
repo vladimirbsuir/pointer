@@ -382,3 +382,15 @@ impl McpHub {
             .map_err(|_| AppError::new("internal_error", "MCP servers are unavailable"))
     }
 }
+
+impl pointer_executor::McpCaller for McpHub {
+    fn call<'a>(
+        &'a self,
+        server: &'a str,
+        tool: &'a str,
+        arguments: Value,
+        timeout: Duration,
+    ) -> pointer_executor::McpFuture<'a> {
+        Box::pin(McpHub::call(self, server, tool, arguments, timeout))
+    }
+}

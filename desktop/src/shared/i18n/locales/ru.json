@@ -82,7 +82,11 @@
     "telegramWaiting": "Нажмите «Старт» в открывшемся чате Telegram. Ссылка действует 10 минут.",
     "telegramOpenLink": "Открыть ссылку ещё раз",
     "telegramLinkedToast": "Telegram привязан",
-    "telegramUnlinkedToast": "Telegram отвязан"
+    "telegramUnlinkedToast": "Telegram отвязан",
+    "githubLinkedWithRepositories": "Привязан как @{{login}}, есть доступ к репозиториям",
+    "githubRepositoriesHint": "Серверным сессиям нужен доступ к репозиториям, чтобы клонировать их и пушить ветки.",
+    "allowRepositories": "Разрешить доступ к репозиториям",
+    "githubRepositoriesToast": "Доступ к репозиториям выдан"
   },
   "themes": {
     "system": "Системная",
@@ -162,7 +166,16 @@
     "index_device_offline": "Откройте проект на этом компьютере, чтобы проиндексировать его.",
     "index_running": "Проект уже индексируется.",
     "telegram_disabled": "На сервере не настроен Telegram-бот.",
-    "telegram_unavailable": "Telegram-бот ещё не готов. Попробуйте через несколько секунд."
+    "telegram_unavailable": "Telegram-бот ещё не готов. Попробуйте через несколько секунд.",
+    "project_repository_missing": "Сначала укажите репозиторий GitHub проекта.",
+    "github_repository_access_required": "Разрешите доступ к репозиториям в Настройки → Аккаунт → GitHub.",
+    "remote_execution_disabled": "Удалённое выполнение не настроено на сервере.",
+    "remote_session_not_found": "Эта сессия не работает на сервере.",
+    "nothing_pushed": "Сессия ещё ничего не запушила.",
+    "github_token_invalid": "GitHub отклонил токен. Разрешите доступ к репозиториям заново в настройках.",
+    "repository_not_found": "Репозиторий GitHub не существует или недоступен.",
+    "pull_request_failed": "GitHub не смог открыть pull request для этой ветки.",
+    "runner_timeout": "Контейнер на сервере не успел запуститься."
   },
   "chat": {
     "empty": "Опишите задачу или задайте вопрос, чтобы начать.",
@@ -420,5 +433,41 @@
     "restore": "Восстановить",
     "enabled": "Включён",
     "delete": "Удалить инструмент"
+  },
+  "repository": {
+    "menu": "Репозиторий GitHub…",
+    "menuWithName": "Репозиторий: {{repository}}",
+    "title": "Репозиторий GitHub проекта {{project}}",
+    "description": "Серверные сессии клонируют этот репозиторий и пушат результат в его ветку.",
+    "label": "Репозиторий",
+    "hint": "owner/name, например octocat/hello-world. Оставьте пустым, чтобы убрать.",
+    "detect": "Определить",
+    "notDetected": "У привязанной папки нет remote origin на GitHub."
+  },
+  "remote": {
+    "newSession": "Новая сессия на сервере",
+    "onServer": "Работает на сервере",
+    "disabled": "Удалённое выполнение не настроено на сервере",
+    "noRepository": "Сначала укажите репозиторий GitHub проекта",
+    "noAccess": "Разрешите доступ к репозиториям в Настройки → Аккаунт → GitHub",
+    "title": "Сессия на сервере",
+    "description": "Агент работает в контейнере на сервере. После каждого хода, изменившего файлы, работа коммитится и пушится в ветку сессии.",
+    "repository": "Репозиторий",
+    "branch": "Ветка",
+    "statusLabel": "Контейнер",
+    "lastPush": "Последний push",
+    "notPushed": "Пока ничего не запушено",
+    "pushHint": "Команды и правки внутри контейнера выполняются без подтверждения. Автоматически ничего не мержится.",
+    "openBranch": "Открыть ветку",
+    "createPullRequest": "Создать pull request",
+    "openPullRequest": "Открыть pull request",
+    "waitingForContainer": "Запускаю контейнер на сервере и готовлю репозиторий…",
+    "status": {
+      "starting": "Запускается",
+      "preparing": "Клонирую репозиторий",
+      "ready": "Работает",
+      "stopped": "Остановлен, запустится при следующем сообщении",
+      "failed": "Не удалось запустить"
+    }
   }
 }

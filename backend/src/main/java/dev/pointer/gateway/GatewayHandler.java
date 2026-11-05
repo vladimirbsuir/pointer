@@ -39,6 +39,8 @@ class GatewayHandler extends TextWebSocketHandler {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final Logger log = LoggerFactory.getLogger(GatewayHandler.class);
 
+    private static final String RUNNER_CAPABILITY = "executor";
+
     private final ConnectionRegistry registry;
     private final McpToolCatalog mcpTools;
     private final SessionService sessionService;
@@ -83,6 +85,7 @@ class GatewayHandler extends TextWebSocketHandler {
                 json,
                 UUID.fromString(jwt.getSubject()),
                 deviceClaim == null ? null : UUID.fromString(deviceClaim),
+                Boolean.TRUE.equals(jwt.getClaimAsBoolean(AuthPrincipal.RUNNER_CLAIM)),
                 jwt.getExpiresAt()));
     }
 
@@ -169,6 +172,9 @@ class GatewayHandler extends TextWebSocketHandler {
         }
         var capabilities = new HashSet<String>();
         payload.path("capabilities").forEach(capability -> capabilities.add(capability.asString()));
+        if (connection.isRunner()) {
+            capabilities.retainAll(Set.of(RUNNER_CAPABILITY));
+        }
         var interpreters = new HashSet<String>();
         payload.path("interpreters").forEach(interpreter -> interpreters.add(interpreter.asString()));
         connection.markReady(deviceId, capabilities, uuids(payload.path("projects")), interpreters);
@@ -198,6 +204,9 @@ class GatewayHandler extends TextWebSocketHandler {
     }
 
     private void subscribe(GatewayConnection connection, String id, JsonNode payload) {
+        if (connection.isRunner()) {
+            throw ApiException.forbidden("runner_forbidden", "Runners cannot subscribe to sessions");
+        }
         var sessionId = uuid(payload, "sessionId");
         var afterSeq = payload.path("afterSeq").asLong(0);
         var session = sessionService.owned(connection.userId(), sessionId);

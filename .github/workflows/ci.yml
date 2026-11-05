@@ -49,9 +49,9 @@ jobs:
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm build
-      - run: cargo fmt --check
+      - run: cargo fmt --all --check
         working-directory: desktop/src-tauri
-      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --workspace --all-targets -- -D warnings
         working-directory: desktop/src-tauri
-      - run: cargo test
+      - run: cargo test --workspace
         working-directory: desktop/src-tauri

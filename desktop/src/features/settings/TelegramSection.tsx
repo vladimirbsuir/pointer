@@ -1,24 +1,15 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { isTauri } from "@tauri-apps/api/core";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { api, unwrap } from "@/shared/api/client";
 import { queryKeys } from "@/shared/api/queries";
 import { toAppError } from "@/shared/api/types";
 import { errorMessage } from "@/shared/i18n/errors";
+import { openExternal } from "@/shared/lib/open-external";
 import { Button } from "@/shared/ui/button";
 
 const LINK_POLL_MS = 2000;
-
-async function openExternal(url: string) {
-  if (isTauri()) {
-    await openUrl(url);
-  } else {
-    window.open(url, "_blank", "noopener");
-  }
-}
 
 export function TelegramSection() {
   const { t } = useTranslation();

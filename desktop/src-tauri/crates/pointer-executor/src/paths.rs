@@ -59,6 +59,11 @@ fn outside(requested: &str) -> ExecError {
 mod tests {
     use super::*;
 
+    #[cfg(windows)]
+    const FOREIGN_ABSOLUTE_PATH: &str = "C:/Windows/System32/drivers/etc/hosts";
+    #[cfg(not(windows))]
+    const FOREIGN_ABSOLUTE_PATH: &str = "/etc/hosts";
+
     #[test]
     fn resolves_relative_paths_inside_root() {
         let root = tempfile::tempdir().unwrap();
@@ -74,7 +79,7 @@ mod tests {
 
         assert!(resolve(root.path(), "../secret.txt").is_err());
         assert!(resolve(root.path(), "src/../../secret.txt").is_err());
-        assert!(resolve(root.path(), "C:/Windows/System32/drivers/etc/hosts").is_err());
+        assert!(resolve(root.path(), FOREIGN_ABSOLUTE_PATH).is_err());
     }
 
     #[test]

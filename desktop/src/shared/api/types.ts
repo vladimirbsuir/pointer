@@ -23,9 +23,29 @@ export type Provider = Required<Omit<Schemas["ProviderResponse"], "models" | "ap
   models: Model[];
 };
 
-export type Project = Required<Omit<Schemas["ProjectResponse"], "archivedAt">> & {
+export type Project = Required<Omit<Schemas["ProjectResponse"], "archivedAt" | "repository">> & {
   archivedAt: string | null;
+  repository: string | null;
 };
+
+export type RemoteStatus = Required<Schemas["RemoteStatus"]>;
+
+export type RemoteWorkspaceStatus = "starting" | "preparing" | "ready" | "stopped" | "failed";
+
+export type RemoteWorkspace = {
+  sessionId: string;
+  repository: string;
+  branch: string;
+  baseBranch: string | null;
+  status: RemoteWorkspaceStatus;
+  error: string | null;
+  pushedCommit: string | null;
+  branchUrl: string | null;
+  pullRequestUrl: string | null;
+  lastActiveAt: string;
+};
+
+export type GitHubRepository = Required<Schemas["RepositoryResponse"]>;
 
 export type ProjectIndex = {
   status: "none" | "indexing" | "ready" | "failed";

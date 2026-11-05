@@ -7,6 +7,8 @@ import type {
   ProjectIndex,
   Project,
   Provider,
+  RemoteStatus,
+  RemoteWorkspace,
   Session,
   SlashCommand,
 } from "./types";
@@ -26,7 +28,48 @@ export const queryKeys = {
   localProjects: ["localProjects"] as const,
   sessions: (projectId: string) => ["sessions", projectId] as const,
   projectIndex: (projectId: string) => ["projectIndex", projectId] as const,
+  remote: ["remote"] as const,
+  remoteSessions: (projectId: string) => ["remoteSessions", projectId] as const,
+  remoteWorkspace: (sessionId: string) => ["remoteWorkspace", sessionId] as const,
 };
+
+const TRANSITIONAL_REMOTE_STATUSES = new Set(["starting", "preparing"]);
+const REMOTE_POLL_MS = 2500;
+
+export function useRemoteStatus() {
+  return useQuery({
+    queryKey: queryKeys.remote,
+    queryFn: async () => (await unwrap(api().GET("/api/v1/remote"))) as RemoteStatus,
+  });
+}
+
+export function useRemoteSessions(projectId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.remoteSessions(projectId),
+    enabled: enabled && projectId !== "",
+    queryFn: async () =>
+      (await unwrap(
+        api().GET("/api/v1/projects/{projectId}/remote-sessions", {
+          params: { path: { projectId } },
+        }),
+      )) as RemoteWorkspace[],
+  });
+}
+
+export function useRemoteWorkspace(sessionId: string, enabled: boolean, sessionBusy: boolean) {
+  return useQuery({
+    queryKey: queryKeys.remoteWorkspace(sessionId),
+    enabled,
+    queryFn: async () =>
+      (await unwrap(
+        api().GET("/api/v1/sessions/{sessionId}/remote", { params: { path: { sessionId } } }),
+      )) as RemoteWorkspace,
+    refetchInterval: (query) =>
+      sessionBusy || TRANSITIONAL_REMOTE_STATUSES.has(query.state.data?.status ?? "")
+        ? REMOTE_POLL_MS
+        : false,
+  });
+}
 
 export function useProviders() {
   return useQuery({

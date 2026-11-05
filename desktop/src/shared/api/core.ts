@@ -30,7 +30,7 @@ export const core = {
   register: (email: string, password: string, displayName: string, locale: string) =>
     call<Me>("auth_register", { email, password, displayName, locale }),
   signInWithGitHub: (locale: string) => call<Me>("auth_sign_in_with_github", { locale }),
-  linkGitHub: () => call<Me>("auth_link_github"),
+  linkGitHub: (repositories = false) => call<Me>("auth_link_github", { repositories }),
   accessToken: () => call<string>("auth_access_token"),
   signOut: () => call<void>("auth_sign_out"),
   subscribe: (sessionId: string, afterSeq: number) =>
@@ -40,6 +40,8 @@ export const core = {
   localProjects: () => call<Record<string, string>>("projects_local"),
   linkProject: (projectId: string, path: string) => call<void>("project_link", { projectId, path }),
   unlinkProject: (projectId: string) => call<void>("project_unlink", { projectId }),
+  projectRepository: (projectId: string) =>
+    call<string | null>("project_repository", { projectId }),
   projectFiles: (projectId: string, query: string) =>
     call<string[]>("project_files", { projectId, query }),
   readProjectFile: (projectId: string, path: string) =>

@@ -22,6 +22,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 class GitHubAuthService {
 
     static final String SCOPES = "read:user user:email";
+    static final String REPOSITORY_SCOPES = SCOPES + " repo";
 
     private static final Pattern CODE_CHALLENGE = Pattern.compile("[A-Za-z0-9_-]{43,128}");
     private static final String LOOPBACK_HOST = "127.0.0.1";
@@ -32,7 +33,7 @@ class GitHubAuthService {
     private final UserService userService;
     private final AuthSessionService sessions;
 
-    String authorizationUrl(String codeChallenge, String state, String redirectUri) {
+    String authorizationUrl(String codeChallenge, String state, String redirectUri, boolean repositories) {
         ensureConfigured();
         validateRedirectUri(redirectUri);
         if (!CODE_CHALLENGE.matcher(codeChallenge).matches()) {
@@ -41,7 +42,7 @@ class GitHubAuthService {
         return UriComponentsBuilder.fromUriString(properties.authorizeUrl())
                 .queryParam("client_id", properties.clientId())
                 .queryParam("redirect_uri", redirectUri)
-                .queryParam("scope", SCOPES)
+                .queryParam("scope", repositories ? REPOSITORY_SCOPES : SCOPES)
                 .queryParam("state", state)
                 .queryParam("code_challenge", codeChallenge)
                 .queryParam("code_challenge_method", "S256")
@@ -78,24 +79,33 @@ class GitHubAuthService {
     MeResponse link(UUID userId, String code, String codeVerifier, String redirectUri) {
         userService.getActive(userId);
         var account = fetchAccount(code, codeVerifier, redirectUri);
-        userService.linkIdentity(
-                userId,
-                UserIdentity.GITHUB,
-                Long.toString(account.user().id()),
-                account.user().login());
+        var providerUserId = Long.toString(account.user().id());
+        var grant = account.grant().includesRepositories() ? account.grant() : null;
+        var existing = userService
+                .findIdentity(UserIdentity.GITHUB, providerUserId)
+                .filter(identity -> identity.getUserId().equals(userId));
+        if (existing.isPresent() && grant != null) {
+            userService.storeIdentityToken(existing.get(), account.user().login(), grant.accessToken(), grant.scope());
+            return userService.me(userId);
+        }
+        var identity = userService.linkIdentity(
+                userId, UserIdentity.GITHUB, providerUserId, account.user().login());
+        if (grant != null) {
+            userService.storeIdentityToken(identity, account.user().login(), grant.accessToken(), grant.scope());
+        }
         return userService.me(userId);
     }
 
     private GitHubAccount fetchAccount(String code, String codeVerifier, String redirectUri) {
         ensureConfigured();
         validateRedirectUri(redirectUri);
-        var accessToken = client.exchangeCode(code, codeVerifier, redirectUri);
-        var user = client.fetchUser(accessToken);
-        var email = client.fetchPrimaryVerifiedEmail(accessToken)
+        var grant = client.exchangeCode(code, codeVerifier, redirectUri);
+        var user = client.fetchUser(grant.accessToken());
+        var email = client.fetchPrimaryVerifiedEmail(grant.accessToken())
                 .map(Emails::normalize)
                 .orElseThrow(() -> ApiException.badRequest(
                         "github_email_unverified", "GitHub account has no verified primary email"));
-        return new GitHubAccount(user, email);
+        return new GitHubAccount(user, email, grant);
     }
 
     private void ensureConfigured() {
@@ -129,5 +139,5 @@ class GitHubAuthService {
         return user.name() == null || user.name().isBlank() ? user.login() : user.name();
     }
 
-    private record GitHubAccount(GitHubClient.GitHubUser user, String email) {}
+    private record GitHubAccount(GitHubClient.GitHubUser user, String email, GitHubClient.TokenGrant grant) {}
 }

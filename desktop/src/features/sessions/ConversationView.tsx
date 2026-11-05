@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { FileDiffIcon, FoldVerticalIcon, SquareTerminalIcon } from "lucide-react";
 import { useWorkspace } from "@/features/workspace/workspace-store";
 import { api, unwrap } from "@/shared/api/client";
-import { enabledModels, useProviders } from "@/shared/api/queries";
+import { enabledModels, useProviders, useRemoteSessions } from "@/shared/api/queries";
 import { toAppError, type Session, type SessionMode } from "@/shared/api/types";
 import { errorMessage } from "@/shared/i18n/errors";
 import { cn } from "@/shared/lib/utils";
@@ -16,6 +16,7 @@ import { Composer, type Attachment } from "./Composer";
 import { MessageList } from "./MessageList";
 import { ModelPicker } from "./ModelPicker";
 import { useConversation, type Usage } from "./use-conversation";
+import { RemoteControl } from "./RemoteControl";
 import { WorktreeControl } from "./WorktreeControl";
 
 const BUSY_STATUSES = ["running", "waiting_for_approval", "waiting_for_executor"];
@@ -30,6 +31,8 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
   const { data: changedFiles } = useChangedFiles(sessionId, state.changesVersion);
   const session = state.session;
   const running = session ? BUSY_STATUSES.includes(session.status) : false;
+  const { data: remoteSessions } = useRemoteSessions(session?.projectId ?? "", Boolean(session));
+  const remote = remoteSessions?.some((workspace) => workspace.sessionId === sessionId) ?? false;
 
   useEffect(() => {
     if (!running) {
@@ -134,6 +137,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
               busy={running}
               onChanged={(updated) => patchSession({ ...updated, status: session.status })}
             />
+            {remote && <RemoteControl sessionId={sessionId} busy={running} />}
           </div>
           <div className="flex items-center gap-2">
             <UsageIndicator
@@ -150,15 +154,17 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
             >
               <FoldVerticalIcon />
             </Button>
-            <Button
-              size="icon-sm"
-              variant={terminalOpen ? "secondary" : "ghost"}
-              onClick={() => useWorkspace.getState().setTerminalOpen(!terminalOpen)}
-              title={t("terminal.toggle")}
-              aria-label={t("terminal.toggle")}
-            >
-              <SquareTerminalIcon />
-            </Button>
+            {!remote && (
+              <Button
+                size="icon-sm"
+                variant={terminalOpen ? "secondary" : "ghost"}
+                onClick={() => useWorkspace.getState().setTerminalOpen(!terminalOpen)}
+                title={t("terminal.toggle")}
+                aria-label={t("terminal.toggle")}
+              >
+                <SquareTerminalIcon />
+              </Button>
+            )}
             <Button
               size="sm"
               variant={changesOpen ? "secondary" : "ghost"}
@@ -199,7 +205,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
         {session.status === "waiting_for_executor" && (
           <div className="mx-auto mb-2 w-full max-w-3xl px-6">
             <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
-              {t("chat.waitingForExecutor")}
+              {t(remote ? "remote.waitingForContainer" : "chat.waitingForExecutor")}
             </div>
           </div>
         )}
@@ -208,6 +214,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
           initialText={draft.text}
           sessionId={sessionId}
           projectId={session.projectId}
+          remote={remote}
           supportsImages={currentModel?.supportsVision ?? false}
           running={running}
           disabledReason={disabledReason}

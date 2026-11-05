@@ -36,6 +36,12 @@ public class UserIdentity extends BaseEntity {
         this.updatedAt = now;
     }
 
+    public void storeAccessToken(byte[] accessTokenEncrypted, String scopes, Instant now) {
+        this.accessTokenEncrypted = accessTokenEncrypted;
+        this.scopes = scopes;
+        this.updatedAt = now;
+    }
+
     public void updateLogin(String providerLogin, Instant now) {
         this.providerLogin = providerLogin;
         this.updatedAt = now;

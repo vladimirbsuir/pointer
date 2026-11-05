@@ -82,7 +82,11 @@
     "telegramWaiting": "Press Start in the Telegram chat that opened. The link is valid for 10 minutes.",
     "telegramOpenLink": "Open the link again",
     "telegramLinkedToast": "Telegram linked",
-    "telegramUnlinkedToast": "Telegram unlinked"
+    "telegramUnlinkedToast": "Telegram unlinked",
+    "githubLinkedWithRepositories": "Linked as @{{login}} with repository access",
+    "githubRepositoriesHint": "Server sessions need access to your repositories to clone them and push branches.",
+    "allowRepositories": "Allow repository access",
+    "githubRepositoriesToast": "Repository access granted"
   },
   "themes": {
     "system": "System",
@@ -162,7 +166,16 @@
     "index_device_offline": "Open the project on this computer to index it.",
     "index_running": "The project is already being indexed.",
     "telegram_disabled": "The server has no Telegram bot configured.",
-    "telegram_unavailable": "The Telegram bot is not ready yet. Try again in a few seconds."
+    "telegram_unavailable": "The Telegram bot is not ready yet. Try again in a few seconds.",
+    "project_repository_missing": "Set the GitHub repository of the project first.",
+    "github_repository_access_required": "Allow repository access in Settings → Account → GitHub.",
+    "remote_execution_disabled": "Remote execution is not configured on the server.",
+    "remote_session_not_found": "This session does not run on the server.",
+    "nothing_pushed": "The session has not pushed any changes yet.",
+    "github_token_invalid": "GitHub rejected the token. Allow repository access again in settings.",
+    "repository_not_found": "The GitHub repository does not exist or is not accessible.",
+    "pull_request_failed": "GitHub could not open a pull request for this branch.",
+    "runner_timeout": "The server container did not become ready in time."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",
@@ -420,5 +433,41 @@
     "restore": "Restore",
     "enabled": "Enabled",
     "delete": "Delete tool"
+  },
+  "repository": {
+    "menu": "GitHub repository…",
+    "menuWithName": "Repository: {{repository}}",
+    "title": "GitHub repository of {{project}}",
+    "description": "Server sessions clone this repository and push their work to a branch of it.",
+    "label": "Repository",
+    "hint": "owner/name, for example octocat/hello-world. Leave empty to remove.",
+    "detect": "Detect",
+    "notDetected": "The linked folder has no GitHub origin remote."
+  },
+  "remote": {
+    "newSession": "New session on server",
+    "onServer": "Runs on the server",
+    "disabled": "Remote execution is not configured on the server",
+    "noRepository": "Set the GitHub repository of the project first",
+    "noAccess": "Allow repository access in Settings → Account → GitHub",
+    "title": "Server session",
+    "description": "The agent works in a container on the server. After each turn that changes files, the work is committed and pushed to the session branch.",
+    "repository": "Repository",
+    "branch": "Branch",
+    "statusLabel": "Container",
+    "lastPush": "Last push",
+    "notPushed": "Nothing pushed yet",
+    "pushHint": "Commands and edits run without approval inside the container. Nothing is merged automatically.",
+    "openBranch": "Open branch",
+    "createPullRequest": "Create pull request",
+    "openPullRequest": "Open pull request",
+    "waitingForContainer": "Starting the server container and preparing the repository…",
+    "status": {
+      "starting": "Starting",
+      "preparing": "Cloning the repository",
+      "ready": "Running",
+      "stopped": "Stopped, starts on the next message",
+      "failed": "Failed to start"
+    }
   }
 }

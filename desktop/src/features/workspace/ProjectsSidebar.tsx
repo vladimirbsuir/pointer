@@ -5,7 +5,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ChevronRightIcon,
+  CloudIcon,
   DatabaseZapIcon,
+  FolderGitIcon,
   FolderIcon,
   FolderPlusIcon,
   GitBranchIcon,
@@ -15,7 +17,14 @@ import {
 } from "lucide-react";
 import { api, unwrap } from "@/shared/api/client";
 import { core } from "@/shared/api/core";
-import { queryKeys, useLocalProjects, useProjects, useSessions } from "@/shared/api/queries";
+import {
+  queryKeys,
+  useLocalProjects,
+  useProjects,
+  useRemoteSessions,
+  useRemoteStatus,
+  useSessions,
+} from "@/shared/api/queries";
 import { toAppError, type Project, type Session } from "@/shared/api/types";
 import { errorMessage } from "@/shared/i18n/errors";
 import { cn } from "@/shared/lib/utils";
@@ -26,7 +35,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu";
-import { createSession } from "./create-session";
+import { createRemoteSession, createSession } from "./create-session";
+import { ProjectRepositoryDialog } from "./ProjectRepositoryDialog";
 import { ProjectIndexDialog } from "./ProjectIndexDialog";
 import { useWorkspace } from "./workspace-store";
 
@@ -37,6 +47,23 @@ function folderName(path: string) {
 async function pickFolder(): Promise<string | null> {
   const selected = await open({ directory: true, multiple: false });
   return typeof selected === "string" ? selected : null;
+}
+
+async function adoptRepository(project: Project) {
+  if (project.repository) {
+    return false;
+  }
+  const repository = await core.projectRepository(project.id).catch(() => null);
+  if (!repository) {
+    return false;
+  }
+  await unwrap(
+    api().PATCH("/api/v1/projects/{projectId}", {
+      params: { path: { projectId: project.id } },
+      body: { repository },
+    }),
+  );
+  return true;
 }
 
 export function ProjectsSidebar() {
@@ -57,6 +84,7 @@ export function ProjectsSidebar() {
         api().POST("/api/v1/projects", { body: { name: folderName(path) } }),
       )) as Project;
       await core.linkProject(project.id, path);
+      await adoptRepository(project);
       await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
       await queryClient.invalidateQueries({ queryKey: queryKeys.localProjects });
       useWorkspace.getState().selectProject(project.id);
@@ -107,7 +135,27 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
   const activeProjectId = useWorkspace((state) => state.activeProjectId);
   const [expanded, setExpanded] = useState(true);
   const [indexOpen, setIndexOpen] = useState(false);
+  const [repositoryOpen, setRepositoryOpen] = useState(false);
   const { data: sessions } = useSessions(project.id);
+  const { data: remote } = useRemoteStatus();
+  const { data: remoteSessions } = useRemoteSessions(project.id);
+  const remoteSessionIds = new Set(remoteSessions?.map((workspace) => workspace.sessionId));
+  const serverBlocker = !remote?.enabled
+    ? t("remote.disabled")
+    : !project.repository
+      ? t("remote.noRepository")
+      : !remote.repositoryAccess
+        ? t("remote.noAccess")
+        : null;
+
+  const startRemoteSession = async () => {
+    try {
+      await createRemoteSession(project.id, queryClient);
+      setExpanded(true);
+    } catch (error) {
+      toast.error(errorMessage(t, toAppError(error)));
+    }
+  };
 
   const startSession = async (worktree = false) => {
     try {
@@ -122,6 +170,9 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
     const folder = await pickFolder();
     if (folder) {
       await core.linkProject(project.id, folder);
+      if (await adoptRepository(project)) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+      }
       await queryClient.invalidateQueries({ queryKey: queryKeys.localProjects });
     }
   };
@@ -179,6 +230,20 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
               <GitBranchIcon />
               {t("shell.newWorktreeSession")}
             </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={serverBlocker !== null}
+              title={serverBlocker ?? undefined}
+              onClick={() => void startRemoteSession()}
+            >
+              <CloudIcon />
+              {t("remote.newSession")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setRepositoryOpen(true)}>
+              <FolderGitIcon />
+              {project.repository
+                ? t("repository.menuWithName", { repository: project.repository })
+                : t("repository.menu")}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setIndexOpen(true)}>
               <DatabaseZapIcon />
               {t("shell.semanticIndex")}
@@ -186,6 +251,12 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <ProjectRepositoryDialog
+        project={project}
+        linked={Boolean(path)}
+        open={repositoryOpen}
+        onOpenChange={setRepositoryOpen}
+      />
       <ProjectIndexDialog
         project={project}
         linked={Boolean(path)}
@@ -195,7 +266,12 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
       {expanded && (
         <div className="ml-4 flex flex-col">
           {sessions?.map((session) => (
-            <SessionRow key={session.id} projectId={project.id} session={session} />
+            <SessionRow
+              key={session.id}
+              projectId={project.id}
+              session={session}
+              remote={remoteSessionIds.has(session.id)}
+            />
           ))}
           {sessions?.length === 0 && (
             <button
@@ -212,7 +288,16 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
   );
 }
 
-function SessionRow({ projectId, session }: { projectId: string; session: Session }) {
+function SessionRow({
+  projectId,
+  session,
+  remote,
+}: {
+  projectId: string;
+  session: Session;
+  remote: boolean;
+}) {
+  const { t } = useTranslation();
   const active = useWorkspace((state) => state.activeSessionId === session.id);
 
   return (
@@ -224,6 +309,12 @@ function SessionRow({ projectId, session }: { projectId: string; session: Sessio
         active && "bg-sidebar-accent text-sidebar-foreground",
       )}
     >
+      {remote && (
+        <CloudIcon
+          className="size-3.5 shrink-0 text-muted-foreground"
+          aria-label={t("remote.onServer")}
+        />
+      )}
       {session.worktree?.state === "active" && (
         <GitBranchIcon
           className="size-3.5 shrink-0 text-muted-foreground"

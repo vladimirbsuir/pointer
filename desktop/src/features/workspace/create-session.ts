@@ -4,6 +4,20 @@ import { queryKeys } from "@/shared/api/queries";
 import type { Session } from "@/shared/api/types";
 import { useWorkspace } from "./workspace-store";
 
+export async function createRemoteSession(projectId: string, queryClient: QueryClient) {
+  const created = await unwrap(
+    api().POST("/api/v1/projects/{projectId}/remote-sessions", {
+      params: { path: { projectId } },
+      body: {},
+    }),
+  );
+  const session = created.session as Session;
+  await queryClient.invalidateQueries({ queryKey: queryKeys.sessions(projectId) });
+  await queryClient.invalidateQueries({ queryKey: queryKeys.remoteSessions(projectId) });
+  useWorkspace.getState().openSession(projectId, session.id);
+  return session;
+}
+
 export async function createSession(
   projectId: string,
   queryClient: QueryClient,

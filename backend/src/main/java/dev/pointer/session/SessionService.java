@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -103,10 +104,8 @@ public class SessionService {
         var session = owned(userId, sessionId);
         sessions.delete(session);
         notifySessionsChanged(session, "deleted");
-        if (session.activeWorktree() != null) {
-            publisher.publishEvent(new SessionDeleted(
-                    session.getId(), session.getProjectId(), session.getExecutorDeviceId(), session.activeWorktree()));
-        }
+        publisher.publishEvent(new SessionDeleted(
+                session.getId(), session.getProjectId(), session.getExecutorDeviceId(), session.activeWorktree()));
     }
 
     @Transactional(readOnly = true)
@@ -160,6 +159,15 @@ public class SessionService {
     }
 
     public record SessionDeleted(UUID sessionId, UUID projectId, UUID deviceId, String worktree) {}
+
+    @Transactional(readOnly = true)
+    public Optional<String> turnMessage(UUID sessionId, UUID turnId) {
+        return items.findBySessionIdOrderByPosition(sessionId).stream()
+                .filter(item -> turnId.equals(item.getTurnId()) && Item.USER_MESSAGE.equals(item.getType()))
+                .map(item -> String.valueOf(item.getPayload().getOrDefault("text", "")))
+                .filter(text -> !text.isBlank())
+                .findFirst();
+    }
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> items(UUID userId, UUID sessionId) {

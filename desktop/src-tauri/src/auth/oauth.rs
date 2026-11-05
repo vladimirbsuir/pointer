@@ -23,7 +23,11 @@ const FAILURE_PAGE: &str = "<!doctype html><html><head><meta charset=\"utf-8\"><
 <body style=\"font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0\">\
 <p>Sign-in was not completed. Return to Pointer and try again.</p></body></html>";
 
-pub async fn authorize_with_github<F>(api: &ApiClient, open_browser: F) -> AppResult<GitHubCode>
+pub async fn authorize_with_github<F>(
+    api: &ApiClient,
+    repositories: bool,
+    open_browser: F,
+) -> AppResult<GitHubCode>
 where
     F: FnOnce(&str) -> AppResult<()>,
 {
@@ -35,7 +39,7 @@ where
     let state = random_token();
 
     let authorize_url = api
-        .github_authorize_url(&code_challenge, &state, &redirect_uri)
+        .github_authorize_url(&code_challenge, &state, &redirect_uri, repositories)
         .await?;
     open_browser(&authorize_url)?;
 

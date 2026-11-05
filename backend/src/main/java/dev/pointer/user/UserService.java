@@ -1,5 +1,6 @@
 package dev.pointer.user;
 
+import dev.pointer.common.crypto.SecretCipher;
 import dev.pointer.common.error.ApiException;
 import java.time.Clock;
 import java.util.Optional;
@@ -15,6 +16,7 @@ public class UserService {
     private final UserRepository users;
     private final UserIdentityRepository identities;
     private final UserSettingsRepository settings;
+    private final SecretCipher cipher;
     private final Clock clock;
 
     @Transactional
@@ -74,7 +76,7 @@ public class UserService {
     }
 
     @Transactional
-    public void linkIdentity(UUID userId, String provider, String providerUserId, String providerLogin) {
+    public UserIdentity linkIdentity(UUID userId, String provider, String providerUserId, String providerLogin) {
         identities.findByProviderAndProviderUserId(provider, providerUserId).ifPresent(existing -> {
             throw existing.getUserId().equals(userId)
                     ? ApiException.conflict("identity_already_linked", "This account is already linked")
@@ -83,8 +85,27 @@ public class UserService {
         if (identities.findByUserIdAndProvider(userId, provider).isPresent()) {
             throw ApiException.conflict("provider_already_linked", "Another account of this provider is linked");
         }
-        identities.save(new UserIdentity(userId, provider, providerUserId, providerLogin, clock.instant()));
+        return identities.save(new UserIdentity(userId, provider, providerUserId, providerLogin, clock.instant()));
     }
+
+    @Transactional
+    public void storeIdentityToken(UserIdentity identity, String providerLogin, String accessToken, String scopes) {
+        var now = clock.instant();
+        identity.updateLogin(providerLogin, now);
+        identity.storeAccessToken(cipher.encrypt(accessToken), scopes, now);
+        identities.save(identity);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<GitHubCredentials> gitHubCredentials(UUID userId) {
+        return identities
+                .findByUserIdAndProvider(userId, UserIdentity.GITHUB)
+                .filter(identity -> identity.getAccessTokenEncrypted() != null)
+                .map(identity -> new GitHubCredentials(
+                        identity.getProviderLogin(), cipher.decrypt(identity.getAccessTokenEncrypted())));
+    }
+
+    public record GitHubCredentials(String login, String accessToken) {}
 
     @Transactional
     public void changePassword(User user, String passwordHash) {
@@ -114,7 +135,8 @@ public class UserService {
     public MeResponse me(User user) {
         var github = identities
                 .findByUserIdAndProvider(user.getId(), UserIdentity.GITHUB)
-                .map(identity -> new MeResponse.GitHubAccount(identity.getProviderLogin()))
+                .map(identity -> new MeResponse.GitHubAccount(
+                        identity.getProviderLogin(), identity.getAccessTokenEncrypted() != null))
                 .orElse(null);
         return new MeResponse(
                 user.getId(), user.getEmail(), user.getDisplayName(), user.getLocale(), user.hasPassword(), github);

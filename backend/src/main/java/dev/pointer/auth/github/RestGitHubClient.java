@@ -24,7 +24,7 @@ class RestGitHubClient implements GitHubClient {
     private final RestClient restClient = RestClient.create();
 
     @Override
-    public String exchangeCode(String code, String codeVerifier, String redirectUri) {
+    public TokenGrant exchangeCode(String code, String codeVerifier, String redirectUri) {
         var form = new LinkedMultiValueMap<String, String>();
         form.add("client_id", properties.clientId());
         form.add("client_secret", properties.clientSecret());
@@ -44,7 +44,7 @@ class RestGitHubClient implements GitHubClient {
                     "github_code_rejected",
                     response == null || response.error() == null ? "GitHub rejected the code" : response.error());
         }
-        return response.accessToken();
+        return new TokenGrant(response.accessToken(), response.scope());
     }
 
     @Override
@@ -87,6 +87,7 @@ class RestGitHubClient implements GitHubClient {
 
     record TokenResponse(
             @JsonProperty("access_token") String accessToken,
+            String scope,
             @JsonProperty("error_description") String error) {}
 
     record EmailEntry(String email, boolean primary, boolean verified) {

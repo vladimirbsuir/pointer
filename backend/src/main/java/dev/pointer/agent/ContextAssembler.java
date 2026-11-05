@@ -21,6 +21,8 @@ class ContextAssembler {
 
     static final String NOT_EXECUTED = "The tool call was not executed.";
 
+    private static final String DEFAULT_OS = "Windows";
+    private static final String DEFAULT_SHELL = "PowerShell";
     private static final String BASE_INSTRUCTIONS = """
             You are Pointer, an AI software engineering agent working inside the user's project on their computer.
             Be precise and concise. Prefer concrete, working solutions over general advice.
@@ -123,7 +125,10 @@ class ContextAssembler {
                 .append(MODE_INSTRUCTIONS.getOrDefault(mode, MODE_INSTRUCTIONS.get("agent")))
                 .append("\n\nEnvironment:\n- Date: ")
                 .append(LocalDate.now(clock.withZone(ZoneOffset.UTC)))
-                .append("\n- OS: Windows\n- Shell: PowerShell");
+                .append("\n- OS: ")
+                .append(project == null || project.os() == null ? DEFAULT_OS : project.os())
+                .append("\n- Shell: ")
+                .append(project == null || project.shell() == null ? DEFAULT_SHELL : project.shell());
         if (project != null) {
             prompt.append("\n- Project: ").append(project.name());
             if (project.gitBranch() != null) {
@@ -262,5 +267,11 @@ class ContextAssembler {
         }
     }
 
-    record ProjectContext(String name, String gitBranch, String rulesFile, String rulesContent) {}
+    record ProjectContext(
+            String name, String gitBranch, String rulesFile, String rulesContent, String os, String shell) {
+
+        ProjectContext(String name) {
+            this(name, null, null, null, null, null);
+        }
+    }
 }

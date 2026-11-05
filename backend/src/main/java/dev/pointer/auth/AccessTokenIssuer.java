@@ -21,6 +21,14 @@ class AccessTokenIssuer {
     private final Clock clock;
 
     IssuedToken issue(UUID userId, UUID deviceId) {
+        return issue(userId, deviceId, false);
+    }
+
+    IssuedToken issueRunner(UUID userId, UUID deviceId) {
+        return issue(userId, deviceId, true);
+    }
+
+    private IssuedToken issue(UUID userId, UUID deviceId, boolean runner) {
         var issuedAt = clock.instant();
         var expiresAt = issuedAt.plus(properties.accessTokenTtl());
         var claims = JwtClaimsSet.builder()
@@ -29,6 +37,7 @@ class AccessTokenIssuer {
                 .issuedAt(issuedAt)
                 .expiresAt(expiresAt)
                 .claim(AuthPrincipal.DEVICE_CLAIM, deviceId.toString())
+                .claim(AuthPrincipal.RUNNER_CLAIM, runner)
                 .build();
         var header = JwsHeader.with(MacAlgorithm.HS256).build();
         var token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();

@@ -3,7 +3,6 @@ mod commands;
 mod config;
 mod device;
 mod error;
-mod executor;
 mod mcp;
 mod projects;
 mod realtime;
@@ -58,6 +57,7 @@ pub fn run() {
             commands::realtime_status,
             commands::projects_local,
             commands::project_link,
+            commands::project_repository,
             commands::project_unlink,
             commands::project_files,
             commands::project_read_file,

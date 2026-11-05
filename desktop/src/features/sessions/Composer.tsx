@@ -9,7 +9,7 @@ import {
   SquareIcon,
   XIcon,
 } from "lucide-react";
-import { core } from "@/shared/api/core";
+import { readFile, suggestFiles } from "./session-files";
 import { useSlashCommands } from "@/shared/api/queries";
 import type { SessionMode } from "@/shared/api/types";
 import { cn } from "@/shared/lib/utils";
@@ -38,6 +38,7 @@ type ComposerProps = {
   initialText: string;
   sessionId: string;
   projectId: string;
+  remote: boolean;
   supportsImages: boolean;
   running: boolean;
   disabledReason: string | null;
@@ -64,6 +65,7 @@ export function Composer({
   initialText,
   sessionId,
   projectId,
+  remote,
   supportsImages,
   running,
   disabledReason,
@@ -97,8 +99,7 @@ export function Composer({
     }
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      core
-        .projectFiles(projectId, mentionQuery)
+      suggestFiles({ sessionId, projectId, remote }, mentionQuery)
         .then((paths) => {
           if (!cancelled) {
             setSuggestions(paths.slice(0, VISIBLE_SUGGESTIONS));
@@ -115,7 +116,7 @@ export function Composer({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [projectId, mentionQuery]);
+  }, [sessionId, projectId, remote, mentionQuery]);
 
   const updateText = (value: string, caret: number) => {
     setText(value);
@@ -218,7 +219,7 @@ export function Composer({
         attachments.push({
           kind: "file",
           path,
-          content: await core.readProjectFile(projectId, path),
+          content: await readFile({ sessionId, projectId, remote }, path),
         });
       } catch {
         toast.error(t("chat.attachFailed", { path }));

@@ -19,9 +19,9 @@ use uuid::Uuid;
 use crate::auth::session::AuthSession;
 use crate::config::{API_URL, CLIENT_VERSION};
 use crate::device::DeviceInfo;
-use crate::executor::{Emit, Executor, Workspace, Worktree};
 use crate::mcp::McpHub;
 use crate::projects::ProjectMap;
+use pointer_executor::{Emit, Executor, McpCaller, Workspace, Worktree};
 use relay::Relay;
 
 const PROTOCOL_VERSION: u32 = 1;
@@ -333,8 +333,10 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
                 let emit: Emit = Arc::new(move |message_type, payload| {
                     emit_app.state::<Realtime>().deliver(message_type, payload)
                 });
-                let mcp = app.state::<Arc<McpHub>>().inner().clone();
-                realtime.executor.handle(payload, workspace, mcp, emit);
+                let mcp: Arc<dyn McpCaller> = app.state::<Arc<McpHub>>().inner().clone();
+                realtime
+                    .executor
+                    .handle(payload, workspace, Some(mcp), emit);
             }
             "exec.cancel" => realtime
                 .executor

@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuthStore } from "@/features/auth/auth-store";
 import { api, problemToError } from "@/shared/api/client";
+import { queryKeys } from "@/shared/api/queries";
 import { toAppError, type Me } from "@/shared/api/types";
 import { errorMessage } from "@/shared/i18n/errors";
 import { Button } from "@/shared/ui/button";
@@ -163,11 +165,16 @@ function GitHubSection({ user }: { user: Me }) {
   const linkGitHub = useAuthStore((state) => state.linkGitHub);
   const [linking, setLinking] = useState(false);
 
-  const link = async () => {
+  const queryClient = useQueryClient();
+
+  const link = async (repositories: boolean) => {
     setLinking(true);
     try {
-      await linkGitHub();
-      toast.success(t("settings.githubLinkedToast"));
+      await linkGitHub(repositories);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.remote });
+      toast.success(
+        t(repositories ? "settings.githubRepositoriesToast" : "settings.githubLinkedToast"),
+      );
     } catch (error) {
       toast.error(errorMessage(t, toAppError(error)));
     } finally {
@@ -181,14 +188,29 @@ function GitHubSection({ user }: { user: Me }) {
         <p className="text-sm font-medium">{t("settings.github")}</p>
         <p className="text-sm text-muted-foreground">
           {user.github
-            ? t("settings.githubLinked", { login: user.github.login })
+            ? t(
+                user.github.repositoryAccess
+                  ? "settings.githubLinkedWithRepositories"
+                  : "settings.githubLinked",
+                { login: user.github.login },
+              )
             : t("settings.githubNotLinked")}
         </p>
+        {!user.github?.repositoryAccess && (
+          <p className="text-sm text-muted-foreground">{t("settings.githubRepositoriesHint")}</p>
+        )}
       </div>
-      {!user.github && (
-        <Button variant="outline" disabled={linking} onClick={() => void link()}>
-          {linking ? t("auth.waitingForGitHub") : t("settings.linkGitHub")}
-        </Button>
+      {!user.github?.repositoryAccess && (
+        <div className="flex shrink-0 flex-col gap-2">
+          {!user.github && (
+            <Button variant="outline" disabled={linking} onClick={() => void link(false)}>
+              {linking ? t("auth.waitingForGitHub") : t("settings.linkGitHub")}
+            </Button>
+          )}
+          <Button variant="outline" disabled={linking} onClick={() => void link(true)}>
+            {t("settings.allowRepositories")}
+          </Button>
+        </div>
       )}
     </div>
   );

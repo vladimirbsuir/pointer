@@ -65,7 +65,7 @@ External identities linked to a user (AUTH-3, AUTH-4).
 | `provider` | text | `github` |
 | `provider_user_id` | text | Stable id at the provider |
 | `provider_login` | text | |
-| `access_token_encrypted` | bytea | Nullable; kept for repository access later |
+| `access_token_encrypted` | bytea | Nullable; stored when the user grants repository access (`repo` scope), encrypted like provider keys |
 | `scopes` | text | Granted scopes |
 | `created_at`, `updated_at` | timestamptz | |
 
@@ -96,6 +96,8 @@ Unique: (`provider`, `provider_user_id`), (`user_id`, `provider`).
 | `client_version` | text | |
 | `last_seen_at` | timestamptz | |
 | `revoked_at` | timestamptz | Nullable |
+| `kind` | text | `desktop` or `runner` (the device of a server session, [ADR 0016](adr/0016-remote-execution-in-containers.md)) |
+| `runner_secret_hash` | text | Nullable; SHA-256 of the runner secret, cleared on revoke |
 | `created_at`, `updated_at` | timestamptz | |
 
 Connection presence is kept in memory, not in the database.
@@ -171,6 +173,7 @@ Unique: (`provider_id`, `model_key`).
 | `id` | uuid | PK |
 | `user_id` | uuid | FK `users` |
 | `name` | text | Defaults to the folder name |
+| `repository` | text | Nullable; GitHub `owner/name` used by server sessions |
 | `archived_at` | timestamptz | Nullable |
 | `created_at`, `updated_at` | timestamptz | |
 
@@ -438,10 +441,27 @@ Remote control through a Telegram bot (REM-1, 2, [ADR 0015](adr/0015-telegram-re
 | `code_hash` | text | SHA-256 of the code, unique |
 | `expires_at` | timestamptz | 10 minutes after creation; the code is deleted when used |
 
-## 8. Planned for highlight features
+### Remote execution
 
-Sketched here so the core schema leaves room for them. Final definitions come with their milestones.
+Server sessions on a per-session container (REM-3, [ADR 0016](adr/0016-remote-execution-in-containers.md)).
 
-| Table | Feature | Purpose |
+`remote_workspaces`: one row per server session.
+
+| Column | Type | Notes |
 |---|---|---|
-| `remote_workspaces` | Remote execution | Container id, repository, branch, status for sessions on the container executor |
+| `id` | uuid | PK |
+| `session_id` | uuid | FK `sessions`, cascade, unique |
+| `user_id` | uuid | FK `users`, cascade |
+| `device_id` | uuid | FK `devices`; the runner device of the session |
+| `repository` | text | GitHub `owner/name` |
+| `branch` | text | `pointer/<first 8 characters of the session id>` |
+| `base_branch` | text | Branch the session branch starts from; the repository default when not chosen |
+| `container_name`, `volume_name` | text | Unique Docker names derived from the session id |
+| `status` | text | `starting`, `preparing`, `ready`, `stopped`, `failed` |
+| `error` | text | Nullable; last start or push failure |
+| `pushed_commit` | text | Nullable; last commit pushed to the branch |
+| `pull_request_url` | text | Nullable |
+| `last_active_at` | timestamptz | Drives the idle stop |
+| `created_at`, `updated_at` | timestamptz | |
+
+Index: (`status`, `last_active_at`).

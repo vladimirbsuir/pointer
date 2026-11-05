@@ -14,14 +14,28 @@ pub use search::suggest_files;
 pub use worktree::Worktree;
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::{Map, Value, json};
 use tokio::sync::{OnceCell, watch};
 
-use crate::mcp::McpHub;
+const MAX_FILE_SUGGESTIONS: usize = 30;
+
+pub type McpFuture<'a> = Pin<Box<dyn Future<Output = Result<Value, String>> + Send + 'a>>;
+
+pub trait McpCaller: Send + Sync {
+    fn call<'a>(
+        &'a self,
+        server: &'a str,
+        tool: &'a str,
+        arguments: Value,
+        timeout: Duration,
+    ) -> McpFuture<'a>;
+}
 
 pub struct Request {
     pub operation: String,
@@ -126,7 +140,7 @@ impl Executor {
         self: &Arc<Self>,
         payload: Value,
         workspace: Option<Workspace>,
-        mcp: Arc<McpHub>,
+        mcp: Option<Arc<dyn McpCaller>>,
         emit: Emit,
     ) {
         let call_id = payload["callId"].as_str().unwrap_or_default().to_string();
@@ -135,7 +149,7 @@ impl Executor {
             running.insert(call_id.clone(), cancel_sender);
         }
         let executor = self.clone();
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             let started = Instant::now();
             let request = Request {
                 operation: payload["operation"]
@@ -151,7 +165,7 @@ impl Executor {
                     let interpreters = executor.interpreters().await;
                     let context = Context {
                         call_id: &call_id,
-                        mcp: &mcp,
+                        mcp: mcp.as_deref(),
                         interpreters,
                         emit: emit.clone(),
                     };
@@ -187,7 +201,7 @@ impl Executor {
 
 struct Context<'a> {
     call_id: &'a str,
-    mcp: &'a McpHub,
+    mcp: Option<&'a dyn McpCaller>,
     interpreters: &'a Interpreters,
     emit: Emit,
 }
@@ -212,7 +226,13 @@ async fn execute(
     mut cancel: watch::Receiver<bool>,
 ) -> Result<ExecOutcome, ExecError> {
     if request.operation == "mcp.call" {
-        return call_mcp(context.mcp, &request, cancel).await;
+        return match context.mcp {
+            Some(mcp) => call_mcp(mcp, &request, cancel).await,
+            None => Err(ExecError::rejected(
+                "mcp_unavailable",
+                "MCP servers are not available on this executor",
+            )),
+        };
     }
     if request.operation == "web_fetch" {
         return tokio::select! {
@@ -254,6 +274,14 @@ async fn execute(
         "pointer.restore_file" => files::restore_file(&root, &request),
         "pointer.index_scan" => index::scan(&root),
         "pointer.index_chunks" => index::chunks(&root, &request),
+        "pointer.suggest_files" => suggest_files(
+            &root,
+            request.str_arg("query").unwrap_or_default(),
+            MAX_FILE_SUGGESTIONS,
+        )
+        .map(|paths| ExecOutcome::result(json!({ "paths": paths }))),
+        "pointer.read_attachment" => read_attachment(&root, request.required_str("path")?)
+            .map(|content| ExecOutcome::result(json!({ "content": content }))),
         other => Err(ExecError::rejected(
             "unknown_operation",
             format!("Unknown operation {other}"),
@@ -266,7 +294,7 @@ async fn execute(
 }
 
 async fn call_mcp(
-    mcp: &McpHub,
+    mcp: &dyn McpCaller,
     request: &Request,
     mut cancel: watch::Receiver<bool>,
 ) -> Result<ExecOutcome, ExecError> {

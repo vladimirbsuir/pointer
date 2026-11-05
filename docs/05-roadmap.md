@@ -36,10 +36,10 @@ gantt
 | M3 Executor and tools | end of January | The agent reads, edits and runs commands with approvals | Implemented |
 | M4 Agent experience | early March | **MVP v0.1**, used daily for Pointer development | Implemented; the week of daily use is tracked by the author |
 | M5 MVP+ | end of March | Checkpoints, worktrees, MCP, terminal | Implemented (November 2026) |
-| M6 Highlights | mid May | RAG, custom tools, Telegram, remote execution | In progress: RAG, custom tools and Telegram implemented (November 2026) |
+| M6 Highlights | mid May | RAG, custom tools, Telegram, remote execution | Implemented (November 2026); a manual check of remote execution against GitHub is pending |
 | M7 Hardening and thesis | mid June | Cloud deployment, measurements, thesis text | Planned |
 
-Development runs ahead of the targets: M0 to M5 were implemented by early November 2026. M6 is in progress in the order listed below: RAG, agent-proposed custom tools (TOOL-13) and Telegram remote control are done, remote execution is next. "Implemented" means the features are built and covered by tests; done criteria that require a period of real use are confirmed separately.
+Development runs ahead of the targets: M0 to M5 were implemented by early November 2026. M6 was implemented in the order listed below: RAG, agent-proposed custom tools (TOOL-13), Telegram remote control and remote execution. "Implemented" means the features are built and covered by tests; done criteria that require a period of real use are confirmed separately.
 
 ## 3. Milestones
 
@@ -112,7 +112,7 @@ Ordered by value for the defense.
 1. **RAG with AST chunking** (CTX-7, TOOL-14): tree-sitter chunking in the core, embeddings through an OpenAI-compatible `/embeddings` endpoint, pgvector index, incremental reindexing, `semantic_search` tool. Implemented; the evaluation comparing answers with and without RAG is part of the M7 measurements.
 2. **Agent-proposed custom tools** (TOOL-13): scripts for an interpreter reported by the device, proposed through `propose_tool` and approved like a tool call, stored with versions and rollback, executed on the device as `custom_tool.run` ([ADR 0014](adr/0014-agent-proposed-custom-tools.md)). Implemented.
 3. **Telegram remote control** (REM-1, 2): account linking through a one-time deep link, session list and new sessions, sending messages, a live progress message, final answers, inline approval and plan buttons, long polling of the Bot API ([ADR 0015](adr/0015-telegram-remote-control.md)). Implemented and checked manually with a real bot: linking, progress, approvals by button, by reply and from the desktop, plans, /stop, /new, answers from other sessions, failures and the Russian locale.
-4. **Remote execution** (REM-3): container executor running a cloned GitHub repository, pushing a branch.
+4. **Remote execution** (REM-3): a per-session Docker container with the headless runner, cloning the project's GitHub repository into a session branch, auto-approved tools inside the container, a commit and push after each turn that changed files, pull requests from the desktop, server sessions from Telegram `/new` when no computer is online ([ADR 0016](adr/0016-remote-execution-in-containers.md)). Implemented; a manual check against a real GitHub repository is pending.
 
 ### M7 Hardening and thesis
 
@@ -145,5 +145,5 @@ To be settled as ADRs when the related milestone starts.
 | Compaction strategy details (threshold, what to keep verbatim): [ADR 0009](adr/0009-context-compaction-and-plan-approval.md) | M4 |
 | MCP transports to support (stdio, streamable HTTP) and where MCP servers run: [ADR 0010](adr/0010-mcp-servers-on-the-device.md) | M5 |
 | Embedding model defaults and chunk size for RAG: [ADR 0013](adr/0013-semantic-code-index.md) | M6 |
-| Container runtime and isolation for remote execution | M6 |
+| Container runtime and isolation for remote execution: [ADR 0016](adr/0016-remote-execution-in-containers.md) | M6 |
 | Where session worktrees live and how they merge: [ADR 0011](adr/0011-session-worktrees.md) | M5 |

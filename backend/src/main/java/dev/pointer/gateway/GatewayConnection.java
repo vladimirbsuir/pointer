@@ -23,6 +23,7 @@ final class GatewayConnection {
     private final JsonMapper json;
     private final UUID userId;
     private final UUID tokenDeviceId;
+    private final boolean runner;
     private final Set<UUID> subscriptions = ConcurrentHashMap.newKeySet();
     private volatile Instant tokenExpiresAt;
     private volatile UUID deviceId;
@@ -31,10 +32,17 @@ final class GatewayConnection {
     private volatile Set<String> interpreters = Set.of();
     private volatile boolean ready;
 
-    GatewayConnection(WebSocketSession session, JsonMapper json, UUID userId, UUID tokenDeviceId, Instant expiresAt) {
+    GatewayConnection(
+            WebSocketSession session,
+            JsonMapper json,
+            UUID userId,
+            UUID tokenDeviceId,
+            boolean runner,
+            Instant expiresAt) {
         this.session = new ConcurrentWebSocketSessionDecorator(session, SEND_TIME_LIMIT_MS, BUFFER_SIZE_LIMIT);
         this.json = json;
         this.userId = userId;
+        this.runner = runner;
         this.tokenDeviceId = tokenDeviceId;
         this.tokenExpiresAt = expiresAt;
     }
@@ -77,6 +85,10 @@ final class GatewayConnection {
 
     Set<String> interpreters() {
         return interpreters;
+    }
+
+    boolean isRunner() {
+        return runner;
     }
 
     void markReady(UUID deviceId, Set<String> capabilities, Set<UUID> projects, Set<String> interpreters) {

@@ -28,6 +28,7 @@ public class ExecutionService {
 
     private final DeviceChannel channel;
     private final ObjectProvider<ServerOperation> serverOperations;
+    private final ObjectProvider<ExecutorReadiness> readiness;
     private final Map<UUID, PendingCall> pending = new ConcurrentHashMap<>();
 
     public ExecutionResult execute(ExecutionRequest request, ExecutionListener listener, Cancellation cancellation) {
@@ -52,6 +53,10 @@ public class ExecutionService {
 
     public boolean canExecute(UUID deviceId, UUID projectId) {
         return channel.canExecute(deviceId, projectId);
+    }
+
+    public boolean isManaged(UUID deviceId) {
+        return deviceId != null && readiness.stream().anyMatch(hook -> hook.manages(deviceId));
     }
 
     public Optional<UUID> executorFor(UUID userId, UUID projectId) {
@@ -90,13 +95,14 @@ public class ExecutionService {
 
     private boolean awaitDevice(ExecutionRequest request, ExecutionListener listener, Cancellation cancellation) {
         var waiting = false;
-        while (!channel.canExecute(request.deviceId(), request.projectId())) {
+        while (!isReady(request)) {
             if (cancellation.isCancelled()) {
                 return false;
             }
             if (!waiting) {
                 waiting = true;
                 listener.onWaitingForDevice();
+                readiness.forEach(hook -> hook.wake(request));
             }
             sleep(POLL_INTERVAL);
         }
@@ -104,6 +110,11 @@ public class ExecutionService {
             listener.onDeviceAvailable();
         }
         return true;
+    }
+
+    private boolean isReady(ExecutionRequest request) {
+        return channel.canExecute(request.deviceId(), request.projectId())
+                && readiness.stream().allMatch(hook -> hook.isReady(request));
     }
 
     private ExecutionResult awaitResult(

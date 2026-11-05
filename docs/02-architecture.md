@@ -109,13 +109,14 @@ A module exposes a small public API (services, DTOs, domain events) and keeps ev
 | `command` | User-defined slash commands. |
 | `customtool` | Agent-proposed custom tools: proposal validation, versions, approval outcome, management REST ([ADR 0014](adr/0014-agent-proposed-custom-tools.md)). |
 | `telegram` | Telegram remote control: account linking, long polling of the Bot API, commands, inline approvals, progress and answer notifications ([ADR 0015](adr/0015-telegram-remote-control.md)). |
+| `container` | Remote execution: server sessions on a per-session Docker container running the headless runner, GitHub repository access, commit and push after each turn, pull requests, idle stop ([ADR 0016](adr/0016-remote-execution-in-containers.md)). |
 | `rag` | Semantic project index: scanning and chunking through the executor, embeddings through the user's provider, pgvector storage, the server-side `semantic_search` operation ([ADR 0013](adr/0013-semantic-code-index.md)). |
 | `gateway` | WebSocket endpoint: authentication, protocol parsing, routing to modules. |
 | `common` | Cross-cutting basics: error model, ids, clock, JSON. |
 
 DTOs are records; Lombok is limited to constructor injection and entity getters ([ADR 0012](adr/0012-lombok-for-boilerplate.md)).
 
-Highlight modules plug in without touching the agent loop: `rag`, `customtool` and `telegram` (implemented), `container` (server-side executor). Tools whose operation has a `ServerOperation` bean are executed by the backend instead of the device; `ExecutionService` routes them, and the registry hides them when they are unavailable for the project.
+Highlight modules plug in without touching the agent loop: `rag`, `customtool`, `telegram` and `container`. Tools whose operation has a `ServerOperation` bean are executed by the backend instead of the device; `ExecutionService` routes them, and the registry hides them when they are unavailable for the project.
 
 ### 4.2 Agent loop
 
@@ -176,23 +177,18 @@ The thresholds and what stays verbatim are described in [ADR 0009](adr/0009-cont
 ### 4.4 Execution
 
 ```mermaid
-classDiagram
-    class Executor {
-        <<interface>>
-        execute(ExecutionRequest) ExecutionHandle
-        cancel(callId)
-        isAvailable() boolean
-    }
-    class DesktopExecutor
-    class ContainerExecutor {
-        <<HL>>
-    }
-    Executor <|.. DesktopExecutor
-    Executor <|.. ContainerExecutor
+flowchart LR
+    agent[Agent loop] --> exec[ExecutionService]
+    exec -->|exec.request| desktop[Desktop core: pointer-executor]
+    exec -->|exec.request| runner[pointer-runner in a session container: pointer-executor]
+    exec -. wake .-> container[container module]
+    container -->|Docker Engine API| runner
 ```
 
-- The agent asks the `execution` module for the session's executor and calls it. The loop does not know whether the executor is a desktop or a container.
-- `DesktopExecutor` sends `exec.request` through the gateway to the session's device and completes the handle on `exec.result`.
+- The agent asks the `execution` module to run an operation on the session's executor device. The loop does not know whether the device is a desktop or a server-side runner.
+- `ExecutionService` sends `exec.request` through the gateway to the device and completes the call on `exec.result`.
+- The executor operations live in the `pointer-executor` Rust crate, shared by the desktop core and the headless `pointer-runner` binary that runs in a per-session container ([ADR 0016](adr/0016-remote-execution-in-containers.md)).
+- Before dispatching, `ExecutionService` asks `ExecutorReadiness` hooks whether the device is ready and wakes it when not. The `container` module uses this to start a stopped container and to hold calls until the repository is cloned.
 - If the device is offline, the session status becomes `waiting_for_executor` and the turn waits until it reconnects or the user cancels.
 - Tools that modify files return the content before and after, which the `review` module stores as file changes.
 - An approval for `write_file` or `edit_file` needs a diff preview. The backend first sends the call with `dryRun: true`, shows the returned diff, and executes the real call after approval.
@@ -363,4 +359,4 @@ Later, cloud: the backend as a container behind a reverse proxy with TLS, the sa
 | Telegram control | New client of the `session` module: a `SessionEventListener` notified after commit next to the WebSocket fan-out, calls the same services as REST. | None |
 | RAG | `rag` module with indexing triggered by executor file events; `semantic_search` tool in the registry. | None |
 | Custom tools | Registry entries with source `custom`, the server-side `propose_tool` approved like a tool call, the executor operation `custom_tool.run` running the approved script on the device. | Dispatch of `propose_tool`; the tool list is rebuilt before every model call |
-| Remote execution | `ContainerExecutor` implementing `Executor`. | None |
+| Remote execution | A runner device per session in a container, started by the `container` module through the `ExecutorReadiness` hook; commit and push through a `SessionEventListener` on `turn.completed`. | None; the environment section of the system prompt reports the executor's OS and shell |

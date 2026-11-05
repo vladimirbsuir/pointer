@@ -10,9 +10,9 @@ The agent loop runs on a cloud backend; the desktop client executes tools (file 
 | Directory  | Contents                                             |
 |------------|------------------------------------------------------|
 | `backend/` | Spring Boot monolith (Java)                          |
-| `desktop/` | Tauri application: `src-tauri/` (Rust) and `src/` (frontend) |
+| `desktop/` | Tauri application: `src-tauri/` (Rust workspace: the app, the shared `pointer-executor` crate and the headless `pointer-runner`) and `src/` (frontend) |
 | `docs/`    | Project documentation (English, Markdown)            |
-| `infra/`   | Docker Compose and deployment configuration          |
+| `infra/`   | Docker Compose, the runner image and deployment configuration |
 
 ## Code style
 

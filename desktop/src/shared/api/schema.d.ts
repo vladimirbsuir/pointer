@@ -164,6 +164,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/remote/pull-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["pullRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/plans/{itemId}/approve": {
         parameters: {
             query?: never;
@@ -276,6 +292,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runner/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/providers": {
         parameters: {
             query?: never;
@@ -372,6 +404,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/remote-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["forProject"];
+        put?: never;
+        post: operations["create_4"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/index": {
         parameters: {
             query?: never;
@@ -413,7 +461,7 @@ export interface paths {
         };
         get: operations["list_3"];
         put?: never;
-        post: operations["create_4"];
+        post: operations["create_5"];
         delete?: never;
         options?: never;
         head?: never;
@@ -644,6 +692,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/remote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["forSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{sessionId}/remote/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["files"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{sessionId}/remote/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/items": {
         parameters: {
             query?: never;
@@ -716,6 +812,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["status_3"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/github/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["repositories"];
         put?: never;
         post?: never;
         delete?: never;
@@ -885,6 +1013,9 @@ export interface components {
             restoredFiles?: string[];
             text?: string;
         };
+        PullRequestResponse: {
+            url?: string;
+        };
         SendMessageResponse: {
             /** Format: uuid */
             itemId?: string;
@@ -941,6 +1072,16 @@ export interface components {
             defaultPolicy?: string;
             modes?: string[];
         };
+        RunnerTokenRequest: {
+            /** Format: uuid */
+            deviceId: string;
+            secret: string;
+        };
+        RunnerTokenResponse: {
+            accessToken?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+        };
         CreateProviderRequest: {
             name: string;
             baseUrl: string;
@@ -990,11 +1131,13 @@ export interface components {
         };
         CreateProjectRequest: {
             name: string;
+            repository?: string;
         };
         ProjectResponse: {
             /** Format: uuid */
             id?: string;
             name?: string;
+            repository?: string;
             /** Format: date-time */
             archivedAt?: string;
             /** Format: date-time */
@@ -1005,6 +1148,31 @@ export interface components {
             mode?: string;
             /** Format: uuid */
             modelId?: string;
+        };
+        CreateRemoteSessionRequest: {
+            title?: string;
+            mode?: string;
+            /** Format: uuid */
+            modelId?: string;
+            baseBranch?: string;
+        };
+        RemoteSessionResponse: {
+            session?: components["schemas"]["SessionResponse"];
+            workspace?: components["schemas"]["RemoteWorkspaceResponse"];
+        };
+        RemoteWorkspaceResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            repository?: string;
+            branch?: string;
+            baseBranch?: string;
+            status?: string;
+            error?: string;
+            pushedCommit?: string;
+            branchUrl?: string;
+            pullRequestUrl?: string;
+            /** Format: date-time */
+            lastActiveAt?: string;
         };
         StartIndexRequest: {
             rebuild?: boolean;
@@ -1076,6 +1244,7 @@ export interface components {
         };
         GitHubAccount: {
             login?: string;
+            repositoryAccess?: boolean;
         };
         MeResponse: {
             /** Format: uuid */
@@ -1140,6 +1309,7 @@ export interface components {
         };
         UpdateProjectRequest: {
             name?: string;
+            repository?: string;
             archived?: boolean;
         };
         UpdateMeRequest: {
@@ -1166,6 +1336,13 @@ export interface components {
             /** Format: date-time */
             linkedAt?: string;
         };
+        RemoteFileSuggestions: {
+            paths?: string[];
+        };
+        RemoteFile: {
+            path?: string;
+            content?: string;
+        };
         SessionEventResponse: {
             /** Format: uuid */
             sessionId?: string;
@@ -1184,6 +1361,15 @@ export interface components {
             after?: string;
             unavailable?: boolean;
             reverted?: boolean;
+        };
+        RemoteStatus: {
+            enabled?: boolean;
+            repositoryAccess?: boolean;
+        };
+        RepositoryResponse: {
+            fullName?: string;
+            defaultBranch?: string;
+            isPrivate?: boolean;
         };
         VersionResponse: {
             /** Format: int32 */
@@ -1574,6 +1760,28 @@ export interface operations {
             };
         };
     };
+    pullRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullRequestResponse"];
+                };
+            };
+        };
+    };
     approvePlan: {
         parameters: {
             query?: never;
@@ -1744,6 +1952,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunnerTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunnerTokenResponse"];
+                };
             };
         };
     };
@@ -1953,6 +2185,54 @@ export interface operations {
             };
         };
     };
+    forProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteWorkspaceResponse"][];
+                };
+            };
+        };
+    };
+    create_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRemoteSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteSessionResponse"];
+                };
+            };
+        };
+    };
     status_1: {
         parameters: {
             query?: never;
@@ -2064,7 +2344,7 @@ export interface operations {
             };
         };
     };
-    create_4: {
+    create_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -2568,6 +2848,76 @@ export interface operations {
             };
         };
     };
+    forSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteWorkspaceResponse"];
+                };
+            };
+        };
+    };
+    files: {
+        parameters: {
+            query?: {
+                query?: string;
+            };
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteFileSuggestions"];
+                };
+            };
+        };
+    };
+    file: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteFile"];
+                };
+            };
+        };
+    };
     items: {
         parameters: {
             query?: never;
@@ -2685,6 +3035,46 @@ export interface operations {
             };
         };
     };
+    status_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteStatus"];
+                };
+            };
+        };
+    };
+    repositories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryResponse"][];
+                };
+            };
+        };
+    };
     list_5: {
         parameters: {
             query?: never;
@@ -2733,6 +3123,7 @@ export interface operations {
                 codeChallenge: string;
                 state: string;
                 redirectUri: string;
+                repositories?: boolean;
             };
             header?: never;
             path?: never;

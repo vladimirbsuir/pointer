@@ -15,7 +15,7 @@ type AuthState = {
   signIn: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName: string) => Promise<void>;
   signInWithGitHub: () => Promise<void>;
-  linkGitHub: () => Promise<void>;
+  linkGitHub: (repositories?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   setUser: (user: Me) => void;
 };
@@ -64,7 +64,7 @@ export const useAuthStore = create<AuthState>((set) => {
 
     signInWithGitHub: async () => signedIn(await core.signInWithGitHub(currentLanguage())),
 
-    linkGitHub: async () => set({ user: await core.linkGitHub() }),
+    linkGitHub: async (repositories = false) => set({ user: await core.linkGitHub(repositories) }),
 
     signOut: async () => {
       await core.signOut();

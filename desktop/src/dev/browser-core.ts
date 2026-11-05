@@ -267,6 +267,8 @@ export function installBrowserCore() {
           return connected;
         case "projects_local":
           return localProjects();
+        case "project_repository":
+          return null;
         case "project_link":
           saveLocalProjects({ ...localProjects(), [String(args.projectId)]: String(args.path) });
           return null;

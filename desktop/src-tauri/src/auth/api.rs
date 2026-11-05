@@ -106,6 +106,7 @@ impl ApiClient {
         code_challenge: &str,
         state: &str,
         redirect_uri: &str,
+        repositories: bool,
     ) -> AppResult<String> {
         let response = self
             .http
@@ -114,6 +115,7 @@ impl ApiClient {
                 ("codeChallenge", code_challenge),
                 ("state", state),
                 ("redirectUri", redirect_uri),
+                ("repositories", if repositories { "true" } else { "false" }),
             ])
             .send()
             .await?;

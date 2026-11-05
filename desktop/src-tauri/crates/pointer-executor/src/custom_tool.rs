@@ -305,6 +305,7 @@ mod tests {
         .await
     }
 
+    #[cfg(windows)]
     #[tokio::test]
     async fn powershell_script_reads_arguments_from_stdin() {
         let outcome = run_script(
@@ -320,6 +321,7 @@ mod tests {
         );
     }
 
+    #[cfg(windows)]
     #[tokio::test]
     async fn non_zero_exit_is_a_failure_with_stderr() {
         let error = run_script("powershell", "[Console]::Error.WriteLine('broken'); exit 4")

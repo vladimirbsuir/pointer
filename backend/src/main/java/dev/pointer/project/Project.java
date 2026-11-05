@@ -15,6 +15,7 @@ public class Project extends BaseEntity {
 
     private UUID userId;
     private String name;
+    private String repository;
     private Instant archivedAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -31,6 +32,11 @@ public class Project extends BaseEntity {
 
     void rename(String name, Instant now) {
         this.name = name;
+        this.updatedAt = now;
+    }
+
+    void changeRepository(String repository, Instant now) {
+        this.repository = repository;
         this.updatedAt = now;
     }
 

@@ -89,6 +89,8 @@ The first message after connecting must be `hello` from the client. The server a
 | `capabilities` | `viewer`: receives session events. `executor`: performs executor operations. `relay`: performs LLM relay requests. |
 | `interpreters` | Script interpreters found on the device for custom tools: any of `python`, `node`, `powershell`, `bash` ([ADR 0014](adr/0014-agent-proposed-custom-tools.md)). Missing means none. |
 | `projects` | Projects mapped to a local path on this device. The device can execute only for these. |
+
+A server-side runner ([ADR 0016](adr/0016-remote-execution-in-containers.md)) connects with an access token from `POST /runner/token`. Its token carries the claim `rnr`: the connection gets only the `executor` capability whatever `hello` lists, cannot subscribe to sessions, and is never chosen as the user's computer for new sessions. The same token is rejected by every REST endpoint.
 | `undeliveredResults` | `exec.result` payloads finished while disconnected (see 6.4). |
 
 ### 3.2 `welcome` (server в†’ client)
@@ -416,7 +418,11 @@ Used by the backend itself, never exposed to the model. Names start with `pointe
 
 | Operation | Arguments | Result |
 |---|---|---|
-| `pointer.project_context` | none | `rulesFile` (`{ name, content }` or null), `gitBranch`, `isGitRepository` |
+| `pointer.project_context` | none | `rulesFile` (`{ name, content }` or null), `gitBranch`, `isGitRepository`, `os` and `shell` (shown to the model, for example `Windows` and `PowerShell` or `Linux` and `bash`) |
+| `pointer.suggest_files` | `query` | `paths` (at most 30), ranked for `@` mentions in the composer |
+| `pointer.read_attachment` | `path` | `content` of a text file attached with an `@` mention |
+| `pointer.repo_prepare` | `cloneUrl`, `token`, `branch`, `baseBranch?`, `authorName`, `authorEmail` | `branch`, `baseBranch`, `head`. Runner only: clones the repository into the workspace if it is not there yet and checks out `branch`, creating it from `origin/<baseBranch>` (default: the remote default branch). |
+| `pointer.repo_publish` | `branch`, `message`, `token` | `committed`, `pushed`, `commit`. Runner only: commits all changes with `message` and pushes `HEAD` to `branch`; pushes also when an earlier commit was not pushed. |
 | `pointer.worktree_create` | none | `branch`, `baseBranch`, `path`. Creates the worktree on a new branch from `HEAD`. Fails with `not_a_git_repository`, `not_repository_root`, `detached_head` or `worktree_exists`. |
 | `pointer.worktree_status` | `baseBranch` | `path`, `branch`, `baseBranch`, `commitsAhead`, `uncommittedFiles`, `baseCheckedOut` |
 | `pointer.worktree_merge` | `baseBranch`, `message` | `merged`, `commits`. Commits pending changes with `message`, merges the branch with `--no-ff` into the project folder, then removes the worktree and the branch. Fails with `base_not_checked_out`, `commit_failed` or `merge_conflict` (the merge is aborted). |
@@ -426,6 +432,8 @@ Used by the backend itself, never exposed to the model. Names start with `pointe
 | `pointer.index_chunks` | `paths` (at most 200) | `files: [{ path, hash, chunks: [{ symbol, kind, startLine, endLine, content }] }]`. A file that no longer exists has `missing: true`, a file that cannot be indexed `skipped: true`. |
 
 Index operations always work on the project folder, never on a session worktree.
+
+The `token` of the `pointer.repo_*` operations is the user's GitHub token. The runner passes it to git as an `http.extraHeader` through the environment of that git process only. `run_command` runs in PowerShell on Windows and in `bash -c` on Linux (the runner), where the whole process group is killed on timeout or cancel. A runner rejects `mcp.call` with `mcp_unavailable`.
 
 ## 8. LLM relay
 
@@ -465,11 +473,11 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /auth/register` (public), `POST /auth/login` (public), `POST /auth/refresh` (public), `POST /auth/logout` (public, takes the refresh token), `GET /auth/github/authorize-url` (public), `POST /auth/github/callback` (public), `POST /auth/github/link`, `PUT /auth/password` |
+| Auth | `POST /auth/register` (public), `POST /auth/login` (public), `POST /auth/refresh` (public), `POST /auth/logout` (public, takes the refresh token), `GET /auth/github/authorize-url` (public; `repositories=true` adds the `repo` scope), `POST /auth/github/link` (links GitHub or, with a `repo` grant, stores the token for repository access; `github.repositoryAccess` in `/me`), `POST /auth/github/callback` (public), `PUT /auth/password`, `POST /runner/token` (public; `deviceId` and runner `secret` give `accessToken` and `expiresAt` for a runner) |
 | User | `GET /me`, `PATCH /me`, `GET /me/settings`, `PUT /me/settings`, `GET /commands`, `POST /commands`, `PUT /commands/{id}`, `DELETE /commands/{id}` |
 | Devices | `GET /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |
 | Providers | `GET /providers`, `POST /providers`, `PATCH /providers/{id}`, `DELETE /providers/{id}`, `POST /providers/{id}/test`, `POST /providers/{id}/models/refresh`, `PATCH /providers/{id}/models/{modelId}` |
-| Projects | `GET /projects`, `POST /projects`, `PATCH /projects/{id}`, `DELETE /projects/{id}`, `GET /projects/{id}/settings`, `PUT /projects/{id}/settings` |
+| Projects | `GET /projects`, `POST /projects`, `PATCH /projects/{id}` (`name`, `repository` as `owner/name`, empty to clear, `archived`), `DELETE /projects/{id}`, `GET /projects/{id}/settings`, `PUT /projects/{id}/settings` |
 | Sessions | `GET /projects/{id}/sessions`, `POST /projects/{id}/sessions`, `GET /sessions/{id}`, `PATCH /sessions/{id}`, `DELETE /sessions/{id}`, `GET /sessions/{id}/items`, `GET /sessions/{id}/events?afterSeq=` |
 | Attachments | `POST /sessions/{id}/attachments` (raw PNG, JPEG, GIF or WebP body, at most 5 MB), `GET /sessions/{id}/attachments/{attachmentId}` |
 | Turns | `POST /sessions/{id}/messages`, `POST /sessions/{id}/cancel`, `POST /sessions/{id}/compact`, `POST /sessions/{id}/plans/{itemId}/approve` |
@@ -479,6 +487,7 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 | Permissions | `GET /permissions`, `PUT /permissions`, `GET /projects/{id}/permissions`, `PUT /projects/{id}/permissions` |
 | Tools | `GET /tools` |
 | Telegram | `GET /telegram` (`enabled`, `botUsername`, `linked`, `telegramUsername`, `linkedAt`), `POST /telegram/link` (one-time deep link `url` and `expiresAt`), `DELETE /telegram/link` ([ADR 0015](adr/0015-telegram-remote-control.md)) |
+| Remote execution | `GET /remote` (`enabled`, `repositoryAccess`), `GET /github/repositories`, `POST /projects/{id}/remote-sessions` with optional `title`, `mode`, `modelId`, `baseBranch` (`201` with `session` and `workspace`; `400 project_repository_missing`, `400 github_repository_access_required`, `503 remote_execution_disabled`), `GET /projects/{id}/remote-sessions`, `GET /sessions/{id}/remote` (`repository`, `branch`, `baseBranch`, `status`: `starting`, `preparing`, `ready`, `stopped`, `failed`, `error`, `pushedCommit`, `branchUrl`, `pullRequestUrl`, `lastActiveAt`), `POST /sessions/{id}/remote/pull-request` (`url`; `409 nothing_pushed`), `GET /sessions/{id}/remote/files?query=`, `GET /sessions/{id}/remote/file?path=` ([ADR 0016](adr/0016-remote-execution-in-containers.md)) |
 | Custom tools | `GET /custom-tools`, `PATCH /custom-tools/{id}` with `defaultPolicy`, `modes`, `enabled`, `DELETE /custom-tools/{id}`, `GET /custom-tools/{id}/versions`, `POST /custom-tools/{id}/versions/{version}/restore` |
 
 `POST /sessions/{id}/messages` accepts an `Idempotency-Key` header so a retried request never starts a second turn.

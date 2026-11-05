@@ -279,8 +279,8 @@ public class AgentRunner implements LiveItemSnapshots {
 
     private ContextAssembler.ProjectContext projectContext(ToolCallHandler.TurnScope scope) {
         var name = projectService.owned(scope.userId(), scope.projectId()).getName();
-        if (!execution.canExecute(scope.deviceId(), scope.projectId())) {
-            return new ContextAssembler.ProjectContext(name, null, null, null);
+        if (!execution.canExecute(scope.deviceId(), scope.projectId()) && !execution.isManaged(scope.deviceId())) {
+            return new ContextAssembler.ProjectContext(name);
         }
         var result = execution.execute(
                 new ExecutionRequest(
@@ -295,14 +295,20 @@ public class AgentRunner implements LiveItemSnapshots {
                 new ExecutionListener() {},
                 scope.cancellation());
         if (!result.succeeded()) {
-            return new ContextAssembler.ProjectContext(name, null, null, null);
+            return new ContextAssembler.ProjectContext(name);
         }
-        var branch = result.result().get("gitBranch") instanceof String value ? value : null;
+        var branch = text(result.result().get("gitBranch"));
+        var os = text(result.result().get("os"));
+        var shell = text(result.result().get("shell"));
         if (result.result().get("rulesFile") instanceof Map<?, ?> rules) {
             return new ContextAssembler.ProjectContext(
-                    name, branch, String.valueOf(rules.get("name")), String.valueOf(rules.get("content")));
+                    name, branch, String.valueOf(rules.get("name")), String.valueOf(rules.get("content")), os, shell);
         }
-        return new ContextAssembler.ProjectContext(name, branch, null, null);
+        return new ContextAssembler.ProjectContext(name, branch, null, null, os, shell);
+    }
+
+    private static String text(Object value) {
+        return value instanceof String string ? string : null;
     }
 
     private Optional<UUID> fail(
