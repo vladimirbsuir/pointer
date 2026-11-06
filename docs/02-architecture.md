@@ -354,8 +354,9 @@ Server ([ADR 0017](adr/0017-server-deployment.md)):
 
 ```
 infra/deploy/compose.yml   PostgreSQL, backend, Docker socket proxy, optional Caddy (profile proxy)
-infra/deploy/.env          secrets and settings, created on the server from .env.example
-infra/deploy/deploy.sh     pulls images from GHCR and recreates the stack
+infra/deploy/host-setup.sh root-only host preparation: Docker, docker group, reverse proxy site
+infra/deploy/init-env.sh   writes .env with secrets generated on the server
+infra/deploy/deploy.sh     up, stop, status, logs, backup
 ```
 
 The backend image and the runner images (`latest` with toolchains, `slim` for small servers) are built by the `Images` workflow and published to GHCR. TLS ends at a reverse proxy in front of `127.0.0.1:8080`. The backend reaches Docker only through a socket proxy limited to container and volume calls, and session containers run on the `pointer-runners` network, where they reach the backend and the internet but not the database or the proxy. `POINTER_RUNNER_MAX_RUNNING` limits running session containers.
