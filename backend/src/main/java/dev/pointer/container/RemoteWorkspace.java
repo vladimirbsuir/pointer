@@ -13,6 +13,7 @@ import lombok.Getter;
 @Getter
 public class RemoteWorkspace extends BaseEntity {
 
+    static final String QUEUED = "queued";
     static final String STARTING = "starting";
     static final String PREPARING = "preparing";
     static final String READY = "ready";
@@ -55,7 +56,7 @@ public class RemoteWorkspace extends BaseEntity {
         this.baseBranch = baseBranch;
         this.containerName = "pointer-session-" + suffix;
         this.volumeName = "pointer-workspace-" + suffix;
-        this.status = STARTING;
+        this.status = QUEUED;
         this.lastActiveAt = now;
         this.createdAt = now;
         this.updatedAt = now;
@@ -88,9 +89,5 @@ public class RemoteWorkspace extends BaseEntity {
 
     boolean isReady() {
         return READY.equals(status);
-    }
-
-    boolean needsStart() {
-        return STOPPED.equals(status) || FAILED.equals(status);
     }
 }

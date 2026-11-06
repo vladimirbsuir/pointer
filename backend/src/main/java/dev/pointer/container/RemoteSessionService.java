@@ -41,6 +41,9 @@ public class RemoteSessionService {
     private static final int MAX_COMMIT_SUBJECT = 72;
     private static final String DEFAULT_COMMIT_MESSAGE = "Pointer session changes";
     private static final String BRANCH_PREFIX = "pointer/";
+    private static final Duration SLOT_POLL_INTERVAL = Duration.ofSeconds(2);
+    private static final List<String> RUNNING_STATUSES =
+            List.of(RemoteWorkspace.STARTING, RemoteWorkspace.PREPARING, RemoteWorkspace.READY);
 
     private final ContainerProperties properties;
     private final ContainerRuntime runtime;
@@ -55,6 +58,7 @@ public class RemoteSessionService {
     private final Clock clock;
     private final Set<UUID> starting = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Object> publishLocks = new ConcurrentHashMap<>();
+    private final Object slots = new Object();
     private final ScheduledExecutorService timers = Executors.newSingleThreadScheduledExecutor(
             Thread.ofVirtual().name("remote-timeouts").factory());
 
@@ -243,8 +247,7 @@ public class RemoteSessionService {
     void stopIdle() {
         var cutoff = clock.instant().minus(properties.idleTimeout());
         for (var workspace : workspaces.findByStatusAndLastActiveAtBefore(RemoteWorkspace.READY, cutoff)) {
-            var session = sessions.get(workspace.getUserId(), workspace.getSessionId());
-            if (!SessionStatus.IDLE.equals(session.status()) && !SessionStatus.ERROR.equals(session.status())) {
+            if (!isSessionIdle(workspace)) {
                 continue;
             }
             try {
@@ -258,7 +261,7 @@ public class RemoteSessionService {
 
     void resetInterruptedStarts() {
         workspaces
-                .findByStatusIn(List.of(RemoteWorkspace.STARTING, RemoteWorkspace.PREPARING))
+                .findByStatusIn(List.of(RemoteWorkspace.QUEUED, RemoteWorkspace.STARTING, RemoteWorkspace.PREPARING))
                 .forEach(workspace -> changeStatus(workspace.getId(), RemoteWorkspace.STOPPED, null));
     }
 
@@ -276,7 +279,10 @@ public class RemoteSessionService {
     }
 
     private void start(UUID workspaceId) {
-        var workspace = changeStatus(workspaceId, RemoteWorkspace.STARTING, null);
+        if (!acquireSlot(workspaceId)) {
+            return;
+        }
+        var workspace = workspaces.findById(workspaceId).orElseThrow();
         try {
             if (!runtime.exists(workspace.getContainerName())) {
                 var secret = devices.rotateRunnerSecret(workspace.getDeviceId());
@@ -311,6 +317,67 @@ public class RemoteSessionService {
             current.touch(clock.instant());
             return current;
         });
+    }
+
+    private boolean acquireSlot(UUID workspaceId) {
+        var deadline = System.nanoTime() + properties.prepareTimeout().toNanos();
+        while (!claimSlot(workspaceId)) {
+            if (stopLeastRecentlyActiveIdle(workspaceId)) {
+                continue;
+            }
+            if (System.nanoTime() > deadline) {
+                changeStatus(
+                        workspaceId,
+                        RemoteWorkspace.FAILED,
+                        "The server already runs " + properties.maxRunning()
+                                + " busy session containers, try again later");
+                return false;
+            }
+            if (!RemoteWorkspace.QUEUED.equals(
+                    workspaces.findById(workspaceId).orElseThrow().getStatus())) {
+                changeStatus(workspaceId, RemoteWorkspace.QUEUED, null);
+            }
+            try {
+                Thread.sleep(SLOT_POLL_INTERVAL);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean claimSlot(UUID workspaceId) {
+        synchronized (slots) {
+            if (workspaces.countByStatusInAndIdNot(RUNNING_STATUSES, workspaceId) >= properties.maxRunning()) {
+                return false;
+            }
+            changeStatus(workspaceId, RemoteWorkspace.STARTING, null);
+            return true;
+        }
+    }
+
+    private boolean stopLeastRecentlyActiveIdle(UUID workspaceId) {
+        for (var candidate : workspaces.findByStatusOrderByLastActiveAtAsc(RemoteWorkspace.READY)) {
+            if (candidate.getId().equals(workspaceId) || !isSessionIdle(candidate)) {
+                continue;
+            }
+            try {
+                runtime.stop(candidate.getContainerName());
+                changeStatus(candidate.getId(), RemoteWorkspace.STOPPED, null);
+                log.info("Stopped idle container {} to free a slot", candidate.getContainerName());
+                return true;
+            } catch (ContainerException exception) {
+                log.warn("Could not stop container {}: {}", candidate.getContainerName(), exception.getMessage());
+            }
+        }
+        return false;
+    }
+
+    private boolean isSessionIdle(RemoteWorkspace workspace) {
+        var status =
+                sessions.get(workspace.getUserId(), workspace.getSessionId()).status();
+        return SessionStatus.IDLE.equals(status) || SessionStatus.ERROR.equals(status);
     }
 
     private void publish(UUID userId, UUID sessionId, UUID turnId) {

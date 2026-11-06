@@ -52,9 +52,10 @@ pointer:
     image: ${POINTER_RUNNER_IMAGE:pointer-runner:latest}
     api-url: ${POINTER_RUNNER_API_URL:http://host.docker.internal:8080}
     network: ${POINTER_RUNNER_NETWORK:}
-    cpus: 2
-    memory: 4GB
+    cpus: ${POINTER_RUNNER_CPUS:2}
+    memory: ${POINTER_RUNNER_MEMORY:4GB}
     pids-limit: 512
+    max-running: ${POINTER_RUNNER_MAX_RUNNING:2}
     idle-timeout: 30m
     prepare-timeout: 10m
     github-api-url: ${pointer.github.api-url}

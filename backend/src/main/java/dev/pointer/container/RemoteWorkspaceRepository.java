@@ -18,4 +18,8 @@ interface RemoteWorkspaceRepository extends JpaRepository<RemoteWorkspace, UUID>
     List<RemoteWorkspace> findByStatusAndLastActiveAtBefore(String status, Instant before);
 
     List<RemoteWorkspace> findByStatusIn(Collection<String> statuses);
+
+    List<RemoteWorkspace> findByStatusOrderByLastActiveAtAsc(String status);
+
+    long countByStatusInAndIdNot(Collection<String> statuses, UUID id);
 }

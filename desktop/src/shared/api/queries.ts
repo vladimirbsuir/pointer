@@ -33,7 +33,7 @@ export const queryKeys = {
   remoteWorkspace: (sessionId: string) => ["remoteWorkspace", sessionId] as const,
 };
 
-const TRANSITIONAL_REMOTE_STATUSES = new Set(["starting", "preparing"]);
+const TRANSITIONAL_REMOTE_STATUSES = new Set(["queued", "starting", "preparing"]);
 const REMOTE_POLL_MS = 2500;
 
 export function useRemoteStatus() {

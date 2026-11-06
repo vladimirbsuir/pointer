@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 import dev.pointer.container.ContainerRuntime;
 import dev.pointer.container.ContainerSpec;
 import dev.pointer.container.GitHubRepositories;
+import dev.pointer.session.SessionStatus;
+import dev.pointer.session.SessionWriter;
 import dev.pointer.testing.FakeContainerRuntime;
 import dev.pointer.testing.GatewayTestClient;
 import dev.pointer.user.UserIdentity;
@@ -21,6 +23,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -28,11 +31,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.JsonNode;
 
-@TestPropertySource(properties = {"pointer.container.enabled=true", "pointer.container.idle-check-interval=1h"})
+@TestPropertySource(
+        properties = {
+            "pointer.container.enabled=true",
+            "pointer.container.idle-check-interval=1h",
+            "pointer.container.max-running=1"
+        })
 class RemoteExecutionTests extends AgentIntegrationTest {
 
     private static final String REPOSITORY = "octo/demo";
@@ -54,8 +63,20 @@ class RemoteExecutionTests extends AgentIntegrationTest {
     @Autowired
     private UserService users;
 
+    @Autowired
+    private SessionWriter writer;
+
+    @Autowired
+    private JdbcClient jdbc;
+
     @MockitoBean
     private GitHubRepositories gitHub;
+
+    @BeforeEach
+    void stopWorkspacesOfEarlierTests() {
+        jdbc.sql("update remote_workspaces set status = 'stopped' where status <> 'stopped'")
+                .update();
+    }
 
     @Test
     void remoteSessionClonesRunsAutoApprovedToolsAndPushesAfterTheTurn() throws Exception {
@@ -201,6 +222,40 @@ class RemoteExecutionTests extends AgentIntegrationTest {
                 .returnResult()
                 .getStatus()
                 .equals(HttpStatus.UNAUTHORIZED));
+    }
+
+    @Test
+    void idleContainerFreesTheOnlySlotWhileBusyOnesQueueNewSessions() throws Exception {
+        var setup = remoteSetUp();
+        var userId = setup.auth().user().id();
+        var first = UUID.fromString(
+                createRemoteSession(setup).path("session").path("id").asString());
+
+        try (var runner = startRunner(setup, new CopyOnWriteArrayList<>())) {
+            awaitWorkspace(
+                    setup,
+                    first,
+                    workspace -> "ready".equals(workspace.path("status").asString()));
+            writer.changeStatus(userId, first, SessionStatus.RUNNING);
+
+            var second = UUID.fromString(
+                    createRemoteSession(setup).path("session").path("id").asString());
+            awaitWorkspace(
+                    setup,
+                    second,
+                    workspace -> "queued".equals(workspace.path("status").asString()));
+            assertThat(fakeRuntime().isRunning("pointer-session-" + first)).isTrue();
+
+            writer.changeStatus(userId, first, SessionStatus.IDLE);
+            var secondContainer = fakeRuntime().awaitCreated(TIMEOUT);
+            assertThat(secondContainer.name()).isEqualTo("pointer-session-" + second);
+            awaitWorkspace(
+                    setup,
+                    first,
+                    workspace -> "stopped".equals(workspace.path("status").asString()));
+            assertThat(fakeRuntime().isRunning("pointer-session-" + first)).isFalse();
+            awaitTrue(() -> fakeRuntime().isRunning(secondContainer.name()));
+        }
     }
 
     @Test

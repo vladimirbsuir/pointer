@@ -465,6 +465,7 @@
     "openPullRequest": "Open pull request",
     "waitingForContainer": "Starting the server container and preparing the repository…",
     "status": {
+      "queued": "Waiting for a free container slot on the server",
       "starting": "Starting",
       "preparing": "Cloning the repository",
       "ready": "Running",

@@ -1,0 +1,128 @@
+name: pointer-server
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_DB: pointer
+      POSTGRES_USER: pointer
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    command: >-
+      postgres
+      -c shared_buffers=48MB
+      -c effective_cache_size=128MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=32MB
+      -c max_connections=30
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pointer -d pointer"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  docker-proxy:
+    image: ${DOCKER_PROXY_IMAGE:-tecnativa/docker-socket-proxy:v0.5.0}
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      CONTAINERS: 1
+      VOLUMES: 1
+      POST: 1
+      EXEC: 0
+      IMAGES: 0
+      NETWORKS: 0
+      INFO: 0
+      EVENTS: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/vladimirbsuir/pointer-backend:latest}
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      docker-proxy:
+        condition: service_started
+    env_file: .env
+    environment:
+      POINTER_DB_URL: jdbc:postgresql://postgres:5432/pointer
+      POINTER_DB_USER: pointer
+      POINTER_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      POINTER_DOCKER_HOST: tcp://docker-proxy:2375
+      POINTER_RUNNER_NETWORK: pointer-runners
+      POINTER_RUNNER_API_URL: http://backend:8080
+      JAVA_TOOL_OPTIONS: >-
+        -XX:+UseSerialGC
+        -XX:TieredStopAtLevel=1
+        -Xms96m
+        -Xmx${BACKEND_HEAP:-256m}
+        -XX:MaxMetaspaceSize=160m
+        -XX:ReservedCodeCacheSize=48m
+        -Xss512k
+    ports:
+      - "${BACKEND_BIND:-127.0.0.1:8080}:8080"
+    networks:
+      - public
+      - data
+      - docker
+      - runners
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\r\n\r\n' >&3 && grep -q UP <&3
+      interval: 15s
+      timeout: 5s
+      start_period: 180s
+      retries: 5
+
+  caddy:
+    image: caddy:2.11-alpine
+    profiles: [proxy]
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      - backend
+    environment:
+      POINTER_DOMAIN: ${POINTER_DOMAIN:?set POINTER_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - public
+
+networks:
+  public: {}
+  data:
+    internal: true
+  docker:
+    internal: true
+  runners:
+    name: pointer-runners
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

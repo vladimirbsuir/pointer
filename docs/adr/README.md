@@ -23,3 +23,4 @@ File name: `NNNN-short-title.md`. Status: `Proposed`, `Accepted`, `Superseded by
 | [0014](0014-agent-proposed-custom-tools.md) | Agent-proposed custom tools | Accepted |
 | [0015](0015-telegram-remote-control.md) | Telegram remote control | Accepted |
 | [0016](0016-remote-execution-in-containers.md) | Remote execution in containers | Accepted |
+| [0017](0017-server-deployment.md) | Server deployment | Accepted |

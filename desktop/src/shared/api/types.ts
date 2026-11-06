@@ -30,7 +30,8 @@ export type Project = Required<Omit<Schemas["ProjectResponse"], "archivedAt" | "
 
 export type RemoteStatus = Required<Schemas["RemoteStatus"]>;
 
-export type RemoteWorkspaceStatus = "starting" | "preparing" | "ready" | "stopped" | "failed";
+export type RemoteWorkspaceStatus =
+  "queued" | "starting" | "preparing" | "ready" | "stopped" | "failed";
 
 export type RemoteWorkspace = {
   sessionId: string;

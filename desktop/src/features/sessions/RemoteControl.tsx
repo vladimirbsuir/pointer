@@ -85,7 +85,11 @@ export function RemoteControl({ sessionId, busy }: RemoteControlProps) {
 }
 
 function StatusIcon({ workspace }: { workspace: RemoteWorkspace }) {
-  if (workspace.status === "starting" || workspace.status === "preparing") {
+  if (
+    workspace.status === "queued" ||
+    workspace.status === "starting" ||
+    workspace.status === "preparing"
+  ) {
     return <Loader2Icon className="animate-spin" />;
   }
   if (workspace.status === "failed" || workspace.error) {

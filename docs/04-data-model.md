@@ -457,7 +457,7 @@ Server sessions on a per-session container (REM-3, [ADR 0016](adr/0016-remote-ex
 | `branch` | text | `pointer/<first 8 characters of the session id>` |
 | `base_branch` | text | Branch the session branch starts from; the repository default when not chosen |
 | `container_name`, `volume_name` | text | Unique Docker names derived from the session id |
-| `status` | text | `starting`, `preparing`, `ready`, `stopped`, `failed` |
+| `status` | text | `queued` (waiting for a free container slot), `starting`, `preparing`, `ready`, `stopped`, `failed` |
 | `error` | text | Nullable; last start or push failure |
 | `pushed_commit` | text | Nullable; last commit pushed to the branch |
 | `pull_request_url` | text | Nullable |

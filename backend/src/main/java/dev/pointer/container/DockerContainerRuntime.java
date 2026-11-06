@@ -113,6 +113,7 @@ class DockerContainerRuntime implements ContainerRuntime {
         hostConfig.put("CapDrop", List.of("ALL"));
         hostConfig.put("SecurityOpt", List.of("no-new-privileges"));
         hostConfig.put("ExtraHosts", List.of("host.docker.internal:host-gateway"));
+        hostConfig.put("LogConfig", Map.of("Type", "json-file", "Config", Map.of("max-size", "10m", "max-file", "2")));
         if (properties.network() != null && !properties.network().isBlank()) {
             hostConfig.put("NetworkMode", properties.network());
         }
