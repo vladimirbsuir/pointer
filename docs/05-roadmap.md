@@ -37,7 +37,7 @@ gantt
 | M4 Agent experience | early March | **MVP v0.1**, used daily for Pointer development | Implemented; the week of daily use is tracked by the author |
 | M5 MVP+ | end of March | Checkpoints, worktrees, MCP, terminal | Implemented (November 2026) |
 | M6 Highlights | mid May | RAG, custom tools, Telegram, remote execution | Implemented (November 2026) |
-| M7 Hardening and thesis | mid June | Cloud deployment, measurements, thesis text | Planned |
+| M7 Hardening and thesis | mid June | Cloud deployment, measurements, thesis text | In progress: deployment done (November 2026) |
 
 Development runs ahead of the targets: M0 to M5 were implemented by early November 2026. M6 was implemented in the order listed below: RAG, agent-proposed custom tools (TOOL-13), Telegram remote control and remote execution. "Implemented" means the features are built and covered by tests; done criteria that require a period of real use are confirmed separately.
 
@@ -116,8 +116,8 @@ Ordered by value for the defense.
 
 ### M7 Hardening and thesis
 
-- Deploy the backend to a cloud server with TLS.
-- Remote execution on the server: Docker access through a socket proxy limited to container and volume calls, a separate network for runner containers that reaches only the backend, the runner image published to GHCR by CI, and a limit on concurrently running containers sized to the server.
+- Deploy the backend to a cloud server with TLS. Done in November 2026 ([ADR 0017](adr/0017-server-deployment.md)): the stack from `infra/deploy` runs on a 1 vCPU / 1 GB VPS behind the host's Caddy at `https://46-183-21-5.sslip.io`. The backend starts in about 25 seconds and uses about 310 MB.
+- Remote execution on the server. Done: Docker access through a socket proxy limited to container and volume calls, the `pointer-runners` network that reaches the backend and the internet but not the database or the proxy, backend and runner images (`latest` and `slim`) published to GHCR by the `Images` workflow, and `POINTER_RUNNER_MAX_RUNNING` (1 on the VPS) with idle containers stopped to free a slot and a `queued` status otherwise. Checked on the server: HTTPS and WSS through the proxy, container create, start and remove through the socket proxy, denied image calls, runner network isolation. An end-to-end server session from a desktop build pointed at the server is still to be checked.
 - Measurements for the thesis: time to first token overhead (NFR-2), reconnect behaviour (NFR-3), RAG evaluation results.
 - RAG findings from the first end-to-end run with Ollama `nomic-embed-text` (CPU): indexing this repository (289 files, 933 chunks) took about 5.5 minutes, dominated by the model; retrieval was accurate for most code questions but missed `SecretCipher` for "encrypt provider API keys". Candidates to evaluate: model-specific query and document prefixes (`search_query:` / `search_document:`), hybrid lexical and vector ranking.
 - Bug fixing from dogfooding, test coverage of core backend logic (NFR-10).

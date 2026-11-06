@@ -47,3 +47,15 @@ pnpm tauri dev
 Checks: `pnpm format:check`, `pnpm lint`, `pnpm build`, and in `src-tauri`: `cargo fmt --check`, `cargo clippy -- -D warnings`.
 
 With the backend running, `pnpm api:generate` regenerates TypeScript types from the OpenAPI document.
+
+## Deployment
+
+The server runs the stack from `infra/deploy` with images that the `Images` workflow publishes to GHCR ([ADR 0017](docs/adr/0017-server-deployment.md)).
+
+1. As root, once: install Docker with the Compose plugin, add the deploy user to the `docker` group, and point a reverse proxy with TLS at `127.0.0.1:8080` (or use the bundled Caddy with `docker compose --profile proxy up -d`).
+2. Copy `compose.yml`, `Caddyfile`, `deploy.sh` and `.env.example` from `infra/deploy` to the server, create `.env` from `.env.example` with a random `POSTGRES_PASSWORD`, `POINTER_JWT_SECRET` (`openssl rand -hex 48`) and `POINTER_ENCRYPTION_KEY` (`openssl rand -base64 32`), and add the GitHub OAuth App credentials.
+3. Run `./deploy.sh`. It pulls the images, including `POINTER_RUNNER_IMAGE`, and starts the stack.
+
+Small servers use `ghcr.io/vladimirbsuir/pointer-runner:slim` with `POINTER_RUNNER_MAX_RUNNING=1`; larger ones use the `latest` runner with all toolchains.
+
+The desktop app talks to the backend whose address was compiled in: build it with `POINTER_API_URL=https://<domain>` set, for example `$env:POINTER_API_URL="https://46-183-21-5.sslip.io"; pnpm tauri build`.
