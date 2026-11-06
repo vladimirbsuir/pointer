@@ -181,6 +181,8 @@
     "empty": "Describe a task or ask a question to get started.",
     "thinking": "Thinking…",
     "turnFailed": "The agent stopped with an error",
+    "turnInterrupted": "The turn was interrupted",
+    "turnInterruptedHint": "The server restarted while the agent was working. Send a message to continue.",
     "reasoning": "Reasoning",
     "reasoningLive": "Reasoning…",
     "stopped": "Stopped",

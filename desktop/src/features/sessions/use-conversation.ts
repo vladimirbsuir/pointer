@@ -80,7 +80,10 @@ function applyEvent(state: ConversationState, { seq, event }: SessionEvent): Con
     case "turn.completed":
       return {
         ...next,
-        turnError: event.reason === "failed" ? ((event.error as TurnError | null) ?? null) : null,
+        turnError:
+          event.reason === "failed" || event.reason === "interrupted"
+            ? ((event.error as TurnError | null) ?? null)
+            : null,
       };
     case "status.changed":
       return next.session

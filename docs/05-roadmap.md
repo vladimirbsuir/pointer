@@ -121,7 +121,7 @@ Ordered by value for the defense.
 - Measurements for the thesis: time to first token overhead (NFR-2), reconnect behaviour (NFR-3), RAG evaluation results.
 - RAG findings from the first end-to-end run with Ollama `nomic-embed-text` (CPU): indexing this repository (289 files, 933 chunks) took about 5.5 minutes, dominated by the model; retrieval was accurate for most code questions but missed `SecretCipher` for "encrypt provider API keys". Candidates to evaluate: model-specific query and document prefixes (`search_query:` / `search_document:`), hybrid lexical and vector ranking.
 - Bug fixing from dogfooding, test coverage of core backend logic (NFR-10).
-- Known issue: turns interrupted by a backend restart are marked `interrupted` in the database without session events, so open clients show them as running until the session is reloaded.
+- Fixed: turns interrupted by a backend restart were marked `interrupted` in the database without session events, so open clients showed them as running until the session was reloaded. Recovery now appends the item, approval, turn and status events.
 - Thesis write-up and defense materials.
 
 ## 4. Risks

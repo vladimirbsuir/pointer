@@ -156,7 +156,7 @@ Rules:
 - Cancellation sets a flag checked at every await point, aborts the provider stream and sends `exec.cancel` to running calls.
 - Messages sent during a turn are queued and appended at the next step boundary (SESS-6).
 - Every state change is written to the event log in the same transaction as the item it describes, then fanned out.
-- Running turns are held in memory. On backend restart they are marked `interrupted`. The backend runs as a single instance; horizontal scaling is out of scope.
+- Running turns are held in memory. On backend restart they are marked `interrupted` through the session event log: unfinished items are cancelled, pending approvals are resolved as cancelled, `turn.completed` with reason `interrupted` is appended and the session returns to `idle`, so clients that resubscribe see the turn end. The backend runs as a single instance; horizontal scaling is out of scope.
 
 ### 4.3 Context assembly
 

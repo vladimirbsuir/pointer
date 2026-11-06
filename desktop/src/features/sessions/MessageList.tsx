@@ -91,8 +91,17 @@ export function MessageList({ sessionId, items, running, turnError, onRewound }:
           <div className="flex gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
             <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
             <div>
-              <p className="font-medium">{t("chat.turnFailed")}</p>
-              <p className="text-muted-foreground">{turnError.message || turnError.code}</p>
+              {turnError.code === "interrupted" ? (
+                <>
+                  <p className="font-medium">{t("chat.turnInterrupted")}</p>
+                  <p className="text-muted-foreground">{t("chat.turnInterruptedHint")}</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium">{t("chat.turnFailed")}</p>
+                  <p className="text-muted-foreground">{turnError.message || turnError.code}</p>
+                </>
+              )}
             </div>
           </div>
         )}

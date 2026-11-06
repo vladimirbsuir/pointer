@@ -262,7 +262,7 @@ Rewinding (`POST /sessions/{id}/rewind` with `turnId`, `restoreFiles`, `force`) 
 | Kind | Payload | Emitted when |
 |---|---|---|
 | `turn.started` | `turnId`, `turnKind` (`message`, `compaction`), `mode`, `modelId` | A turn begins. |
-| `turn.completed` | `turnId`, `reason` (`completed`, `cancelled`, `failed`, `step_limit`, `interrupted`), `usage`, `error` | A turn ends. |
+| `turn.completed` | `turnId`, `reason` (`completed`, `cancelled`, `failed`, `step_limit`, `interrupted`), `usage`, `error` | A turn ends. A turn cut off by a backend restart ends with `interrupted` and the error code `interrupted` when the backend starts again. |
 | `item.created` | `turnId`, `item` | An item starts. Streaming deltas for it may follow. |
 | `item.updated` | `item` | An item changes: a tool call moving to `awaiting_approval` or `running`, a queued user message attached to a turn, a plan approved or rejected. Carries the full item. |
 | `item.completed` | `item` | An item reaches its final state. Carries the full item. |

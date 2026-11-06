@@ -167,4 +167,7 @@ public class ApprovalService {
             @Size(max = 3) List<@Pattern(regexp = "ask|plan|agent") String> modes) {}
 }
 
-interface ApprovalRepository extends JpaRepository<Approval, UUID> {}
+interface ApprovalRepository extends JpaRepository<Approval, UUID> {
+
+    List<Approval> findBySessionIdAndStatus(UUID sessionId, String status);
+}

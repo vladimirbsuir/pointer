@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,10 +25,13 @@ public class SessionWriter {
     public static final String PLAN_APPROVED = "approved";
     public static final String PLAN_REJECTED = "rejected";
     static final String APPROVED_PLAN_MESSAGE = "The plan is approved. Implement it now, step by step.";
+    static final Map<String, Object> INTERRUPTED_ERROR =
+            Map.of("code", "interrupted", "message", "The server restarted while this turn was running");
 
     private final AgentSessionRepository sessions;
     private final TurnRepository turns;
     private final ItemRepository items;
+    private final ApprovalRepository approvals;
     private final SessionEventLog eventLog;
     private final SessionService sessionService;
     private final ProviderService providerService;
@@ -281,18 +285,50 @@ public class SessionWriter {
 
     @Transactional
     public int recoverInterrupted() {
-        var now = clock.instant();
         var interrupted = turns.findByStatus(Turn.RUNNING);
-        interrupted.forEach(turn -> turn.finish(Turn.INTERRUPTED, null, now));
-        turns.saveAll(interrupted);
+        var sessionIds = new LinkedHashSet<UUID>();
+        interrupted.forEach(turn -> sessionIds.add(turn.getSessionId()));
+        sessions.findByStatusIn(List.of(
+                        SessionStatus.RUNNING, SessionStatus.WAITING_FOR_APPROVAL, SessionStatus.WAITING_FOR_EXECUTOR))
+                .forEach(session -> sessionIds.add(session.getId()));
+        for (var sessionId : sessionIds) {
+            var session = sessions.findById(sessionId).orElseThrow();
+            entityManager.refresh(session, LockModeType.PESSIMISTIC_WRITE);
+            cancelPendingApprovals(session);
+            interrupted.stream()
+                    .filter(turn -> turn.getSessionId().equals(sessionId))
+                    .forEach(turn -> interruptTurn(session, turn));
+            changeStatus(session, SessionStatus.IDLE);
+        }
+        var now = clock.instant();
         var unfinished = items.findByStatus(Item.IN_PROGRESS);
         unfinished.forEach(item -> item.complete(Item.CANCELLED, Map.of(), now));
         items.saveAll(unfinished);
-        var busy = sessions.findByStatusIn(
-                List.of(SessionStatus.RUNNING, SessionStatus.WAITING_FOR_APPROVAL, SessionStatus.WAITING_FOR_EXECUTOR));
-        busy.forEach(session -> session.changeStatus(SessionStatus.IDLE, now));
-        sessions.saveAll(busy);
         return interrupted.size();
+    }
+
+    private void interruptTurn(AgentSession session, Turn turn) {
+        closeUnfinishedItems(session.getUserId(), session.getId(), turn.getId(), Item.CANCELLED);
+        turn.finish(Turn.INTERRUPTED, INTERRUPTED_ERROR, clock.instant());
+        turns.save(turn);
+        var payload = new LinkedHashMap<String, Object>();
+        payload.put("turnId", turn.getId());
+        payload.put("reason", Turn.INTERRUPTED);
+        payload.put("usage", Map.of("inputTokens", turn.getInputTokens(), "outputTokens", turn.getOutputTokens()));
+        payload.put("error", INTERRUPTED_ERROR);
+        eventLog.append(session.getUserId(), session.getId(), "turn.completed", payload);
+    }
+
+    private void cancelPendingApprovals(AgentSession session) {
+        approvals.findBySessionIdAndStatus(session.getId(), Approval.PENDING).forEach(approval -> {
+            approval.resolve(Approval.CANCELLED, null, null, clock.instant());
+            approvals.save(approval);
+            eventLog.append(
+                    session.getUserId(),
+                    session.getId(),
+                    "approval.resolved",
+                    Map.of("approvalId", approval.getId(), "decision", Approval.CANCELLED));
+        });
     }
 
     private void closeUnfinishedItems(UUID userId, UUID sessionId, UUID turnId, String status) {
