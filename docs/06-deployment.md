@@ -18,7 +18,7 @@ Scripts in `infra/deploy`:
 |---|---|---|
 | `host-setup.sh` | root, once | installs Docker, adds the deploy user to the `docker` group, adds a site to a system Caddy, optional small-server tuning |
 | `init-env.sh` | deploy user, once | creates `.env` with generated secrets |
-| `deploy.sh` | deploy user | `up`, `stop`, `status`, `logs`, `backup` |
+| `deploy.sh` | deploy user | `up`, `stop`, `status`, `logs`, `backup`; first strips Windows line endings and byte order marks from `.env` |
 
 All scripts print their options with `--help` and are safe to run again.
 
@@ -108,4 +108,3 @@ The first prints `"status":"UP"`, the second `401` (the WebSocket reaches the ba
 | `permission denied ... docker.sock` | The `docker` group needs a new login session after `host-setup.sh`. |
 | A server session stays `queued` | The container limit is reached by busy sessions; raise `POINTER_RUNNER_MAX_RUNNING` if memory allows, then `./deploy.sh`. |
 | `The runner image ... is not available` | `POINTER_RUNNER_IMAGE` was not pulled; `./deploy.sh` pulls it. |
-| `failed to read .env: unexpected character "﻿"` | `.env` has a byte order mark from a Windows editor: `sed -i 's/\xEF\xBB\xBF//g' .env`. |

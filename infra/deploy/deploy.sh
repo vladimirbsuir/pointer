@@ -19,7 +19,7 @@ if [ ! -f .env ]; then
   echo "No .env here; create it with ./init-env.sh." >&2
   exit 1
 fi
-sed -i 's/$//; s/ï»¿//g' .env
+sed -i 's/\r$//; s/\xEF\xBB\xBF//g' .env
 set -a
 . ./.env
 set +a
