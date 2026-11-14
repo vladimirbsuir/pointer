@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, unwrap } from "@/shared/api/client";
+import { useSettings } from "@/shared/api/queries";
 import type { Model } from "@/shared/api/types";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -32,10 +33,21 @@ export function ModelOptionsEditor({
   const [input, setInput] = useState(model.inputPricePerMtok?.toString() ?? "");
   const [output, setOutput] = useState(model.outputPricePerMtok?.toString() ?? "");
   const [supportsVision, setSupportsVision] = useState(model.supportsVision);
+  const [queryPrefix, setQueryPrefix] = useState(model.embeddingQueryPrefix ?? "");
+  const [documentPrefix, setDocumentPrefix] = useState(model.embeddingDocumentPrefix ?? "");
+  const { data: settings } = useSettings();
+  const showPrefixes =
+    settings?.embeddingModelId === model.id ||
+    Boolean(model.embeddingQueryPrefix) ||
+    Boolean(model.embeddingDocumentPrefix);
   const inputPrice = parsePrice(input);
   const outputPrice = parsePrice(output);
   const valid = inputPrice !== undefined && outputPrice !== undefined;
   const path = { params: { path: { providerId, modelId: model.id } } };
+
+  const prefixes = showPrefixes
+    ? { embeddingQueryPrefix: queryPrefix, embeddingDocumentPrefix: documentPrefix }
+    : {};
 
   const save = () =>
     unwrap(
@@ -43,12 +55,13 @@ export function ModelOptionsEditor({
         ...path,
         body:
           inputPrice === null && outputPrice === null
-            ? { clearPrices: true, supportsVision }
+            ? { clearPrices: true, supportsVision, ...prefixes }
             : {
                 clearPrices: true,
                 supportsVision,
                 inputPricePerMtok: inputPrice ?? 0,
                 outputPricePerMtok: outputPrice ?? 0,
+                ...prefixes,
               },
       }),
     );
@@ -81,6 +94,29 @@ export function ModelOptionsEditor({
         <Switch size="sm" checked={supportsVision} onCheckedChange={setSupportsVision} />
         {t("providers.supportsVision")}
       </label>
+      {showPrefixes && (
+        <div className="flex w-full flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {t("providers.queryPrefix")}
+            <Input
+              value={queryPrefix}
+              maxLength={200}
+              className="h-8 w-56 font-mono"
+              onChange={(event) => setQueryPrefix(event.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {t("providers.documentPrefix")}
+            <Input
+              value={documentPrefix}
+              maxLength={200}
+              className="h-8 w-56 font-mono"
+              onChange={(event) => setDocumentPrefix(event.target.value)}
+            />
+          </label>
+          <p className="w-full text-xs text-muted-foreground">{t("providers.prefixHint")}</p>
+        </div>
+      )}
       <div className="ml-auto flex gap-1">
         <Button size="sm" variant="ghost" onClick={onCancel}>
           {t("common.cancel")}

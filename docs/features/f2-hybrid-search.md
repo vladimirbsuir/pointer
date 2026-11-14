@@ -1,6 +1,6 @@
 # F2. Hybrid code search and RAG benchmark
 
-Status: Approved · Requirement ids: CTX-8 to CTX-10 · Depends on: semantic index (CTX-7, TOOL-14, [ADR 0013](../adr/0013-semantic-code-index.md)).
+Status: In progress (phase 1 implemented) · Requirement ids: CTX-8 to CTX-10 · Depends on: semantic index (CTX-7, TOOL-14, [ADR 0013](../adr/0013-semantic-code-index.md)).
 
 ## Goal
 
@@ -75,7 +75,7 @@ Strategy `vector` skips steps 2 and 3. A strategy `lexical` exists only for the 
 
 ## Phases
 
-1. Query and document prefixes (small, independent, rerun the first measurement).
+1. Query and document prefixes (small, independent, rerun the first measurement). Implemented: `EmbeddingPrefixes`, migration V18; the index status reports `prefixesChanged`, and starting an update with changed prefixes rebuilds the index.
 2. Lexical column, `CodeTokens`, hybrid fusion, project setting.
 3. Benchmark endpoint, dataset, script; results recorded in `docs/` for the thesis.
 

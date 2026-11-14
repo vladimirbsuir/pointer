@@ -247,7 +247,10 @@
     "priceSummary": "${{input}} / ${{output}}",
     "supportsVision": "Accepts images",
     "makeEmbedding": "Use for semantic search",
-    "isEmbedding": "Embedding model for semantic search"
+    "isEmbedding": "Embedding model for semantic search",
+    "queryPrefix": "Search query prefix",
+    "documentPrefix": "Indexed code prefix",
+    "prefixHint": "Text the embedding model expects before queries and documents, including the trailing space. Changing it requires rebuilding indexes."
   },
   "approval": {
     "title": "Allow this action?",
@@ -403,6 +406,7 @@
     "model": "Embedding model: {{model}}",
     "noModel": "No embedding model selected. Mark one in Settings → Providers.",
     "modelChanged": "The embedding model changed; updating rebuilds the whole index.",
+    "prefixesChanged": "The embedding prefixes changed; updating rebuilds the whole index.",
     "notLinked": "Link the project folder on this computer to index it.",
     "build": "Index",
     "update": "Update",

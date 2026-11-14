@@ -9,13 +9,20 @@ export type Me = Required<Omit<Schemas["MeResponse"], "github">> & {
 export type Model = Required<
   Omit<
     Schemas["ModelResponse"],
-    "contextWindow" | "maxOutputTokens" | "inputPricePerMtok" | "outputPricePerMtok"
+    | "contextWindow"
+    | "maxOutputTokens"
+    | "inputPricePerMtok"
+    | "outputPricePerMtok"
+    | "embeddingQueryPrefix"
+    | "embeddingDocumentPrefix"
   >
 > & {
   contextWindow: number | null;
   maxOutputTokens: number | null;
   inputPricePerMtok: number | null;
   outputPricePerMtok: number | null;
+  embeddingQueryPrefix: string | null;
+  embeddingDocumentPrefix: string | null;
 };
 
 export type Provider = Required<Omit<Schemas["ProviderResponse"], "models" | "apiKeyHint">> & {
@@ -58,6 +65,7 @@ export type ProjectIndex = {
   chunkCount: number;
   error: string | null;
   indexedAt: string | null;
+  prefixesChanged: boolean;
 };
 
 export type SessionStatus =

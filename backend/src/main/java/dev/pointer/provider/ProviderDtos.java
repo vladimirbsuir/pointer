@@ -37,6 +37,8 @@ public final class ProviderDtos {
             boolean supportsVision,
             BigDecimal inputPricePerMtok,
             BigDecimal outputPricePerMtok,
+            String embeddingQueryPrefix,
+            String embeddingDocumentPrefix,
             String source,
             boolean enabled) {}
 
@@ -69,7 +71,9 @@ public final class ProviderDtos {
             Boolean enabled,
             @DecimalMin("0") @DecimalMax("100000") BigDecimal inputPricePerMtok,
             @DecimalMin("0") @DecimalMax("100000") BigDecimal outputPricePerMtok,
-            Boolean clearPrices) {}
+            Boolean clearPrices,
+            @Size(max = 200) String embeddingQueryPrefix,
+            @Size(max = 200) String embeddingDocumentPrefix) {}
 
     public record ConnectionTestResponse(boolean ok, int modelCount, String errorCode, String errorMessage) {}
 }

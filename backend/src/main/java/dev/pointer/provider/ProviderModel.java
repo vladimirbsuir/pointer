@@ -26,6 +26,8 @@ public class ProviderModel extends BaseEntity {
     private boolean supportsVision;
     private BigDecimal inputPricePerMtok;
     private BigDecimal outputPricePerMtok;
+    private String embeddingQueryPrefix;
+    private String embeddingDocumentPrefix;
     private String source;
     private boolean enabled;
     private Instant createdAt;
@@ -41,6 +43,9 @@ public class ProviderModel extends BaseEntity {
         this.source = source;
         this.supportsTools = true;
         this.enabled = true;
+        var prefixes = EmbeddingPrefixes.defaultsFor(modelKey);
+        this.embeddingQueryPrefix = prefixes.query();
+        this.embeddingDocumentPrefix = prefixes.document();
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -51,6 +56,10 @@ public class ProviderModel extends BaseEntity {
 
     public boolean supportsVision() {
         return supportsVision;
+    }
+
+    public EmbeddingPrefixes embeddingPrefixes() {
+        return new EmbeddingPrefixes(embeddingQueryPrefix, embeddingDocumentPrefix);
     }
 
     void update(ProviderDtos.UpdateModelRequest request, Instant now) {
@@ -81,6 +90,12 @@ public class ProviderModel extends BaseEntity {
         }
         if (request.outputPricePerMtok() != null) {
             outputPricePerMtok = request.outputPricePerMtok();
+        }
+        if (request.embeddingQueryPrefix() != null) {
+            embeddingQueryPrefix = new EmbeddingPrefixes(request.embeddingQueryPrefix(), null).query();
+        }
+        if (request.embeddingDocumentPrefix() != null) {
+            embeddingDocumentPrefix = new EmbeddingPrefixes(null, request.embeddingDocumentPrefix()).document();
         }
         updatedAt = now;
     }

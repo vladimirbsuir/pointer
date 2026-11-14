@@ -1103,6 +1103,8 @@ export interface components {
             supportsVision?: boolean;
             inputPricePerMtok?: number;
             outputPricePerMtok?: number;
+            embeddingQueryPrefix?: string;
+            embeddingDocumentPrefix?: string;
             source?: string;
             enabled?: boolean;
         };
@@ -1193,6 +1195,7 @@ export interface components {
             error?: string;
             /** Format: date-time */
             indexedAt?: string;
+            prefixesChanged?: boolean;
         };
         CustomToolResponse: {
             /** Format: uuid */
@@ -1306,6 +1309,8 @@ export interface components {
             inputPricePerMtok?: number;
             outputPricePerMtok?: number;
             clearPrices?: boolean;
+            embeddingQueryPrefix?: string;
+            embeddingDocumentPrefix?: string;
         };
         UpdateProjectRequest: {
             name?: string;

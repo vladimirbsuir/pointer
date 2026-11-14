@@ -16,13 +16,14 @@ public final class IndexDtos {
             int fileCount,
             int chunkCount,
             String error,
-            Instant indexedAt) {
+            Instant indexedAt,
+            boolean prefixesChanged) {
 
         static final String NONE = "none";
 
-        static IndexStatusResponse of(IndexState state) {
+        static IndexStatusResponse of(IndexState state, boolean prefixesChanged) {
             if (state == null) {
-                return new IndexStatusResponse(NONE, null, null, 0, 0, 0, 0, null, null);
+                return new IndexStatusResponse(NONE, null, null, 0, 0, 0, 0, null, null, false);
             }
             return new IndexStatusResponse(
                     state.status(),
@@ -33,7 +34,8 @@ public final class IndexDtos {
                     state.fileCount(),
                     state.chunkCount(),
                     state.error(),
-                    state.indexedAt());
+                    state.indexedAt(),
+                    prefixesChanged);
         }
     }
 

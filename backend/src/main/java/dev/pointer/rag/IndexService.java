@@ -2,6 +2,8 @@ package dev.pointer.rag;
 
 import dev.pointer.common.error.ApiException;
 import dev.pointer.project.ProjectService;
+import dev.pointer.provider.EmbeddingPrefixes;
+import dev.pointer.provider.ProviderService;
 import dev.pointer.provider.ResolvedModel;
 import dev.pointer.provider.llm.Cancellation;
 import dev.pointer.provider.llm.LlmException;
@@ -35,6 +37,7 @@ public class IndexService {
     private final Embedder embedder;
     private final SettingsService settings;
     private final ProjectService projects;
+    private final ProviderService providers;
     private final Set<UUID> running = ConcurrentHashMap.newKeySet();
 
     @EventListener(ApplicationReadyEvent.class)
@@ -47,7 +50,7 @@ public class IndexService {
 
     public IndexDtos.IndexStatusResponse status(UUID userId, UUID projectId) {
         projects.owned(userId, projectId);
-        return IndexDtos.IndexStatusResponse.of(store.find(projectId).orElse(null));
+        return response(store.find(projectId).orElse(null));
     }
 
     public IndexDtos.IndexStatusResponse start(UUID userId, UUID deviceId, UUID projectId, boolean rebuild) {
@@ -61,15 +64,19 @@ public class IndexService {
             throw ApiException.conflict("index_device_offline", "Open the project on this computer to index it");
         }
         var model = embedder.resolve(userId, modelId, deviceId);
+        var prefixes = model.embeddingPrefixes();
         if (!running.add(projectId)) {
             throw ApiException.conflict("index_running", "The project is already being indexed");
         }
         try {
             var previous = store.find(projectId).orElse(null);
-            if (rebuild || previous == null || !modelId.equals(previous.embeddingModelId())) {
+            if (rebuild
+                    || previous == null
+                    || !modelId.equals(previous.embeddingModelId())
+                    || !prefixes.equals(previous.prefixes())) {
                 store.clear(projectId);
             }
-            store.begin(projectId, userId, modelId, model.modelKey());
+            store.begin(projectId, userId, modelId, model.modelKey(), prefixes);
         } catch (RuntimeException exception) {
             running.remove(projectId);
             throw exception;
@@ -78,7 +85,7 @@ public class IndexService {
             try {
                 var cancellation = new Cancellation();
                 var changes = changes(projectId, deviceId, cancellation);
-                var dimensions = apply(projectId, deviceId, model, changes, cancellation);
+                var dimensions = apply(projectId, deviceId, model, prefixes, changes, cancellation);
                 store.finish(projectId, dimensions);
             } catch (IndexException | LlmException | ApiException exception) {
                 store.fail(projectId, exception.getMessage());
@@ -89,7 +96,7 @@ public class IndexService {
                 running.remove(projectId);
             }
         });
-        return IndexDtos.IndexStatusResponse.of(store.find(projectId).orElse(null));
+        return response(store.find(projectId).orElse(null));
     }
 
     public void delete(UUID userId, UUID projectId) {
@@ -110,12 +117,25 @@ public class IndexService {
                 .filter(found -> found.embeddingModelId() != null)
                 .orElseThrow(() -> new IndexException("index_missing", "The project has no semantic index"));
         var model = embedder.resolve(state.userId(), state.embeddingModelId(), deviceId);
-        var freshness = refresh(projectId, deviceId, model, cancellation);
-        var queryVector = embedder.embed(model, List.of(query), cancellation).getFirst();
+        var freshness = refresh(projectId, deviceId, model, state.prefixes(), cancellation);
+        var queryVector = embedder.embedQuery(model, state.prefixes(), query, cancellation);
         return new SearchOutcome(store.search(projectId, queryVector, pathPrefix, limit), freshness);
     }
 
-    private String refresh(UUID projectId, UUID deviceId, ResolvedModel model, Cancellation cancellation) {
+    private IndexDtos.IndexStatusResponse response(IndexState state) {
+        return IndexDtos.IndexStatusResponse.of(state, state != null && prefixesChanged(state));
+    }
+
+    private boolean prefixesChanged(IndexState state) {
+        return state.embeddingModelId() != null
+                && providers
+                        .embeddingPrefixes(state.embeddingModelId())
+                        .map(current -> !current.equals(state.prefixes()))
+                        .orElse(false);
+    }
+
+    private String refresh(
+            UUID projectId, UUID deviceId, ResolvedModel model, EmbeddingPrefixes prefixes, Cancellation cancellation) {
         if (!device.isOnline(projectId, deviceId)) {
             return OFFLINE;
         }
@@ -130,7 +150,7 @@ public class IndexService {
             if (changes.size() > MAX_CHANGES_BEFORE_SEARCH) {
                 return UPDATING;
             }
-            var dimensions = apply(projectId, deviceId, model, changes, cancellation);
+            var dimensions = apply(projectId, deviceId, model, prefixes, changes, cancellation);
             store.finish(projectId, dimensions);
             return FRESH;
         } catch (IndexException | LlmException exception) {
@@ -156,7 +176,12 @@ public class IndexService {
     }
 
     private Integer apply(
-            UUID projectId, UUID deviceId, ResolvedModel model, Changes changes, Cancellation cancellation) {
+            UUID projectId,
+            UUID deviceId,
+            ResolvedModel model,
+            EmbeddingPrefixes prefixes,
+            Changes changes,
+            Cancellation cancellation) {
         store.removeFiles(projectId, changes.removed());
         var changed = changes.changed();
         Integer dimensions = null;
@@ -166,7 +191,9 @@ public class IndexService {
             var files = device.chunks(projectId, deviceId, paths, cancellation);
             var texts = new ArrayList<String>();
             files.forEach(file -> file.chunks().forEach(chunk -> texts.add(chunk.embeddingText())));
-            var vectors = texts.isEmpty() ? List.<float[]>of() : embedder.embed(model, texts, cancellation);
+            var vectors = texts.isEmpty()
+                    ? List.<float[]>of()
+                    : embedder.embedDocuments(model, prefixes, texts, cancellation);
             if (!vectors.isEmpty()) {
                 dimensions = vectors.getFirst().length;
             }

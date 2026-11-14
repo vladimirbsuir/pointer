@@ -4,7 +4,8 @@ Priority levels:
 
 - **MVP**: required for the first usable version;
 - **MVP+**: next increment after the MVP;
-- **HL**: highlight features (see [vision](00-vision.md#63-highlights)).
+- **HL**: highlight features (see [vision](00-vision.md#63-highlights));
+- **F1** to **F4**: approved features beyond the roadmap, specified in [features](features/README.md).
 
 ## 1. Glossary
 
@@ -132,6 +133,9 @@ Priority levels:
 | CTX-5 | Token usage is recorded per turn and shown per session. | MVP |
 | CTX-6 | Cost estimates are shown when model pricing is configured. | MVP+ |
 | CTX-7 | The project can be indexed for semantic search, with code chunked along AST boundaries. The index updates on file changes. | HL |
+| CTX-8 | Semantic search fuses vector similarity with full-text relevance over identifier-aware tokens; the strategy is a project setting ([F2](features/f2-hybrid-search.md)). | F2 |
+| CTX-9 | Embedding models can have query and document prefixes, with defaults for known model families; changing the prefixes requires rebuilding the index ([F2](features/f2-hybrid-search.md)). | F2 |
+| CTX-10 | A benchmark compares vector, lexical and hybrid retrieval on a fixed question set ([F2](features/f2-hybrid-search.md)). | F2 |
 
 ### 2.10 Client and settings (UI)
 

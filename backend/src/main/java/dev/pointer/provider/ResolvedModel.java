@@ -14,6 +14,7 @@ public record ResolvedModel(
         boolean supportsVision,
         BigDecimal inputPricePerMtok,
         BigDecimal outputPricePerMtok,
+        EmbeddingPrefixes embeddingPrefixes,
         Endpoint endpoint) {
 
     private static final BigDecimal MILLION = BigDecimal.valueOf(1_000_000);

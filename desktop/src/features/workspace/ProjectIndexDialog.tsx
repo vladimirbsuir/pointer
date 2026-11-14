@@ -106,6 +106,9 @@ function IndexBody({ project, linked }: { project: Project; linked: boolean }) {
             : t("index.noModel")}
         </p>
         {modelChanged && <p className="text-amber-600">{t("index.modelChanged")}</p>}
+        {!modelChanged && index?.prefixesChanged && (
+          <p className="text-amber-600">{t("index.prefixesChanged")}</p>
+        )}
         {!linked && <p className="text-amber-600">{t("index.notLinked")}</p>}
       </div>
       <DialogFooter>

@@ -1,5 +1,6 @@
 package dev.pointer.rag;
 
+import dev.pointer.provider.EmbeddingPrefixes;
 import dev.pointer.provider.ProviderService;
 import dev.pointer.provider.ResolvedModel;
 import dev.pointer.provider.llm.Cancellation;
@@ -23,7 +24,16 @@ class Embedder {
         return providers.resolve(userId, modelId, deviceId);
     }
 
-    List<float[]> embed(ResolvedModel model, List<String> texts, Cancellation cancellation) {
+    float[] embedQuery(ResolvedModel model, EmbeddingPrefixes prefixes, String query, Cancellation cancellation) {
+        return embed(model, List.of(prefixes.applyToQuery(query)), cancellation).getFirst();
+    }
+
+    List<float[]> embedDocuments(
+            ResolvedModel model, EmbeddingPrefixes prefixes, List<String> texts, Cancellation cancellation) {
+        return embed(model, texts.stream().map(prefixes::applyToDocument).toList(), cancellation);
+    }
+
+    private List<float[]> embed(ResolvedModel model, List<String> texts, Cancellation cancellation) {
         var vectors = new ArrayList<float[]>(texts.size());
         for (var start = 0; start < texts.size(); start += BATCH_SIZE) {
             if (cancellation.isCancelled()) {

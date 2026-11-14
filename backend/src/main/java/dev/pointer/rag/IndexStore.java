@@ -1,6 +1,7 @@
 package dev.pointer.rag;
 
 import dev.pointer.common.Ids;
+import dev.pointer.provider.EmbeddingPrefixes;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -38,15 +39,19 @@ class IndexStore {
                         """).param("projectId", projectId).query(Boolean.class).single();
     }
 
-    void begin(UUID projectId, UUID userId, UUID modelId, String modelKey) {
+    void begin(UUID projectId, UUID userId, UUID modelId, String modelKey, EmbeddingPrefixes prefixes) {
         jdbc.sql("""
                         insert into index_states (project_id, user_id, embedding_model_id, embedding_model_key,
+                                                  embedding_query_prefix, embedding_document_prefix,
                                                   status, updated_at)
-                        values (:projectId, :userId, :modelId, :modelKey, 'indexing', :now)
+                        values (:projectId, :userId, :modelId, :modelKey, :queryPrefix, :documentPrefix,
+                                'indexing', :now)
                         on conflict (project_id) do update
                         set user_id = excluded.user_id,
                             embedding_model_id = excluded.embedding_model_id,
                             embedding_model_key = excluded.embedding_model_key,
+                            embedding_query_prefix = excluded.embedding_query_prefix,
+                            embedding_document_prefix = excluded.embedding_document_prefix,
                             status = 'indexing', files_total = 0, files_done = 0, error = null,
                             updated_at = excluded.updated_at
                         """)
@@ -54,6 +59,8 @@ class IndexStore {
                 .param("userId", userId)
                 .param("modelId", modelId)
                 .param("modelKey", modelKey)
+                .param("queryPrefix", prefixes.query())
+                .param("documentPrefix", prefixes.document())
                 .param("now", now())
                 .update();
     }
@@ -237,6 +244,8 @@ class IndexStore {
                 rs.getObject("user_id", UUID.class),
                 rs.getObject("embedding_model_id", UUID.class),
                 rs.getString("embedding_model_key"),
+                new EmbeddingPrefixes(
+                        rs.getString("embedding_query_prefix"), rs.getString("embedding_document_prefix")),
                 rs.getObject("dimensions", Integer.class),
                 rs.getString("status"),
                 rs.getInt("files_total"),

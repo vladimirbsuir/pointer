@@ -44,7 +44,7 @@ class SemanticSearchTests extends AgentIntegrationTest {
     @Test
     void projectIsIndexedAndSearchPicksUpChangedFiles() throws Exception {
         var setup = setUp(false);
-        useEmbeddingModel(setup);
+        useEmbeddingModel(setup, "fake-embed");
         var files = new ConcurrentHashMap<String, String>(Map.of(
                 SESSIONS_FILE, "export function createSession(project) { return open session for project }",
                 BILLING_FILE, "export function chargeInvoice(card) { return payment charge for invoice }"));
@@ -90,6 +90,53 @@ class SemanticSearchTests extends AgentIntegrationTest {
     }
 
     @Test
+    void prefixesOfTheModelAreAppliedAndChangingThemRebuildsTheIndex() throws Exception {
+        var setup = setUp(false);
+        var model = useEmbeddingModel(setup, "nomic-embed-text:latest");
+        assertThat(model.embeddingQueryPrefix()).isEqualTo("search_query: ");
+        assertThat(model.embeddingDocumentPrefix()).isEqualTo("search_document: ");
+        var files = new ConcurrentHashMap<String, String>(Map.of(
+                SESSIONS_FILE, "export function createSession(project) { return open session for project }",
+                BILLING_FILE, "export function chargeInvoice(card) { return payment charge for invoice }"));
+        var requests = new CopyOnWriteArrayList<JsonNode>();
+
+        try (var device = executor(setup, files, requests)) {
+            startIndex(setup);
+            awaitIndexStatus(setup, "ready");
+            assertThat(llm.embeddingInputs().stream().flatMap(List::stream))
+                    .isNotEmpty()
+                    .allMatch(input -> input.startsWith("search_document: "));
+
+            llm.enqueueToolCall("call_1", "semantic_search", "{\"query\":\"create session\"}");
+            llm.enqueueText("Found it.");
+            send(setup, "Where are sessions created?", null);
+            device.awaitEvent("turn.completed", TIMEOUT);
+            assertThat(llm.embeddingInputs().getLast()).containsExactly("search_query: create session");
+
+            client.patch()
+                    .uri("/api/v1/providers/{providerId}/models/{modelId}", model.providerId(), model.id())
+                    .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                    .body(Map.of("embeddingDocumentPrefix", ""))
+                    .exchange()
+                    .expectStatus()
+                    .isOk();
+            assertThat(indexStatus(setup).path("prefixesChanged").asBoolean()).isTrue();
+
+            var embeddingCalls = llm.embeddingInputs().size();
+            startIndex(setup);
+            var status = awaitIndexStatus(setup, "ready");
+            assertThat(status.path("prefixesChanged").asBoolean()).isFalse();
+            var rebuilt = llm
+                    .embeddingInputs()
+                    .subList(embeddingCalls, llm.embeddingInputs().size())
+                    .stream()
+                    .flatMap(List::stream)
+                    .toList();
+            assertThat(rebuilt).hasSize(2).noneMatch(input -> input.startsWith("search_document: "));
+        }
+    }
+
+    @Test
     void searchToolIsHiddenUntilTheProjectIsIndexed() throws Exception {
         var setup = setUp(false);
         llm.enqueueText("No index yet.");
@@ -102,7 +149,16 @@ class SemanticSearchTests extends AgentIntegrationTest {
         assertThat(llm.requests().getFirst()).contains("read_file").doesNotContain("semantic_search");
     }
 
-    private void useEmbeddingModel(Setup setup) {
+    private void startIndex(Setup setup) {
+        client.post()
+                .uri("/api/v1/projects/{id}/index", setup.projectId())
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.ACCEPTED);
+    }
+
+    private ProviderDtos.ModelResponse useEmbeddingModel(Setup setup, String modelKey) {
         var providers = client.get()
                 .uri("/api/v1/providers")
                 .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
@@ -113,7 +169,7 @@ class SemanticSearchTests extends AgentIntegrationTest {
         var model = client.post()
                 .uri("/api/v1/providers/{id}/models", providers[0].id())
                 .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
-                .body(Map.of("modelKey", "fake-embed"))
+                .body(Map.of("modelKey", modelKey))
                 .exchange()
                 .expectBody(ProviderDtos.ModelResponse.class)
                 .returnResult()
@@ -125,6 +181,7 @@ class SemanticSearchTests extends AgentIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isOk();
+        return model;
     }
 
     private JsonNode awaitIndexStatus(Setup setup, String expected) throws InterruptedException {

@@ -158,6 +158,7 @@ Unique: (`user_id`, `name`).
 | `supports_vision` | boolean | Default false |
 | `input_price_per_mtok` | numeric(12,6) | Nullable (CTX-6) |
 | `output_price_per_mtok` | numeric(12,6) | Nullable |
+| `embedding_query_prefix`, `embedding_document_prefix` | text | Nullable; prepended to search queries and to indexed chunks when the model computes embeddings (CTX-9). Filled for known families when the model is created: `nomic-embed`, `e5`, `bge-small/base/large`, `mxbai-embed`, `snowflake-arctic-embed` |
 | `source` | text | `discovered`, `manual` |
 | `enabled` | boolean | |
 | `created_at`, `updated_at` | timestamptz | |
@@ -392,6 +393,7 @@ Tables of the `rag` module ([ADR 0013](adr/0013-semantic-code-index.md)), access
 | `user_id` | uuid | FK `users`, whose provider computes embeddings |
 | `embedding_model_id` | uuid | FK `models`, `ON DELETE SET NULL` |
 | `embedding_model_key` | text | Model key at indexing time, for display |
+| `embedding_query_prefix`, `embedding_document_prefix` | text | Prefixes the index was built with; search and incremental passes keep using them until a rebuild |
 | `dimensions` | integer | Vector length returned by the model |
 | `status` | text | `indexing`, `ready`, `failed` |
 | `files_total`, `files_done` | integer | Progress of the current pass over changed files |

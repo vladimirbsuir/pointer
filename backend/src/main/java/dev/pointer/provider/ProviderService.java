@@ -10,6 +10,7 @@ import dev.pointer.provider.llm.RelayTransports;
 import java.time.Clock;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -130,7 +131,7 @@ public class ProviderService {
         if (request.contextWindow() != null) {
             model.update(
                     new ProviderDtos.UpdateModelRequest(
-                            null, request.contextWindow(), null, null, null, null, null, null, null),
+                            null, request.contextWindow(), null, null, null, null, null, null, null, null, null),
                     clock.instant());
         }
         return toResponse(models.save(model));
@@ -168,7 +169,13 @@ public class ProviderService {
                 model.supportsVision(),
                 model.getInputPricePerMtok(),
                 model.getOutputPricePerMtok(),
+                model.embeddingPrefixes(),
                 endpoint(provider, preferredDeviceId));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<EmbeddingPrefixes> embeddingPrefixes(UUID modelId) {
+        return models.findById(modelId).map(ProviderModel::embeddingPrefixes);
     }
 
     @Transactional(readOnly = true)
@@ -264,6 +271,8 @@ public class ProviderService {
                 model.supportsVision(),
                 model.getInputPricePerMtok(),
                 model.getOutputPricePerMtok(),
+                model.getEmbeddingQueryPrefix(),
+                model.getEmbeddingDocumentPrefix(),
                 model.getSource(),
                 model.isEnabled());
     }

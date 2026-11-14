@@ -1,5 +1,6 @@
 package dev.pointer.rag;
 
+import dev.pointer.provider.EmbeddingPrefixes;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -8,6 +9,7 @@ record IndexState(
         UUID userId,
         UUID embeddingModelId,
         String embeddingModelKey,
+        EmbeddingPrefixes prefixes,
         Integer dimensions,
         String status,
         int filesTotal,
