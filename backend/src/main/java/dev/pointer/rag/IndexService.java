@@ -31,6 +31,9 @@ public class IndexService {
     private static final Logger log = LoggerFactory.getLogger(IndexService.class);
     private static final int FILES_PER_REQUEST = 20;
     private static final int MAX_CHANGES_BEFORE_SEARCH = 50;
+    static final int LEXICAL_VERSION = 1;
+    static final int FUSION_CANDIDATES = 50;
+    private static final int QUERY_DEFAULT_LIMIT = 10;
 
     private final IndexStore store;
     private final DeviceIndexClient device;
@@ -84,6 +87,7 @@ public class IndexService {
         Thread.ofVirtual().name("index-" + projectId).start(() -> {
             try {
                 var cancellation = new Cancellation();
+                rebuildLexicalIfOutdated(projectId);
                 var changes = changes(projectId, deviceId, cancellation);
                 var dimensions = apply(projectId, deviceId, model, prefixes, changes, cancellation);
                 store.finish(projectId, dimensions);
@@ -117,9 +121,105 @@ public class IndexService {
                 .filter(found -> found.embeddingModelId() != null)
                 .orElseThrow(() -> new IndexException("index_missing", "The project has no semantic index"));
         var model = embedder.resolve(state.userId(), state.embeddingModelId(), deviceId);
+        upgradeLexical(state);
         var freshness = refresh(projectId, deviceId, model, state.prefixes(), cancellation);
-        var queryVector = embedder.embedQuery(model, state.prefixes(), query, cancellation);
-        return new SearchOutcome(store.search(projectId, queryVector, pathPrefix, limit), freshness);
+        var hits = rank(
+                projectId, model, state.prefixes(), state.searchStrategy(), query, pathPrefix, limit, cancellation);
+        return new SearchOutcome(hits, freshness);
+    }
+
+    public IndexDtos.IndexQueryResponse query(
+            UUID userId, UUID deviceId, UUID projectId, IndexDtos.IndexQueryRequest request) {
+        projects.owned(userId, projectId);
+        var state = store.find(projectId)
+                .filter(found -> found.embeddingModelId() != null)
+                .orElseThrow(() -> ApiException.notFound("index_missing", "The project has no semantic index"));
+        var strategy =
+                request.strategy() == null ? state.searchStrategy() : SearchStrategy.fromWireName(request.strategy());
+        var limit = request.limit() == null ? QUERY_DEFAULT_LIMIT : request.limit();
+        var cancellation = new Cancellation();
+        var model = embedder.resolve(state.userId(), state.embeddingModelId(), deviceId);
+        upgradeLexical(state);
+        refresh(projectId, deviceId, model, state.prefixes(), cancellation);
+        var started = System.nanoTime();
+        var hits = rank(
+                projectId,
+                model,
+                state.prefixes(),
+                strategy,
+                request.query().strip(),
+                SemanticSearchOperation.pathPrefix(request.path()),
+                limit,
+                cancellation);
+        var tookMs = (System.nanoTime() - started) / 1_000_000;
+        return new IndexDtos.IndexQueryResponse(
+                strategy.wireName(),
+                tookMs,
+                hits.stream()
+                        .map(hit -> new IndexDtos.IndexQueryHit(
+                                hit.chunk().path(),
+                                hit.chunk().symbol(),
+                                hit.chunk().kind(),
+                                hit.chunk().startLine(),
+                                hit.chunk().endLine(),
+                                hit.score(),
+                                hit.vectorRank(),
+                                hit.lexicalRank()))
+                        .toList());
+    }
+
+    public IndexDtos.IndexStatusResponse changeStrategy(UUID userId, UUID projectId, String strategyName) {
+        projects.owned(userId, projectId);
+        var strategy = SearchStrategy.fromWireName(strategyName);
+        if (strategy == SearchStrategy.LEXICAL) {
+            throw ApiException.badRequest("invalid_strategy", "Semantic search needs vectors: use vector or hybrid");
+        }
+        if (store.find(projectId).isEmpty()) {
+            throw ApiException.notFound("index_missing", "The project has no semantic index");
+        }
+        store.changeStrategy(projectId, strategy);
+        return response(store.find(projectId).orElse(null));
+    }
+
+    private List<IndexStore.SearchHit> rank(
+            UUID projectId,
+            ResolvedModel model,
+            EmbeddingPrefixes prefixes,
+            SearchStrategy strategy,
+            String query,
+            String pathPrefix,
+            int limit,
+            Cancellation cancellation) {
+        var queryVector = strategy.usesVectors() ? embedder.embedQuery(model, prefixes, query, cancellation) : null;
+        var candidates = strategy == SearchStrategy.VECTOR ? limit : FUSION_CANDIDATES;
+        var vector = strategy.usesVectors()
+                ? store.vectorCandidates(projectId, queryVector, pathPrefix, candidates)
+                : List.<IndexStore.Candidate>of();
+        var lexical = strategy.usesLexical()
+                ? store.lexicalCandidates(projectId, queryVector, CodeTokens.queryTerms(query), pathPrefix, candidates)
+                : List.<IndexStore.Candidate>of();
+        return RankFusion.fuse(vector, lexical, limit);
+    }
+
+    private void upgradeLexical(IndexState state) {
+        if (state.lexicalVersion() >= LEXICAL_VERSION || !running.add(state.projectId())) {
+            return;
+        }
+        try {
+            rebuildLexicalIfOutdated(state.projectId());
+        } finally {
+            running.remove(state.projectId());
+        }
+    }
+
+    private void rebuildLexicalIfOutdated(UUID projectId) {
+        var outdated = store.find(projectId)
+                .filter(state -> state.lexicalVersion() < LEXICAL_VERSION)
+                .isPresent();
+        if (outdated) {
+            var count = store.rebuildLexical(projectId, LEXICAL_VERSION);
+            log.info("Rebuilt full-text tokens of {} chunks in project {}", count, projectId);
+        }
     }
 
     private IndexDtos.IndexStatusResponse response(IndexState state) {

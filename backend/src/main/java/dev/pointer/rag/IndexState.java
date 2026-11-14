@@ -17,7 +17,9 @@ record IndexState(
         int fileCount,
         int chunkCount,
         String error,
-        Instant indexedAt) {
+        Instant indexedAt,
+        int lexicalVersion,
+        SearchStrategy searchStrategy) {
 
     static final String INDEXING = "indexing";
     static final String READY = "ready";

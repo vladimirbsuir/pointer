@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 @RequiredArgsConstructor
 class IndexStore {
+
+    private static final String LEXICAL_VECTOR =
+            "setweight(to_tsvector('english', :head), 'A') || setweight(to_tsvector('english', :body), 'B')";
 
     private final JdbcClient jdbc;
     private final Clock clock;
@@ -168,10 +172,10 @@ class IndexStore {
             var chunk = chunks.get(index);
             jdbc.sql("""
                             insert into code_chunks (id, project_id, path, symbol, kind, start_line, end_line,
-                                                     content, embedding)
+                                                     content, embedding, lexical)
                             values (:id, :projectId, :path, :symbol, :kind, :startLine, :endLine, :content,
-                                    cast(:embedding as vector))
-                            """)
+                                    cast(:embedding as vector),
+                            """ + LEXICAL_VECTOR + ")")
                     .param("id", Ids.newId())
                     .param("projectId", projectId)
                     .param("path", path)
@@ -181,6 +185,8 @@ class IndexStore {
                     .param("endLine", chunk.endLine())
                     .param("content", chunk.content())
                     .param("embedding", literal(embeddings.get(index)))
+                    .param("head", lexicalHead(path, chunk.symbol()))
+                    .param("body", CodeTokens.expand(chunk.content()))
                     .update();
         }
         jdbc.sql("""
@@ -193,10 +199,10 @@ class IndexStore {
                 .update();
     }
 
-    List<SearchHit> search(UUID projectId, float[] query, String pathPrefix, int limit) {
+    List<Candidate> vectorCandidates(UUID projectId, float[] query, String pathPrefix, int limit) {
         return jdbc.sql("""
-                        select path, symbol, kind, start_line, end_line, content,
-                               1 - (embedding <=> cast(:query as vector)) as score
+                        select id, path, symbol, kind, start_line, end_line, content,
+                               1 - (embedding <=> cast(:query as vector)) as similarity
                         from code_chunks
                         where project_id = :projectId and path like :prefix
                         order by embedding <=> cast(:query as vector)
@@ -206,16 +212,107 @@ class IndexStore {
                 .param("query", literal(query))
                 .param("prefix", escapeLike(pathPrefix) + "%")
                 .param("limit", limit)
-                .query((rs, row) -> new SearchHit(
-                        new CodeChunk(
-                                rs.getString("path"),
-                                rs.getString("symbol"),
-                                rs.getString("kind"),
-                                rs.getInt("start_line"),
-                                rs.getInt("end_line"),
-                                rs.getString("content")),
-                        rs.getDouble("score")))
+                .query(IndexStore::candidate)
                 .list();
+    }
+
+    List<Candidate> lexicalCandidates(UUID projectId, float[] query, List<String> terms, String pathPrefix, int limit) {
+        if (terms.isEmpty()) {
+            return List.of();
+        }
+        var weights = termWeights(projectId, terms);
+        var score = new StringBuilder();
+        for (var index = 0; index < terms.size(); index++) {
+            if (index > 0) {
+                score.append(" + ");
+            }
+            score.append(":w")
+                    .append(index)
+                    .append(" * ts_rank(lexical, to_tsquery('english', :t")
+                    .append(index)
+                    .append("), 1)");
+        }
+        var statement = jdbc.sql("""
+                        select id, path, symbol, kind, start_line, end_line, content,
+                               case when cast(:query as vector) is null then 0
+                                    else 1 - (embedding <=> cast(:query as vector)) end as similarity
+                        from code_chunks
+                        where project_id = :projectId and path like :prefix
+                          and lexical @@ to_tsquery('english', :terms)
+                        order by %s desc, id
+                        limit :limit
+                        """.formatted(score))
+                .param("projectId", projectId)
+                .param("query", query == null ? null : literal(query))
+                .param("terms", CodeTokens.tsQuery(terms))
+                .param("prefix", escapeLike(pathPrefix) + "%")
+                .param("limit", limit);
+        for (var index = 0; index < terms.size(); index++) {
+            statement = statement.param("t" + index, terms.get(index)).param("w" + index, weights.get(index));
+        }
+        return statement.query(IndexStore::candidate).list();
+    }
+
+    private List<Double> termWeights(UUID projectId, List<String> terms) {
+        var counts = new StringBuilder("select count(*) as total");
+        for (var index = 0; index < terms.size(); index++) {
+            counts.append(", count(*) filter (where lexical @@ to_tsquery('english', :t")
+                    .append(index)
+                    .append(")) as d")
+                    .append(index);
+        }
+        var statement = jdbc.sql(counts.append(" from code_chunks where project_id = :projectId")
+                        .toString())
+                .param("projectId", projectId);
+        for (var index = 0; index < terms.size(); index++) {
+            statement = statement.param("t" + index, terms.get(index));
+        }
+        return statement
+                .query((rs, row) -> {
+                    var total = rs.getLong("total");
+                    var weights = new ArrayList<Double>(terms.size());
+                    for (var index = 0; index < terms.size(); index++) {
+                        weights.add(inverseDocumentFrequency(total, rs.getLong("d" + index)));
+                    }
+                    return weights;
+                })
+                .single();
+    }
+
+    static double inverseDocumentFrequency(long total, long containing) {
+        return Math.log(1 + (total - containing + 0.5) / (containing + 0.5));
+    }
+
+    @Transactional
+    int rebuildLexical(UUID projectId, int version) {
+        var rows = jdbc.sql("select id, path, symbol, content from code_chunks where project_id = :projectId")
+                .param("projectId", projectId)
+                .query((rs, row) -> new LexicalSource(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("path"),
+                        rs.getString("symbol"),
+                        rs.getString("content")))
+                .list();
+        for (var row : rows) {
+            jdbc.sql("update code_chunks set lexical = " + LEXICAL_VECTOR + " where id = :id")
+                    .param("id", row.id())
+                    .param("head", lexicalHead(row.path(), row.symbol()))
+                    .param("body", CodeTokens.expand(row.content()))
+                    .update();
+        }
+        jdbc.sql("update index_states set lexical_version = :version where project_id = :projectId")
+                .param("projectId", projectId)
+                .param("version", version)
+                .update();
+        return rows.size();
+    }
+
+    void changeStrategy(UUID projectId, SearchStrategy strategy) {
+        jdbc.sql("update index_states set search_strategy = :strategy, updated_at = :now where project_id = :projectId")
+                .param("projectId", projectId)
+                .param("strategy", strategy.wireName())
+                .param("now", now())
+                .update();
     }
 
     private Timestamp now() {
@@ -237,6 +334,23 @@ class IndexStore {
         return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
+    private static String lexicalHead(String path, String symbol) {
+        return CodeTokens.expand(symbol == null ? path : path + " " + symbol);
+    }
+
+    private static Candidate candidate(ResultSet rs, int row) throws SQLException {
+        return new Candidate(
+                rs.getObject("id", UUID.class),
+                new CodeChunk(
+                        rs.getString("path"),
+                        rs.getString("symbol"),
+                        rs.getString("kind"),
+                        rs.getInt("start_line"),
+                        rs.getInt("end_line"),
+                        rs.getString("content")),
+                rs.getDouble("similarity"));
+    }
+
     private static IndexState state(ResultSet rs, int row) throws SQLException {
         var indexedAt = rs.getTimestamp("indexed_at");
         return new IndexState(
@@ -253,8 +367,14 @@ class IndexStore {
                 rs.getInt("file_count"),
                 rs.getInt("chunk_count"),
                 rs.getString("error"),
-                indexedAt == null ? null : indexedAt.toInstant());
+                indexedAt == null ? null : indexedAt.toInstant(),
+                rs.getInt("lexical_version"),
+                SearchStrategy.fromWireName(rs.getString("search_strategy")));
     }
 
-    record SearchHit(CodeChunk chunk, double score) {}
+    record Candidate(UUID id, CodeChunk chunk, double similarity) {}
+
+    record SearchHit(CodeChunk chunk, double score, Integer vectorRank, Integer lexicalRank) {}
+
+    private record LexicalSource(UUID id, String path, String symbol, String content) {}
 }

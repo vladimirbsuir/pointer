@@ -66,7 +66,10 @@ export type ProjectIndex = {
   error: string | null;
   indexedAt: string | null;
   prefixesChanged: boolean;
+  searchStrategy: SearchStrategy;
 };
+
+export type SearchStrategy = "hybrid" | "vector";
 
 export type SessionStatus =
   "idle" | "running" | "waiting_for_approval" | "waiting_for_executor" | "error";

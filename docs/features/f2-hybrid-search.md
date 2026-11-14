@@ -1,6 +1,6 @@
 # F2. Hybrid code search and RAG benchmark
 
-Status: In progress (phase 1 implemented) · Requirement ids: CTX-8 to CTX-10 · Depends on: semantic index (CTX-7, TOOL-14, [ADR 0013](../adr/0013-semantic-code-index.md)).
+Status: In progress (phases 1 and 2 implemented) · Requirement ids: CTX-8 to CTX-10 · Depends on: semantic index (CTX-7, TOOL-14, [ADR 0013](../adr/0013-semantic-code-index.md)).
 
 ## Goal
 
@@ -24,13 +24,13 @@ Combine full-text search over code identifiers with vector search, fix embedding
 
 ### Lexical tokens
 
-`rag/CodeTokens.expand(String)` produces the text for `to_tsvector('simple', ...)`:
+`rag/CodeTokens.expand(String)` produces the text for `to_tsvector('english', ...)` (English stemming, so `keys` matches `key` and `encryption` matches `encrypt`; other scripts pass through unchanged):
 
-- split on non-alphanumerics; split `camelCase`, `PascalCase`, `snake_case`, `kebab-case`, letter/digit borders;
+- split on non-alphanumerics; split `camelCase`, `PascalCase`, `snake_case`, `kebab-case`, letter/digit borders; tokens longer than 64 characters are dropped;
 - keep both the whole identifier and its parts, lowercased: `SecretCipher` → `secretcipher secret cipher`;
-- input per chunk: `path` + `symbol` + `content`; path segments weigh as `A`, symbol as `A`, content as `B` (`setweight`).
+- input per chunk: `path` + `symbol` weigh as `A`, `content` as `B` (`setweight`).
 
-The same expansion is applied to the query; the tsquery is the OR of the expanded tokens (`to_tsquery('simple', 't1 | t2 | ...')`), stop words of English and Russian removed in Java, so natural-language queries do not need every word to match.
+The same expansion is applied to the query; the tsquery is the OR of the expanded tokens (`to_tsquery('english', 't1 | t2 | ...')`), with single letters and English and Russian stop words removed in Java, so natural-language queries do not need every word to match.
 
 ### Schema (`Vn__hybrid_search.sql`)
 
@@ -47,18 +47,18 @@ ALTER TABLE models
     ADD COLUMN embedding_document_prefix text;
 ```
 
-`IndexService` keeps a constant `LEXICAL_VERSION`. When `index_states.lexical_version` is lower, it recomputes `lexical` for all chunks of the project from the stored `content` in batches (no device calls, no embeddings) and sets the version. New and changed chunks get `lexical` on insert.
+`IndexService` keeps a constant `LEXICAL_VERSION` (1). When `index_states.lexical_version` is lower, the next search or indexing run recomputes `lexical` for all chunks of the project from the stored `content` in one transaction (no device calls, no embeddings) and sets the version. New and changed chunks get `lexical` on insert.
 
 ### Retrieval
 
-`IndexStore.search(projectId, queryVector, queryText, pathPrefix, limit, strategy)`:
+`IndexService.rank` with `IndexStore.vectorCandidates` / `lexicalCandidates` and `RankFusion`:
 
-1. Vector candidates: top 50 by cosine distance (existing query).
-2. Lexical candidates: top 50 by `ts_rank_cd(lexical, query, 32)` where `lexical @@ query`.
-3. Reciprocal rank fusion in Java: `score = Σ 1 / (60 + rank)` over the lists a chunk appears in.
-4. Return the top `limit` with both component ranks kept for debugging.
+1. Vector candidates: top 50 by cosine distance.
+2. Lexical candidates: chunks where `lexical @@ query`, top 50 by `Σ idf(t) · ts_rank(lexical, t, 1)` over the query terms, with the BM25 inverse document frequency `idf(t) = ln(1 + (N − n_t + 0.5) / (n_t + 0.5))` counted per project in one aggregate query. Plain `ts_rank` has no IDF, so frequent words like `provider` or `key` outweighed the rare `encrypt` in the first live run. Each candidate also carries its cosine similarity.
+3. Reciprocal rank fusion in Java: `score = Σ 1 / (60 + rank)` over the lists a chunk appears in; ties go to the higher cosine similarity.
+4. Return the top `limit` with both component ranks. The `score` shown to the agent stays the cosine similarity.
 
-Strategy `vector` skips steps 2 and 3. A strategy `lexical` exists only for the benchmark endpoint.
+Strategy `vector` takes only `limit` vector candidates and skips steps 2 and 3. Strategy `lexical` skips the query embedding and exists only for the query endpoint. The project strategy is changed with `PUT /projects/{id}/index/settings` `{searchStrategy: vector|hybrid}` and shown in the index dialog.
 
 ### Prefixes
 
@@ -76,8 +76,23 @@ Strategy `vector` skips steps 2 and 3. A strategy `lexical` exists only for the 
 ## Phases
 
 1. Query and document prefixes (small, independent, rerun the first measurement). Implemented: `EmbeddingPrefixes`, migration V18; the index status reports `prefixesChanged`, and starting an update with changed prefixes rebuilds the index.
-2. Lexical column, `CodeTokens`, hybrid fusion, project setting.
-3. Benchmark endpoint, dataset, script; results recorded in `docs/` for the thesis.
+2. Lexical column, `CodeTokens`, hybrid fusion, project setting. Implemented: migration V19, `CodeTokens`, `RankFusion`, `SearchStrategy`, the settings endpoint and the strategy switch in the index dialog. The query endpoint from phase 3 was built here too, to compare strategies on a real index.
+3. Dataset, script; results recorded in `docs/` for the thesis.
+
+## Early results
+
+First live run on this repository (383 files, 1,297 chunks, `nomic-embed-text` with prefixes on CPU through Ollama, indexing took 629 s) with 10 hand-written questions, top 5 per strategy, after IDF weighting:
+
+| Strategy | Expected file in top 5 | At rank 1 | Typical latency |
+|---|---|---|---|
+| vector | 6 / 10 | 4 / 10 | 55 to 300 ms (query embedding on CPU) |
+| lexical | 7 / 10 | 5 / 10 | 15 to 35 ms |
+| hybrid | 7 / 10 | 6 / 10 | 75 to 275 ms |
+
+- Hybrid ranked first most often; lexical alone is the fastest and strongest on exact names (`SessionEventBus`, `RankFusion`, `kill_tree`).
+- "encrypt provider API keys" finds `SecretCipher` only with IDF weighting (lexical rank 2, hybrid rank 4); vector search does not find it.
+- A Russian question against English code fails in every strategy: vector search returns the Russian Telegram texts, lexical has no shared words. Cross-lingual retrieval is a topic for the phase 3 dataset.
+- Ten questions are not a benchmark; the phase 3 dataset gives the numbers for the thesis.
 
 ## Tests
 

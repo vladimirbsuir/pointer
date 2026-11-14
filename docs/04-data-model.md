@@ -400,10 +400,12 @@ Tables of the `rag` module ([ADR 0013](adr/0013-semantic-code-index.md)), access
 | `file_count`, `chunk_count` | integer | Size of the index |
 | `error` | text | Last failure |
 | `indexed_at`, `updated_at` | timestamptz | |
+| `lexical_version` | integer | Version of the full-text tokenizer the `lexical` column was built with; outdated indexes are re-tokenized on the next search |
+| `search_strategy` | text | `vector` or `hybrid` (default), CTX-8 |
 
 `indexed_files`: (`project_id`, `path`) PK, `content_hash` (SHA-256 reported by the device).
 
-`code_chunks`: `id`, `project_id`, `path`, `symbol` (nullable, e.g. `SessionService.create`), `kind` (syntax node kind, `group` or `lines`), `start_line`, `end_line`, `content`, `embedding vector` without a fixed dimension. Index on (`project_id`, `path`); search is an exact cosine scan per project.
+`code_chunks`: `id`, `project_id`, `path`, `symbol` (nullable, e.g. `SessionService.create`), `kind` (syntax node kind, `group` or `lines`), `start_line`, `end_line`, `content`, `embedding vector` without a fixed dimension, `lexical tsvector` (identifier-aware tokens of path and symbol with weight A and of content with weight B, `english` configuration). Indexes on (`project_id`, `path`) and GIN on `lexical`; vector search is an exact cosine scan per project, hybrid search fuses it with full-text ranking ([F2](features/f2-hybrid-search.md)).
 
 ### Custom tools
 

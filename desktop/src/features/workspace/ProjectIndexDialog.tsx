@@ -5,7 +5,12 @@ import { toast } from "sonner";
 import { DatabaseZapIcon, Loader2Icon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { api, unwrap } from "@/shared/api/client";
 import { queryKeys, useProjectIndex, useProviders, useSettings } from "@/shared/api/queries";
-import { toAppError, type Project, type ProjectIndex } from "@/shared/api/types";
+import {
+  toAppError,
+  type Project,
+  type ProjectIndex,
+  type SearchStrategy,
+} from "@/shared/api/types";
 import { errorMessage } from "@/shared/i18n/errors";
 import { Button } from "@/shared/ui/button";
 import {
@@ -86,6 +91,16 @@ function IndexBody({ project, linked }: { project: Project; linked: boolean }) {
       ),
     );
 
+  const changeStrategy = (searchStrategy: SearchStrategy) =>
+    run(() =>
+      unwrap(
+        api().PUT("/api/v1/projects/{projectId}/index/settings", {
+          params: { path: { projectId: project.id } },
+          body: { searchStrategy },
+        }),
+      ),
+    );
+
   const remove = () =>
     run(() =>
       unwrap(
@@ -110,6 +125,26 @@ function IndexBody({ project, linked }: { project: Project; linked: boolean }) {
           <p className="text-amber-600">{t("index.prefixesChanged")}</p>
         )}
         {!linked && <p className="text-amber-600">{t("index.notLinked")}</p>}
+        {index && index.status !== "none" && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">{t("index.strategy")}</span>
+              {(["hybrid", "vector"] as const).map((strategy) => (
+                <Button
+                  key={strategy}
+                  size="sm"
+                  variant={index.searchStrategy === strategy ? "secondary" : "ghost"}
+                  aria-pressed={index.searchStrategy === strategy}
+                  disabled={pending}
+                  onClick={() => void changeStrategy(strategy)}
+                >
+                  {strategy === "hybrid" ? t("index.strategyHybrid") : t("index.strategyVector")}
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">{t("index.strategyHint")}</p>
+          </div>
+        )}
       </div>
       <DialogFooter>
         {index && index.status !== "none" && (

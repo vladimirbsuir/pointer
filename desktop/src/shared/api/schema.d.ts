@@ -20,6 +20,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/index/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["changeSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/permissions": {
         parameters: {
             query?: never;
@@ -431,6 +447,22 @@ export interface paths {
         put?: never;
         post: operations["start"];
         delete: operations["delete_1"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/index/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["query"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -925,6 +957,28 @@ export interface components {
             defaultPolicy?: string;
             policy?: string;
         };
+        IndexSettingsRequest: {
+            searchStrategy: string;
+        };
+        IndexStatusResponse: {
+            status?: string;
+            /** Format: uuid */
+            embeddingModelId?: string;
+            embeddingModelKey?: string;
+            /** Format: int32 */
+            filesTotal?: number;
+            /** Format: int32 */
+            filesDone?: number;
+            /** Format: int32 */
+            fileCount?: number;
+            /** Format: int32 */
+            chunkCount?: number;
+            error?: string;
+            /** Format: date-time */
+            indexedAt?: string;
+            prefixesChanged?: boolean;
+            searchStrategy?: string;
+        };
         UpdateSettingsRequest: {
             globalInstructions?: string;
             /** Format: uuid */
@@ -1179,23 +1233,33 @@ export interface components {
         StartIndexRequest: {
             rebuild?: boolean;
         };
-        IndexStatusResponse: {
-            status?: string;
-            /** Format: uuid */
-            embeddingModelId?: string;
-            embeddingModelKey?: string;
+        IndexQueryRequest: {
+            query: string;
             /** Format: int32 */
-            filesTotal?: number;
+            limit?: number;
+            strategy?: string;
+            path?: string;
+        };
+        IndexQueryHit: {
+            path?: string;
+            symbol?: string;
+            kind?: string;
             /** Format: int32 */
-            filesDone?: number;
+            startLine?: number;
             /** Format: int32 */
-            fileCount?: number;
+            endLine?: number;
+            /** Format: double */
+            score?: number;
             /** Format: int32 */
-            chunkCount?: number;
-            error?: string;
-            /** Format: date-time */
-            indexedAt?: string;
-            prefixesChanged?: boolean;
+            vectorRank?: number;
+            /** Format: int32 */
+            lexicalRank?: number;
+        };
+        IndexQueryResponse: {
+            strategy?: string;
+            /** Format: int64 */
+            tookMs?: number;
+            results?: components["schemas"]["IndexQueryHit"][];
         };
         CustomToolResponse: {
             /** Format: uuid */
@@ -1447,6 +1511,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PermissionsResponse"];
+                };
+            };
+        };
+    };
+    changeSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IndexSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexStatusResponse"];
                 };
             };
         };
@@ -2303,6 +2393,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    query: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IndexQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexQueryResponse"];
+                };
             };
         };
     };

@@ -14,8 +14,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.JsonNode;
 
 class SemanticSearchTests extends AgentIntegrationTest {
@@ -23,6 +25,11 @@ class SemanticSearchTests extends AgentIntegrationTest {
     private static final String SESSIONS_FILE = "src/sessions.ts";
     private static final String BILLING_FILE = "src/billing.ts";
     private static final String THEME_FILE = "src/theme.ts";
+    private static final String CRYPTO_FILE = "src/crypto.ts";
+    private static final String VAULT_FILE = "src/vault.ts";
+
+    @Autowired
+    private JdbcClient jdbc;
 
     @Test
     void indexingRequiresAnEmbeddingModel() {
@@ -137,6 +144,74 @@ class SemanticSearchTests extends AgentIntegrationTest {
     }
 
     @Test
+    void hybridSearchFindsExactNamesThatVectorSearchMissesAndRebuildsOutdatedTokens() throws Exception {
+        var setup = setUp(false);
+        useEmbeddingModel(setup, "fake-embed");
+        var files = new ConcurrentHashMap<String, String>(Map.of(
+                CRYPTO_FILE, "export const SecretCipher = createCipher(masterKey)",
+                VAULT_FILE, "export function whereIsTheCode() { return where is the code }"));
+        var search = "{\"query\":\"where is the code for secret cipher\",\"limit\":1}";
+
+        try (var device = executor(setup, files, new CopyOnWriteArrayList<>())) {
+            startIndex(setup);
+            assertThat(awaitIndexStatus(setup, "ready").path("searchStrategy").asString())
+                    .isEqualTo("hybrid");
+
+            llm.enqueueToolCall("call_1", "semantic_search", search);
+            llm.enqueueText("Found.");
+            send(setup, "Find the cipher", null);
+            awaitTurns(device, 1);
+            awaitTitle(device);
+            assertThat(firstResultPath(device, 0)).isEqualTo(CRYPTO_FILE);
+
+            assertThat(changeStrategy(setup, "vector").path("searchStrategy").asString())
+                    .isEqualTo("vector");
+            llm.enqueueToolCall("call_2", "semantic_search", search);
+            llm.enqueueText("Found.");
+            send(setup, "Find it by meaning only", null);
+            awaitTurns(device, 2);
+            assertThat(firstResultPath(device, 1)).isEqualTo(VAULT_FILE);
+
+            changeStrategy(setup, "hybrid");
+            jdbc.sql("update code_chunks set lexical = null where project_id = :projectId")
+                    .param("projectId", setup.projectId())
+                    .update();
+            jdbc.sql("update index_states set lexical_version = 0 where project_id = :projectId")
+                    .param("projectId", setup.projectId())
+                    .update();
+            llm.enqueueToolCall("call_3", "semantic_search", search);
+            llm.enqueueText("Found.");
+            send(setup, "Find it again", null);
+            awaitTurns(device, 3);
+            assertThat(firstResultPath(device, 2)).isEqualTo(CRYPTO_FILE);
+        }
+
+        var version = jdbc.sql("select lexical_version from index_states where project_id = :projectId")
+                .param("projectId", setup.projectId())
+                .query(Integer.class)
+                .single();
+        assertThat(version).isEqualTo(1);
+        var lexical = query(setup, "lexical");
+        assertThat(lexical.path("strategy").asString()).isEqualTo("lexical");
+        assertThat(lexical.path("results")).hasSize(1);
+        assertThat(lexical.path("results").get(0).path("path").asString()).isEqualTo(CRYPTO_FILE);
+        assertThat(lexical.path("results").get(0).path("lexicalRank").asInt()).isEqualTo(1);
+        assertThat(lexical.path("results").get(0).path("vectorRank").isNull()).isTrue();
+        var hybrid = query(setup, "hybrid");
+        assertThat(hybrid.path("results").get(0).path("path").asString()).isEqualTo(CRYPTO_FILE);
+        assertThat(hybrid.path("results")).hasSize(2);
+        assertThat(query(setup, "vector").path("results").get(0).path("path").asString())
+                .isEqualTo(VAULT_FILE);
+        client.put()
+                .uri("/api/v1/projects/{id}/index/settings", setup.projectId())
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .body(Map.of("searchStrategy", "lexical"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
+
+    @Test
     void searchToolIsHiddenUntilTheProjectIsIndexed() throws Exception {
         var setup = setUp(false);
         llm.enqueueText("No index yet.");
@@ -147,6 +222,66 @@ class SemanticSearchTests extends AgentIntegrationTest {
         }
 
         assertThat(llm.requests().getFirst()).contains("read_file").doesNotContain("semantic_search");
+    }
+
+    private JsonNode changeStrategy(Setup setup, String strategy) {
+        return client.put()
+                .uri("/api/v1/projects/{id}/index/settings", setup.projectId())
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .body(Map.of("searchStrategy", strategy))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
+    }
+
+    private JsonNode query(Setup setup, String strategy) {
+        return client.post()
+                .uri("/api/v1/projects/{id}/index/query", setup.projectId())
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .body(Map.of("query", "where is the code for secret cipher", "strategy", strategy, "limit", 5))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
+    }
+
+    private static void awaitTurns(GatewayTestClient device, int count) throws Exception {
+        device.await(
+                message -> device.events().stream()
+                                .filter(event -> eventKind(event).equals("turn.completed"))
+                                .count()
+                        >= count,
+                TIMEOUT);
+    }
+
+    private static void awaitTitle(GatewayTestClient device) throws Exception {
+        device.await(
+                message -> eventKind(message).equals("session.updated")
+                        && message.path("payload")
+                                .path("event")
+                                .path("title")
+                                .asString()
+                                .equals("Title"),
+                TIMEOUT);
+    }
+
+    private static String firstResultPath(GatewayTestClient device, int callIndex) {
+        return device.events().stream()
+                .filter(event -> eventKind(event).equals("item.completed"))
+                .map(event -> event.path("payload").path("event").path("item"))
+                .filter(item -> item.path("type").asString().equals("tool_call"))
+                .toList()
+                .get(callIndex)
+                .path("result")
+                .path("results")
+                .get(0)
+                .path("path")
+                .asString();
     }
 
     private void startIndex(Setup setup) {
