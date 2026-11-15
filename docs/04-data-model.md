@@ -266,6 +266,7 @@ Prefix rules for `run_command` (PERM-4).
 | `total_input_tokens` | bigint | |
 | `total_output_tokens` | bigint | |
 | `estimated_cost` | numeric(14,6) | Sum of call costs from model prices at the time of each call; null until a priced model is used (CTX-6) |
+| `budget_usd` | numeric(10,4) | Nullable; turns stop with `budget_exceeded` once `estimated_cost` reaches it (ROUTE-6) |
 | `archived_at` | timestamptz | Nullable |
 | `created_at`, `updated_at` | timestamptz | |
 
@@ -281,7 +282,7 @@ Index: (`project_id`, `updated_at` desc).
 | `kind` | text | `message` or `compaction` |
 | `mode` | text | Mode at turn start |
 | `model_id` | uuid | FK `models`, nullable |
-| `status` | text | `running`, `completed`, `cancelled`, `failed`, `step_limit`, `interrupted` |
+| `status` | text | `running`, `completed`, `cancelled`, `failed`, `step_limit`, `interrupted`, `budget_exceeded` |
 | `error` | jsonb | Nullable |
 | `input_tokens`, `output_tokens` | bigint | |
 | `idempotency_key` | text | From `POST /messages`, nullable |
@@ -508,3 +509,22 @@ Agent memory ([F4](features/f4-agent-memory.md)), accessed with plain SQL becaus
 | `suggested_count` | integer | Memories suggested from this session |
 | `embedding`, `embedding_model_id` | vector, uuid | Embedding of the summary for `search_sessions` |
 | `updated_at` | timestamptz | |
+
+### Model usage
+
+`model_usage`: one row per model call with reported usage ([F3](features/f3-model-routing.md), ROUTE-6).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `session_id` | uuid | FK `sessions`, cascade |
+| `turn_id` | uuid | FK `turns`, `ON DELETE SET NULL`; null for calls outside a turn (memory curation) |
+| `model_id` | uuid | FK `models`, `ON DELETE SET NULL` |
+| `model_label` | text | Display name at the time of the call |
+| `role` | text | `main` now; `plan`, `fast`, `explore`, `fallback` for smart routing |
+| `purpose` | text | `step`, `title`, `compaction`, `memory`, `explore` |
+| `prompt_tokens`, `completion_tokens` | bigint | As reported by the provider |
+| `cost_usd` | numeric(12,6) | Nullable; from model prices at the time of the call |
+| `created_at` | timestamptz | |
+
+Index: (`session_id`, `created_at`).

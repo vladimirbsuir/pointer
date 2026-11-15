@@ -40,6 +40,7 @@ public class AgentSession extends BaseEntity {
     private long totalInputTokens;
     private long totalOutputTokens;
     private BigDecimal estimatedCost;
+    private BigDecimal budgetUsd;
     private String worktreeBranch;
     private String worktreeBaseBranch;
     private String worktreeState;
@@ -82,6 +83,15 @@ public class AgentSession extends BaseEntity {
     void changeModel(UUID modelId, Instant now) {
         this.modelId = modelId;
         this.updatedAt = now;
+    }
+
+    void changeBudget(BigDecimal budgetUsd, Instant now) {
+        this.budgetUsd = budgetUsd;
+        this.updatedAt = now;
+    }
+
+    public boolean isOverBudget() {
+        return budgetUsd != null && estimatedCost != null && estimatedCost.compareTo(budgetUsd) >= 0;
     }
 
     void changeAutoApprove(boolean autoApprove, Instant now) {

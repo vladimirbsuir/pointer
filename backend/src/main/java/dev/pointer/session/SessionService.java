@@ -4,6 +4,7 @@ import dev.pointer.common.error.ApiException;
 import dev.pointer.project.ProjectService;
 import dev.pointer.provider.ProviderService;
 import dev.pointer.user.SettingsService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,6 +33,7 @@ public class SessionService {
     private final ProjectService projectService;
     private final ProviderService providerService;
     private final SettingsService settingsService;
+    private final UsageLedger ledger;
     private final Clock clock;
 
     @Transactional
@@ -44,8 +46,11 @@ public class SessionService {
         }
         var mode = request.mode() == null ? DEFAULT_MODE : request.mode();
         var title = request.title() == null ? null : request.title().strip();
-        var session =
-                sessions.save(new AgentSession(userId, projectId, deviceId, title, mode, modelId, clock.instant()));
+        var created = new AgentSession(userId, projectId, deviceId, title, mode, modelId, clock.instant());
+        if (request.budgetUsd() != null) {
+            created.changeBudget(positiveOrNull(request.budgetUsd()), clock.instant());
+        }
+        var session = sessions.save(created);
         notifySessionsChanged(session, "created");
         return toResponse(session, 0);
     }
@@ -92,6 +97,9 @@ public class SessionService {
         }
         if (request.archived() != null) {
             session.archive(request.archived(), now);
+        }
+        if (request.budgetUsd() != null) {
+            session.changeBudget(positiveOrNull(request.budgetUsd()), now);
         }
         sessions.save(session);
         var event = eventLog.append(userId, sessionId, "session.updated", settingsPayload(session));
@@ -216,12 +224,35 @@ public class SessionService {
         eventLog.afterCommit(() -> bus.publishSessionsChanged(session.getUserId(), payload));
     }
 
+    public SessionDtos.UsageResponse usage(UUID userId, UUID sessionId) {
+        var session = owned(userId, sessionId);
+        return new SessionDtos.UsageResponse(
+                session.getEstimatedCost(),
+                session.getBudgetUsd(),
+                ledger.summary(sessionId).stream()
+                        .map(row -> new SessionDtos.UsageEntry(
+                                row.modelId(),
+                                row.modelLabel(),
+                                row.role(),
+                                row.purpose(),
+                                row.calls(),
+                                row.promptTokens(),
+                                row.completionTokens(),
+                                row.costUsd()))
+                        .toList());
+    }
+
+    private static BigDecimal positiveOrNull(BigDecimal value) {
+        return value.signum() > 0 ? value : null;
+    }
+
     static Map<String, Object> settingsPayload(AgentSession session) {
         var payload = new LinkedHashMap<String, Object>();
         payload.put("title", session.getTitle());
         payload.put("mode", session.getMode());
         payload.put("modelId", session.getModelId());
         payload.put("autoApprove", session.isAutoApprove());
+        payload.put("budgetUsd", session.getBudgetUsd());
         payload.put("archived", session.getArchivedAt() != null);
         payload.put("worktree", worktreePayload(session));
         return payload;
@@ -252,6 +283,7 @@ public class SessionService {
                 session.getTotalInputTokens(),
                 session.getTotalOutputTokens(),
                 session.getEstimatedCost(),
+                session.getBudgetUsd(),
                 session.getExecutorDeviceId(),
                 session.getWorktreeBranch() == null
                         ? null

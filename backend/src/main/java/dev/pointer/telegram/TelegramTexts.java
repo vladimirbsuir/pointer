@@ -72,6 +72,9 @@ final class TelegramTexts {
             Map.entry("progress.cancelled", "⏹ Cancelled"),
             Map.entry("progress.failed", "❌ Failed"),
             Map.entry("progress.step_limit", "⚠️ Stopped at the step limit"),
+            Map.entry(
+                    "progress.budget_exceeded",
+                    "💸 Stopped: the session budget is used up. Raise it in Pointer to continue."),
             Map.entry("progress.earlier", "… {0} earlier steps"),
             Map.entry("approval.title", "🔐 Approval needed"),
             Map.entry("approval.command", "Run a command"),
@@ -164,6 +167,9 @@ final class TelegramTexts {
             Map.entry("progress.cancelled", "⏹ Остановлено"),
             Map.entry("progress.failed", "❌ Ошибка"),
             Map.entry("progress.step_limit", "⚠️ Достигнут лимит шагов"),
+            Map.entry(
+                    "progress.budget_exceeded",
+                    "💸 Остановлено: бюджет сессии исчерпан. Увеличьте его в Pointer, чтобы продолжить."),
             Map.entry("progress.earlier", "… ещё шагов ранее: {0}"),
             Map.entry("approval.title", "🔐 Нужно подтверждение"),
             Map.entry("approval.command", "Выполнить команду"),

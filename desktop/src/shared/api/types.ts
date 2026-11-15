@@ -151,10 +151,18 @@ export type WorktreeStatus = {
 export type Session = Required<
   Omit<
     Schemas["SessionResponse"],
-    "modelId" | "executorDeviceId" | "archivedAt" | "status" | "mode" | "worktree" | "estimatedCost"
+    | "modelId"
+    | "executorDeviceId"
+    | "archivedAt"
+    | "status"
+    | "mode"
+    | "worktree"
+    | "estimatedCost"
+    | "budgetUsd"
   >
 > & {
   estimatedCost: number | null;
+  budgetUsd: number | null;
   worktree: SessionWorktree | null;
   modelId: string | null;
   executorDeviceId: string | null;
@@ -200,3 +208,20 @@ export function toAppError(value: unknown): AppError {
   }
   return { code: "unknown", message: value instanceof Error ? value.message : String(value) };
 }
+
+export type SessionUsageEntry = {
+  modelId: string | null;
+  modelLabel: string;
+  role: string;
+  purpose: "step" | "title" | "compaction" | "memory" | "explore";
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+  costUsd: number | null;
+};
+
+export type SessionUsage = {
+  estimatedCost: number | null;
+  budgetUsd: number | null;
+  entries: SessionUsageEntry[];
+};

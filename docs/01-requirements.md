@@ -157,7 +157,20 @@ Priority levels:
 | REM-2 | Through the Telegram bot the user can list sessions, send messages, receive progress and final answers, and approve or deny tool calls. | HL |
 | REM-3 | A session can run on a server-side executor: a container that clones a GitHub repository and pushes results to a branch. | HL |
 
-### 2.12 Memory (MEM)
+### 2.12 Model routing (ROUTE)
+
+Specified in [F3](features/f3-model-routing.md).
+
+| ID | Requirement | Priority |
+|---|---|---|
+| ROUTE-1 | Routing is a session setting `off` or `smart`; new sessions take the default from user settings, which is `off`. | F3 |
+| ROUTE-2 | Settings define a `fast` model and an optional `plan` model; the session model is the `main` role. | F3 |
+| ROUTE-3 | With smart routing, title generation, compaction and memory curation use the `fast` model and Plan-mode turns the `plan` model. | F3 |
+| ROUTE-4 | With smart routing, the main model can delegate read-only exploration to a sub-agent on the `fast` model. | F3 |
+| ROUTE-5 | With smart routing, a failing model call is retried and then sent to the next model of its fallback list. | F3 |
+| ROUTE-6 | A session can have a budget in USD that stops turns once reached; usage and cost are recorded per model and purpose. | F3 |
+
+### 2.13 Memory (MEM)
 
 Specified in [F4](features/f4-agent-memory.md).
 

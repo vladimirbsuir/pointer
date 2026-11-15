@@ -22,6 +22,7 @@ public class Turn extends BaseEntity {
     public static final String FAILED = "failed";
     public static final String INTERRUPTED = "interrupted";
     public static final String STEP_LIMIT = "step_limit";
+    public static final String BUDGET_EXCEEDED = "budget_exceeded";
 
     public static final String MESSAGE = "message";
     public static final String COMPACTION = "compaction";

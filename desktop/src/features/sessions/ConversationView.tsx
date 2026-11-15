@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { formatCost } from "./format-cost";
+import { SessionUsageDialog } from "./SessionUsageDialog";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { FileDiffIcon, FoldVerticalIcon, SquareTerminalIcon } from "lucide-react";
@@ -30,6 +32,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
   const [draft, setDraft] = useState({ key: 0, text: "" });
   const { data: changedFiles } = useChangedFiles(sessionId, state.changesVersion);
   const session = state.session;
+  const [usageOpen, setUsageOpen] = useState(false);
   const running = session ? BUSY_STATUSES.includes(session.status) : false;
   const { data: remoteSessions } = useRemoteSessions(session?.projectId ?? "", Boolean(session));
   const remote = remoteSessions?.some((workspace) => workspace.sessionId === sessionId) ?? false;
@@ -142,7 +145,15 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
           <div className="flex items-center gap-2">
             <UsageIndicator
               usage={state.usage}
+              budget={session.budgetUsd}
               contextWindow={state.usage?.contextWindow ?? currentModel?.contextWindow ?? null}
+              onOpen={() => setUsageOpen(true)}
+            />
+            <SessionUsageDialog
+              session={session}
+              open={usageOpen}
+              onOpenChange={setUsageOpen}
+              onBudgetChanged={(updated) => patchSession({ ...updated, status: session.status })}
             />
             <Button
               size="icon-sm"
@@ -238,30 +249,36 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
 
 function UsageIndicator({
   usage,
+  budget,
   contextWindow,
+  onOpen,
 }: {
   usage: Usage | null;
+  budget: number | null;
   contextWindow: number | null;
+  onOpen: () => void;
 }) {
   const { t } = useTranslation();
-  if (!usage?.contextTokens) {
-    return null;
-  }
-  const percent = contextWindow
-    ? Math.min(100, Math.round((usage.contextTokens / contextWindow) * 100))
+  const percent =
+    usage?.contextTokens && contextWindow
+      ? Math.min(100, Math.round((usage.contextTokens / contextWindow) * 100))
+      : null;
+  const context = !usage?.contextTokens
+    ? null
+    : contextWindow
+      ? t("chat.contextUsage", { tokens: usage.contextTokens, window: contextWindow })
+      : t("chat.contextUsageUnknown", { tokens: usage.contextTokens });
+  const total = usage
+    ? t("chat.sessionUsage", { input: usage.totalInputTokens, output: usage.totalOutputTokens })
     : null;
-  const context = contextWindow
-    ? t("chat.contextUsage", { tokens: usage.contextTokens, window: contextWindow })
-    : t("chat.contextUsageUnknown", { tokens: usage.contextTokens });
-  const total = t("chat.sessionUsage", {
-    input: usage.totalInputTokens,
-    output: usage.totalOutputTokens,
-  });
-  const cost = usage.estimatedCost === null ? null : formatCost(usage.estimatedCost);
+  const cost = usage?.estimatedCost == null ? null : formatCost(usage.estimatedCost);
+  const overBudget = budget !== null && (usage?.estimatedCost ?? 0) >= budget;
 
   return (
-    <span
-      className="flex shrink-0 items-center gap-1.5 text-xs whitespace-nowrap text-muted-foreground tabular-nums"
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs whitespace-nowrap text-muted-foreground tabular-nums hover:bg-muted"
       title={[context, total, cost && t("chat.estimatedCost", { cost })].filter(Boolean).join("\n")}
     >
       {percent !== null && (
@@ -272,13 +289,17 @@ function UsageIndicator({
           />
         </span>
       )}
-      {percent !== null ? `${percent}%` : t("chat.tokens", { count: usage.contextTokens })}
-      {cost && <span>· {cost}</span>}
-    </span>
+      {percent !== null
+        ? `${percent}%`
+        : usage?.contextTokens
+          ? t("chat.tokens", { count: usage.contextTokens })
+          : t("usage.open")}
+      {(cost || budget !== null) && (
+        <span className={cn(overBudget && "text-destructive")}>
+          · {cost ?? "$0"}
+          {budget !== null && ` / ${formatCost(budget)}`}
+        </span>
+      )}
+    </button>
   );
-}
-
-function formatCost(cost: number) {
-  const digits = cost >= 1 ? 2 : cost >= 0.01 ? 3 : 4;
-  return `$${cost.toFixed(digits)}`;
 }

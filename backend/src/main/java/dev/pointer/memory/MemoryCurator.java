@@ -8,6 +8,7 @@ import dev.pointer.provider.llm.ChatRequest;
 import dev.pointer.provider.llm.OpenAiCompatibleClient;
 import dev.pointer.provider.llm.StreamListener;
 import dev.pointer.session.SessionService;
+import dev.pointer.session.UsageLedger;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -58,6 +59,7 @@ public class MemoryCurator {
     private final ProviderService providers;
     private final OpenAiCompatibleClient client;
     private final JsonMapper json;
+    private final UsageLedger ledger;
     private final Clock clock;
     private final boolean enabled;
     private final Duration idle;
@@ -74,6 +76,7 @@ public class MemoryCurator {
             ProviderService providers,
             OpenAiCompatibleClient client,
             JsonMapper json,
+            UsageLedger ledger,
             Clock clock,
             @Value("${pointer.memory.curation-enabled:true}") boolean enabled,
             @Value("${pointer.memory.curation-idle:15m}") Duration idle,
@@ -87,6 +90,7 @@ public class MemoryCurator {
         this.providers = providers;
         this.client = client;
         this.json = json;
+        this.ledger = ledger;
         this.clock = clock;
         this.enabled = enabled;
         this.idle = idle;
@@ -163,6 +167,11 @@ public class MemoryCurator {
                     @Override
                     public void onText(String delta) {
                         reply.append(delta);
+                    }
+
+                    @Override
+                    public void onUsage(Usage usage) {
+                        ledger.record(session.sessionId(), null, model, UsageLedger.MAIN, UsageLedger.MEMORY, usage);
                     }
                 },
                 new Cancellation());

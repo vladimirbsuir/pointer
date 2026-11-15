@@ -22,9 +22,11 @@ import dev.pointer.session.SessionEventBus;
 import dev.pointer.session.SessionService;
 import dev.pointer.session.SessionWriter;
 import dev.pointer.session.Turn;
+import dev.pointer.session.UsageLedger;
 import dev.pointer.tool.ToolRegistry;
 import dev.pointer.user.SettingsService;
 import jakarta.annotation.PreDestroy;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -73,6 +75,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private final ProjectService projectService;
     private final ExecutionService execution;
     private final MemoryPrompt memoryPrompt;
+    private final UsageLedger ledger;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<UUID, RunningTurn> running = new ConcurrentHashMap<>();
 
@@ -162,10 +165,17 @@ public class AgentRunner implements LiveItemSnapshots {
             var contextWindow = model.contextWindow() == null ? DEFAULT_CONTEXT_WINDOW : model.contextWindow();
             long contextTokens = context.contextTokens();
             String reason = null;
+            Map<String, Object> error = null;
             List<ChatMessage> firstMessages = null;
             for (var step = 0; reason == null; step++) {
                 if (step > 0) {
                     writer.attachQueued(userId, sessionId, turnId, context.mode());
+                }
+                var budget = budgetError(userId, sessionId);
+                if (budget != null) {
+                    reason = Turn.BUDGET_EXCEEDED;
+                    error = budget;
+                    break;
                 }
                 if (contextTokens >= contextWindow * AUTO_COMPACT_RATIO) {
                     var compacted = summarizer.summarize();
@@ -227,9 +237,9 @@ public class AgentRunner implements LiveItemSnapshots {
             }
             if (context.needsTitle() && !Turn.CANCELLED.equals(reason)) {
                 var titleMessages = firstMessages;
-                executor.submit(() -> generateTitle(userId, sessionId, model, titleMessages));
+                executor.submit(() -> generateTitle(userId, sessionId, turnId, model, titleMessages));
             }
-            return writer.finishTurn(userId, sessionId, turnId, reason, null);
+            return writer.finishTurn(userId, sessionId, turnId, reason, error);
         } catch (LlmException exception) {
             return fail(userId, sessionId, turnId, turn, exception.code(), exception.getMessage());
         } catch (ApiException exception) {
@@ -264,6 +274,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private int recordUsage(
             ToolCallHandler.TurnScope scope, ResolvedModel model, StreamListener.Usage usage, List<ChatMessage> sent) {
         if (usage != null) {
+            ledger.record(scope.sessionId(), scope.turnId(), model, UsageLedger.MAIN, UsageLedger.STEP, usage);
             writer.recordUsage(
                     scope.userId(),
                     scope.sessionId(),
@@ -341,7 +352,27 @@ public class AgentRunner implements LiveItemSnapshots {
         return writer.finishTurn(userId, sessionId, turnId, reason, error);
     }
 
-    private void generateTitle(UUID userId, UUID sessionId, ResolvedModel model, List<ChatMessage> messages) {
+    private Map<String, Object> budgetError(UUID userId, UUID sessionId) {
+        var session = sessionService.owned(userId, sessionId);
+        if (!session.isOverBudget()) {
+            return null;
+        }
+        return Map.of(
+                "code",
+                Turn.BUDGET_EXCEEDED,
+                "message",
+                "The session budget of $"
+                        + session.getBudgetUsd().stripTrailingZeros().toPlainString()
+                        + " is used up: $"
+                        + session.getEstimatedCost()
+                                .setScale(4, RoundingMode.HALF_UP)
+                                .stripTrailingZeros()
+                                .toPlainString()
+                        + " spent. Raise or clear the budget to continue.");
+    }
+
+    private void generateTitle(
+            UUID userId, UUID sessionId, UUID turnId, ResolvedModel model, List<ChatMessage> messages) {
         try {
             var firstUserMessage = messages.stream()
                     .filter(message -> message.role() == ChatMessage.Role.USER)
@@ -360,6 +391,11 @@ public class AgentRunner implements LiveItemSnapshots {
                         @Override
                         public void onText(String delta) {
                             title.append(delta);
+                        }
+
+                        @Override
+                        public void onUsage(Usage usage) {
+                            ledger.record(sessionId, turnId, model, UsageLedger.MAIN, UsageLedger.TITLE, usage);
                         }
                     },
                     new Cancellation());
@@ -429,6 +465,8 @@ public class AgentRunner implements LiveItemSnapshots {
                 throw new LlmException("compaction_failed", "The model returned an empty summary", 0);
             }
             listener.completeAll(Item.COMPLETED, Map.of("replacedItemCount", replaced));
+            ledger.record(
+                    scope.sessionId(), scope.turnId(), model, UsageLedger.MAIN, UsageLedger.COMPACTION, listener.usage);
             if (listener.usage != null) {
                 writer.recordUsage(
                         scope.userId(),

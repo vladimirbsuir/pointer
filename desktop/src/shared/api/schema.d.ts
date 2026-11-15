@@ -820,6 +820,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["usage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/remote": {
         parameters: {
             query?: never;
@@ -1134,6 +1150,7 @@ export interface components {
             /** Format: int64 */
             totalOutputTokens?: number;
             estimatedCost?: number;
+            budgetUsd?: number;
             /** Format: uuid */
             executorDeviceId?: string;
             worktree?: components["schemas"]["SessionWorktree"];
@@ -1300,6 +1317,7 @@ export interface components {
             mode?: string;
             /** Format: uuid */
             modelId?: string;
+            budgetUsd?: number;
         };
         CreateRemoteSessionRequest: {
             title?: string;
@@ -1487,6 +1505,7 @@ export interface components {
             modelId?: string;
             autoApprove?: boolean;
             archived?: boolean;
+            budgetUsd?: number;
         };
         UpdateProviderRequest: {
             name?: string;
@@ -1544,6 +1563,25 @@ export interface components {
             telegramUsername?: string;
             /** Format: date-time */
             linkedAt?: string;
+        };
+        UsageEntry: {
+            /** Format: uuid */
+            modelId?: string;
+            modelLabel?: string;
+            role?: string;
+            purpose?: string;
+            /** Format: int64 */
+            calls?: number;
+            /** Format: int64 */
+            promptTokens?: number;
+            /** Format: int64 */
+            completionTokens?: number;
+            costUsd?: number;
+        };
+        UsageResponse: {
+            estimatedCost?: number;
+            budgetUsd?: number;
+            entries?: components["schemas"]["UsageEntry"][];
         };
         RemoteFileSuggestions: {
             paths?: string[];
@@ -3290,6 +3328,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TelegramStatus"];
+                };
+            };
+        };
+    };
+    usage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageResponse"];
                 };
             };
         };

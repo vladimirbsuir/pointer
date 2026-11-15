@@ -81,7 +81,9 @@ function applyEvent(state: ConversationState, { seq, event }: SessionEvent): Con
       return {
         ...next,
         turnError:
-          event.reason === "failed" || event.reason === "interrupted"
+          event.reason === "failed" ||
+          event.reason === "interrupted" ||
+          event.reason === "budget_exceeded"
             ? ((event.error as TurnError | null) ?? null)
             : null,
       };
@@ -102,6 +104,10 @@ function applyEvent(state: ConversationState, { seq, event }: SessionEvent): Con
                 typeof event.autoApprove === "boolean"
                   ? event.autoApprove
                   : next.session.autoApprove,
+              budgetUsd:
+                "budgetUsd" in event
+                  ? ((event.budgetUsd as number | null) ?? null)
+                  : next.session.budgetUsd,
               worktree:
                 "worktree" in event
                   ? ((event.worktree as Session["worktree"]) ?? null)

@@ -222,7 +222,8 @@
     "tooManyImages": "You can attach up to {{count}} images.",
     "imageUploadFailed": "Could not upload the image.",
     "rememberHint": "Enter saves this note to the project memory instead of sending it to the agent.",
-    "remembered": "Saved to memory: {{name}}"
+    "remembered": "Saved to memory: {{name}}",
+    "budgetExceeded": "The session budget is used up"
   },
   "modes": {
     "ask": "Ask",
@@ -525,6 +526,29 @@
       "feedback": "Feedback",
       "project": "Project",
       "reference": "Reference"
+    }
+  },
+  "usage": {
+    "title": "Session usage",
+    "description": "Tokens and estimated cost of every model call in this session, and an optional budget.",
+    "open": "Usage",
+    "noPrices": "No prices are set for the models used, so the cost is unknown. Set prices in Settings → Providers to use a budget.",
+    "spent": "Spent {{spent}}.",
+    "spentOfBudget": "Spent {{spent}} of the {{budget}} budget.",
+    "model": "Model",
+    "purpose": "Purpose",
+    "calls": "Calls",
+    "tokens": "Tokens",
+    "cost": "Cost",
+    "budget": "Budget, $",
+    "budgetHint": "The agent stops before the next step once the estimated cost of turns reaches the budget. Empty or 0 means no budget.",
+    "clearBudget": "Remove budget",
+    "purposes": {
+      "step": "Agent steps",
+      "title": "Title",
+      "compaction": "Compaction",
+      "memory": "Memory curation",
+      "explore": "Exploration"
     }
   }
 }

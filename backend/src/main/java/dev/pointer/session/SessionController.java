@@ -74,6 +74,11 @@ class SessionController {
         return service.items(principal.userId(), sessionId);
     }
 
+    @GetMapping("/sessions/{sessionId}/usage")
+    SessionDtos.UsageResponse usage(AuthPrincipal principal, @PathVariable UUID sessionId) {
+        return service.usage(principal.userId(), sessionId);
+    }
+
     @GetMapping("/sessions/{sessionId}/events")
     List<SessionDtos.SessionEventResponse> events(
             AuthPrincipal principal, @PathVariable UUID sessionId, @RequestParam(defaultValue = "0") long afterSeq) {

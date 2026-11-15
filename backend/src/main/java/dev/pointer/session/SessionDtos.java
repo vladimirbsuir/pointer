@@ -1,5 +1,7 @@
 package dev.pointer.session;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -27,6 +29,7 @@ public final class SessionDtos {
             long totalInputTokens,
             long totalOutputTokens,
             BigDecimal estimatedCost,
+            BigDecimal budgetUsd,
             UUID executorDeviceId,
             SessionWorktree worktree,
             Instant archivedAt,
@@ -38,14 +41,38 @@ public final class SessionDtos {
     public record CreateSessionRequest(
             @Size(min = 1, max = 200) String title,
             @Pattern(regexp = MODE_PATTERN) String mode,
-            UUID modelId) {}
+            UUID modelId,
+            @DecimalMin("0") @DecimalMax("100000") BigDecimal budgetUsd) {
+
+        public CreateSessionRequest(String title, String mode, UUID modelId) {
+            this(title, mode, modelId, null);
+        }
+    }
+
+    public record UsageResponse(BigDecimal estimatedCost, BigDecimal budgetUsd, List<UsageEntry> entries) {}
+
+    public record UsageEntry(
+            UUID modelId,
+            String modelLabel,
+            String role,
+            String purpose,
+            long calls,
+            long promptTokens,
+            long completionTokens,
+            BigDecimal costUsd) {}
 
     public record UpdateSessionRequest(
             @Size(min = 1, max = 200) String title,
             @Pattern(regexp = MODE_PATTERN) String mode,
             UUID modelId,
             Boolean autoApprove,
-            Boolean archived) {}
+            Boolean archived,
+            @DecimalMin("0") @DecimalMax("100000") BigDecimal budgetUsd) {
+
+        public UpdateSessionRequest(String title, String mode, UUID modelId, Boolean autoApprove, Boolean archived) {
+            this(title, mode, modelId, autoApprove, archived, null);
+        }
+    }
 
     public record SendMessageRequest(
             @Size(min = 1, max = 200_000) String text,

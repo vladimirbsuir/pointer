@@ -1,6 +1,6 @@
 # F3. Smart model routing
 
-Status: Approved · Requirement ids: ROUTE-1 to ROUTE-6 · Depends on: providers and models (PROV-*), cost estimates (CTX-6).
+Status: In progress (phase 1 implemented) · Requirement ids: ROUTE-1 to ROUTE-6 · Depends on: providers and models (PROV-*), cost estimates (CTX-6).
 
 ## Goal
 
@@ -110,7 +110,7 @@ CREATE INDEX model_usage_session_idx ON model_usage (session_id, created_at);
 
 ## Phases
 
-1. `model_usage`, per-model usage view, session budget (useful on its own and for [F1](f1-issue-to-pr.md)).
+1. `model_usage`, per-model usage view, session budget (useful on its own and for [F1](f1-issue-to-pr.md)). Implemented: migration V22 (`sessions.budget_usd`, `model_usage` with a nullable `turn_id`, the `budget_exceeded` turn status), `session/UsageLedger` writing a row for every call with reported usage (agent steps, titles, compaction, memory curation), `GET /sessions/{id}/usage`, `budgetUsd` on session create and update (0 removes it). The budget is checked before every agent step against `sessions.estimated_cost`, which counts steps and compaction; titles and memory curation appear in the ledger but not in the budget. Without model prices the cost is unknown and the budget does not apply. The desktop opens a usage dialog from the header indicator (table by model and purpose, budget field) and shows the spent amount against the budget; Telegram reports `budget_exceeded` as a stop. Checked live with `glm-5.3-flash` and test prices: a budget below the cost of the first turn stopped the second turn before any model call.
 2. Roles and routing of auxiliary calls and Plan-mode turns.
 3. Fallback lists and retry.
 4. `explore` sub-agent with nested items.

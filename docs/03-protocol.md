@@ -262,7 +262,7 @@ Rewinding (`POST /sessions/{id}/rewind` with `turnId`, `restoreFiles`, `force`) 
 | Kind | Payload | Emitted when |
 |---|---|---|
 | `turn.started` | `turnId`, `turnKind` (`message`, `compaction`), `mode`, `modelId` | A turn begins. |
-| `turn.completed` | `turnId`, `reason` (`completed`, `cancelled`, `failed`, `step_limit`, `interrupted`), `usage`, `error` | A turn ends. A turn cut off by a backend restart ends with `interrupted` and the error code `interrupted` when the backend starts again. |
+| `turn.completed` | `turnId`, `reason` (`completed`, `cancelled`, `failed`, `step_limit`, `interrupted`, `budget_exceeded`), `usage`, `error` | A turn ends. A turn cut off by a backend restart ends with `interrupted` and the error code `interrupted` when the backend starts again. `budget_exceeded` ends a turn before its next model call once the session cost reaches the session budget; the error code is `budget_exceeded` and the session stays `idle`. |
 | `item.created` | `turnId`, `item` | An item starts. Streaming deltas for it may follow. |
 | `item.updated` | `item` | An item changes: a tool call moving to `awaiting_approval` or `running`, a queued user message attached to a turn, a plan approved or rejected. Carries the full item. |
 | `item.completed` | `item` | An item reaches its final state. Carries the full item. |
@@ -480,7 +480,7 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 | Devices | `GET /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |
 | Providers | `GET /providers`, `POST /providers`, `PATCH /providers/{id}`, `DELETE /providers/{id}`, `POST /providers/{id}/test`, `POST /providers/{id}/models/refresh`, `PATCH /providers/{id}/models/{modelId}` |
 | Projects | `GET /projects`, `POST /projects`, `PATCH /projects/{id}` (`name`, `repository` as `owner/name`, empty to clear, `archived`), `DELETE /projects/{id}`, `GET /projects/{id}/settings`, `PUT /projects/{id}/settings` |
-| Sessions | `GET /projects/{id}/sessions`, `POST /projects/{id}/sessions`, `GET /sessions/{id}`, `PATCH /sessions/{id}`, `DELETE /sessions/{id}`, `GET /sessions/{id}/items`, `GET /sessions/{id}/events?afterSeq=` |
+| Sessions | `GET /projects/{id}/sessions`, `POST /projects/{id}/sessions`, `GET /sessions/{id}`, `PATCH /sessions/{id}`, `DELETE /sessions/{id}`, `GET /sessions/{id}/items`, `GET /sessions/{id}/events?afterSeq=`, `GET /sessions/{id}/usage` (`estimatedCost`, `budgetUsd`, `entries: [{ modelId, modelLabel, role, purpose, calls, promptTokens, completionTokens, costUsd }]` grouped by model, role and purpose). Create and update accept `budgetUsd` (0 removes the budget); the session response and `session.updated` carry `budgetUsd` |
 | Attachments | `POST /sessions/{id}/attachments` (raw PNG, JPEG, GIF or WebP body, at most 5 MB), `GET /sessions/{id}/attachments/{attachmentId}` |
 | Turns | `POST /sessions/{id}/messages`, `POST /sessions/{id}/cancel`, `POST /sessions/{id}/compact`, `POST /sessions/{id}/plans/{itemId}/approve` |
 | Approvals | `POST /sessions/{id}/approvals/{approvalId}` with `decision`, `scope`, `message`, and `tool` for tool proposals |
