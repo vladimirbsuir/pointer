@@ -1,6 +1,6 @@
 # F3. Smart model routing
 
-Status: In progress (phases 1 and 2 implemented) · Requirement ids: ROUTE-1 to ROUTE-6 · Depends on: providers and models (PROV-*), cost estimates (CTX-6).
+Status: In progress, phases 1 and 2 implemented ([ADR 0020](../adr/0020-model-roles-and-usage-ledger.md)) · Requirement ids: ROUTE-1 to ROUTE-6 · Depends on: providers and models (PROV-*), cost estimates (CTX-6).
 
 ## Goal
 

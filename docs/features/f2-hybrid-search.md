@@ -1,6 +1,6 @@
 # F2. Hybrid code search and RAG benchmark
 
-Status: Implemented · Requirement ids: CTX-8 to CTX-10 · Depends on: semantic index (CTX-7, TOOL-14, [ADR 0013](../adr/0013-semantic-code-index.md)).
+Status: Implemented ([ADR 0018](../adr/0018-hybrid-code-search.md)) · Requirement ids: CTX-8 to CTX-10 · Depends on: semantic index (CTX-7, TOOL-14, [ADR 0013](../adr/0013-semantic-code-index.md)).
 
 ## Goal
 

@@ -12,6 +12,8 @@ Built with Tauri and React on the desktop and a Spring Boot backend that orchest
 - [Roadmap](docs/05-roadmap.md)
 - [Deployment](docs/06-deployment.md)
 - [Architecture decisions](docs/adr/README.md)
+- [Feature specs beyond the roadmap](docs/features/README.md)
+- [Benchmarks for the thesis](docs/benchmarks/)
 - [Project rules for contributors and agents](AGENTS.md)
 
 ## Development
@@ -28,6 +30,8 @@ cd backend
 PostgreSQL from `infra/docker-compose.yml` starts automatically. The API runs on `http://localhost:8080`, Swagger UI on `/swagger-ui`.
 
 Local secrets go to `backend/.env` (see `backend/.env.example`). GitHub sign-in needs a GitHub OAuth App with the callback URL `http://127.0.0.1/callback`; put its client id and secret into `POINTER_GITHUB_CLIENT_ID` and `POINTER_GITHUB_CLIENT_SECRET`. Telegram remote control needs a bot created with [@BotFather](https://t.me/BotFather); put its token into `POINTER_TELEGRAM_BOT_TOKEN` and link the account in Settings → Account → Telegram.
+
+Memory curation summarizes idle sessions every minute with each user's own model; set `POINTER_MEMORY_CURATION_ENABLED=false` when the local database holds accounts whose providers should not be called.
 
 Remote execution runs server sessions in Docker containers. Build the runner image with `docker build -f infra/runner/Dockerfile -t pointer-runner:latest desktop/src-tauri`, set `POINTER_CONTAINER_ENABLED=true` (and `POINTER_RUNNER_API_URL` if the containers reach the backend at another address than `http://host.docker.internal:8080`), then grant repository access in Settings → Account → GitHub and set the GitHub repository of a project.
 

@@ -88,6 +88,8 @@ The installer is in `desktop/src-tauri/target/release/bundle/`.
 | Restore a dump | `gunzip -c backups/<file>.sql.gz \| docker compose exec -T postgres psql -U pointer pointer` |
 | Remove everything including data | `./deploy.sh stop && docker volume rm pointer-server_postgres-data` and `docker volume ls -q --filter label=dev.pointer.session \| xargs -r docker volume rm` |
 
+Memory curation ([ADR 0019](adr/0019-agent-memory.md)) runs on the server every minute and calls the users' own models for idle sessions; add `POINTER_MEMORY_CURATION_ENABLED=false` to `.env` and run `./deploy.sh` to turn it off.
+
 `.env` holds the encryption key of provider API keys and GitHub tokens. Losing it makes stored keys unreadable; keep a copy of it with the backups.
 
 ## 6. Checks after a deployment

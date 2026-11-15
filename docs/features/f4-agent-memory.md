@@ -1,6 +1,6 @@
 # F4. Agent memory
 
-Status: Implemented · Requirement ids: MEM-1 to MEM-7 · Depends on: context assembly (CTX-1 to 5), embedding model setting (CTX-7); fast model role from [F3](f3-model-routing.md) is used when present.
+Status: Implemented ([ADR 0019](../adr/0019-agent-memory.md)) · Requirement ids: MEM-1 to MEM-7 · Depends on: context assembly (CTX-1 to 5), embedding model setting (CTX-7); fast model role from [F3](f3-model-routing.md) is used when present.
 
 ## Goal
 

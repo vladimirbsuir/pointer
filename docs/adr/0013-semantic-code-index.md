@@ -1,6 +1,6 @@
 # 0013. Semantic code index
 
-Status: Accepted.
+Status: Accepted. The search ranking is superseded by [ADR 0018](0018-hybrid-code-search.md).
 
 ## Context
 

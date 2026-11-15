@@ -12,7 +12,7 @@ The agent loop runs on a cloud backend; the desktop client executes tools (file 
 | `backend/` | Spring Boot monolith (Java)                          |
 | `desktop/` | Tauri application: `src-tauri/` (Rust workspace: the app, the shared `pointer-executor` crate and the headless `pointer-runner`) and `src/` (frontend) |
 | `docs/`    | Project documentation (English, Markdown)            |
-| `infra/`   | Docker Compose, the runner image and deployment configuration |
+| `infra/`   | Docker Compose, the runner image, deployment configuration and benchmark scripts (`bench/`) |
 
 ## Code style
 
@@ -36,6 +36,7 @@ The agent loop runs on a cloud backend; the desktop client executes tools (file 
 - All documentation is written in English and lives in `docs/`.
 - Start with [docs/00-vision.md](docs/00-vision.md), [docs/01-requirements.md](docs/01-requirements.md), [docs/02-architecture.md](docs/02-architecture.md), [docs/03-protocol.md](docs/03-protocol.md), [docs/04-data-model.md](docs/04-data-model.md) and [docs/05-roadmap.md](docs/05-roadmap.md); deployment is in [docs/06-deployment.md](docs/06-deployment.md).
 - The roadmap is the fixed baseline. Approved work beyond it is specified in [docs/features/](docs/features/README.md); read the relevant spec before implementing it, and record new approved features there, not in the roadmap.
+- Measurements for the thesis live in [docs/benchmarks/](docs/benchmarks/) with their scripts in `infra/bench/`.
 - Changes to the client-server contract update [docs/03-protocol.md](docs/03-protocol.md) in the same commit.
 - Architectural decisions are recorded as ADRs in `docs/adr/`. Read the relevant ADRs before changing architecture, and add a new ADR when a decision changes.
 - Keep requirement ids (`AUTH-1`, `TOOL-7`, ...) stable so code, tasks and docs can refer to them.

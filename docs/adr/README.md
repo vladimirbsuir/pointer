@@ -19,8 +19,11 @@ File name: `NNNN-short-title.md`. Status: `Proposed`, `Accepted`, `Superseded by
 | [0010](0010-mcp-servers-on-the-device.md) | MCP servers run on the user's device | Accepted |
 | [0011](0011-session-worktrees.md) | Sessions in git worktrees | Accepted |
 | [0012](0012-lombok-for-boilerplate.md) | Lombok for constructor injection and entity getters | Accepted |
-| [0013](0013-semantic-code-index.md) | Semantic code index | Accepted |
+| [0013](0013-semantic-code-index.md) | Semantic code index | Accepted, search part superseded by 0018 |
 | [0014](0014-agent-proposed-custom-tools.md) | Agent-proposed custom tools | Accepted |
 | [0015](0015-telegram-remote-control.md) | Telegram remote control | Accepted |
 | [0016](0016-remote-execution-in-containers.md) | Remote execution in containers | Accepted |
 | [0017](0017-server-deployment.md) | Server deployment | Accepted |
+| [0018](0018-hybrid-code-search.md) | Hybrid code search | Accepted |
+| [0019](0019-agent-memory.md) | Agent memory | Accepted |
+| [0020](0020-model-roles-and-usage-ledger.md) | Model roles and usage ledger | Accepted |
