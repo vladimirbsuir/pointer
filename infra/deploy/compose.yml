@@ -67,6 +67,7 @@ services:
       POINTER_DOCKER_HOST: tcp://docker-proxy:2375
       POINTER_RUNNER_NETWORK: pointer-runners
       POINTER_RUNNER_API_URL: http://backend:8080
+      POINTER_PUBLIC_URL: https://${POINTER_DOMAIN}
       JAVA_TOOL_OPTIONS: >-
         -XX:+UseSerialGC
         -XX:TieredStopAtLevel=1
