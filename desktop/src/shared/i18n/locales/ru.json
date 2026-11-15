@@ -292,7 +292,8 @@
     "memoryUpdated": "обновлено",
     "memoryDeleted": "удалено",
     "memoryUndone": "отменено",
-    "undo": "Отменить"
+    "undo": "Отменить",
+    "search_sessions": "Поиск по прошлым сессиям «{{target}}»"
   },
   "permissions": {
     "tools": "Инструменты",

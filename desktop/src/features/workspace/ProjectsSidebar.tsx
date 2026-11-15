@@ -21,6 +21,7 @@ import { core } from "@/shared/api/core";
 import {
   queryKeys,
   useLocalProjects,
+  useMemories,
   useProjects,
   useRemoteSessions,
   useRemoteStatus,
@@ -139,6 +140,7 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
   const [indexOpen, setIndexOpen] = useState(false);
   const [repositoryOpen, setRepositoryOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const { data: suggestedMemories } = useMemories(project.id, "suggested");
   const { data: sessions } = useSessions(project.id);
   const { data: remote } = useRemoteStatus();
   const { data: remoteSessions } = useRemoteSessions(project.id);
@@ -254,6 +256,11 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
             <DropdownMenuItem onClick={() => setMemoryOpen(true)}>
               <BrainIcon />
               {t("memory.menu")}
+              {suggestedMemories && suggestedMemories.length > 0 && (
+                <span className="ml-auto rounded-full bg-primary px-1.5 text-xs text-primary-foreground">
+                  {suggestedMemories.length}
+                </span>
+              )}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

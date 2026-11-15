@@ -11,7 +11,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.client.RestTestClient;
 
 @Import(TestcontainersConfiguration.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "pointer.memory.curation-enabled=false")
 @AutoConfigureRestTestClient
 public abstract class IntegrationTest {
 

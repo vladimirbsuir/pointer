@@ -11,6 +11,7 @@ import {
   FileTextIcon,
   FolderIcon,
   GlobeIcon,
+  HistoryIcon,
   HammerIcon,
   Loader2Icon,
   SearchIcon,
@@ -57,7 +58,20 @@ const icons: Record<string, typeof WrenchIcon> = {
   memory_read: BrainIcon,
   memory_search: BrainIcon,
   memory_delete: BrainIcon,
+  search_sessions: HistoryIcon,
 };
+
+function sessionResultsText(results: unknown) {
+  if (!Array.isArray(results)) {
+    return undefined;
+  }
+  return (results as Record<string, unknown>[])
+    .map((hit) => {
+      const date = typeof hit.date === "string" ? new Date(hit.date).toLocaleDateString() : "";
+      return `${date}  ${String(hit.title)}\n${String(hit.summary)}`;
+    })
+    .join("\n\n");
+}
 
 const MEMORY_ACTIONS = {
   created: "tools.memoryCreated",
@@ -130,6 +144,8 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
       }
       case "memory_search":
         return t("tools.memory_search", { target: argument(call, "query") });
+      case "search_sessions":
+        return t("tools.search_sessions", { target: argument(call, "query") });
       default:
         return mcpParts
           ? t("tools.mcp", { server: mcpParts[0], tool: mcpParts.slice(1).join("__") })
@@ -175,6 +191,7 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
           count: (result.memories as unknown[] | undefined)?.length ?? 0,
         });
       case "memory_search":
+      case "search_sessions":
         return t("tools.matches", {
           count: (result.results as unknown[] | undefined)?.length ?? 0,
         });
@@ -188,7 +205,9 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
   const proposedBody = toolName === "propose_tool" ? argument(call, "body") : "";
   const output =
     (proposedBody || undefined) ??
-    searchResultsText(call.result?.results) ??
+    (toolName === "search_sessions"
+      ? sessionResultsText(call.result?.results)
+      : searchResultsText(call.result?.results)) ??
     call.output ??
     call.liveOutput ??
     (call.result?.output as string | undefined) ??

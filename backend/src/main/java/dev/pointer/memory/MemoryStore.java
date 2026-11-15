@@ -233,7 +233,7 @@ class MemoryStore {
         return clock.instant();
     }
 
-    private static String literal(float[] vector) {
+    static String literal(float[] vector) {
         var builder = new StringBuilder(vector.length * 10).append('[');
         for (var index = 0; index < vector.length; index++) {
             if (index > 0) {

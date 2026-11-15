@@ -495,3 +495,16 @@ Agent memory ([F4](features/f4-agent-memory.md)), accessed with plain SQL becaus
 | `created_at`, `updated_at` | timestamptz | |
 
 `memory_revisions`: the state before each change (`kind`, `description`, `content`, `status`, `pinned`; all null for the creation), newest first per memory; undo restores the newest revision and deletes it.
+
+`session_digests`: one row per curated session ([F4](features/f4-agent-memory.md) phases 3 and 4).
+
+| Column | Type | Notes |
+|---|---|---|
+| `session_id` | uuid | PK, FK `sessions`, cascade |
+| `user_id`, `project_id` | uuid | FK, cascade |
+| `summary` | text | Nullable until the first successful curation |
+| `processed_seq` | bigint | Session `last_seq` the summary covers; newer events make the session eligible again |
+| `attempts` | integer | Failed curation calls since the last success, at most 3 |
+| `suggested_count` | integer | Memories suggested from this session |
+| `embedding`, `embedding_model_id` | vector, uuid | Embedding of the summary for `search_sessions` |
+| `updated_at` | timestamptz | |

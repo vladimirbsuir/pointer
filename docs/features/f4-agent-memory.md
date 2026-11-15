@@ -1,6 +1,6 @@
 # F4. Agent memory
 
-Status: In progress (phases 1 and 2 implemented) · Requirement ids: MEM-1 to MEM-7 · Depends on: context assembly (CTX-1 to 5), embedding model setting (CTX-7); fast model role from [F3](f3-model-routing.md) is used when present.
+Status: Implemented · Requirement ids: MEM-1 to MEM-7 · Depends on: context assembly (CTX-1 to 5), embedding model setting (CTX-7); fast model role from [F3](f3-model-routing.md) is used when present.
 
 ## Goal
 
@@ -113,17 +113,16 @@ The tools are ordinary `tool_call` items; `memory_save` and `memory_delete` retu
 
 Implementation notes: the module is `dev.pointer.memory` (`MemoryStore` on `JdbcClient`, `MemoryService`, `MemoryPrompt`, `MemoryOperations` registering the four `ServerOperation` beans, `MemoryEmbeddings`); migration V20 seeds the tools with kind `read`. Embeddings are computed in a virtual thread after the transaction commits and are optional: without an embedding model search is full-text only and the index keeps its default order. The index is reordered by similarity to the turn's message only when it does not fit the budget.
 
-### Extraction (phase 3)
+### Extraction and session digests (phases 3 and 4)
 
-- Trigger: session idle for 15 minutes after a completed turn with at least 3 user messages, or archived; at most once per session per new `last_seq`.
-- Input: user messages, rejected approvals with their comments, plan rejections, the compaction summary if present, plus the current index to avoid duplicates. Model: the `fast` role when routing is configured, else the session model.
-- Output: strict JSON `[{scope, kind, name, description, content, evidence}]`, max 5; stored with `status = suggested`, `source = extracted`.
-- Desktop shows a badge "N suggested memories" on the project; accepting sets `active`.
+One model call per session produces both the session summary and the suggested memories (`MemoryCurator`):
 
-### Session history (phase 4)
-
-- `SessionDigester` writes `session_digests` on the same idle trigger: a 200-word summary (goal, outcome, files, decisions) and its embedding.
-- Tool `search_sessions {query, limit?}` returns digests with session title, date and id; the agent can quote them, and the desktop links the session.
+- Trigger: a scheduled job every minute (`pointer.memory.curation-interval`) picks up to 5 sessions that are `idle`, have a model, at least 3 user messages (`curation-min-messages`), were last active more than 15 minutes ago (`curation-idle`) or are archived, were active within the last 3 days (`curation-max-age`, so a first run does not process the whole history), and have events after the last processed `seq`. A failed call is retried on later runs up to 3 times. `pointer.memory.curation-enabled` turns the job off (the integration tests do).
+- Input: the transcript of the session (user and agent messages, plans with their approval state, compaction summaries, tool calls with denial messages), at most 24,000 characters keeping the latest part, plus the names and descriptions of existing, suggested and dismissed memories of the user and the project so that nothing is suggested twice. Model: the session model.
+- Output: JSON `{summary, memories: [{scope, kind, name, description, content}]}`. The summary (at most 150 words in English) is stored in `session_digests` with its embedding; up to 5 memories are stored with `status = suggested`, `source = extracted` and the source session. Invalid or duplicate names are skipped.
+- `session_digests` (migration V21): `session_id`, `user_id`, `project_id`, `summary`, `processed_seq`, `attempts`, `suggested_count`, `embedding`, `embedding_model_id`, `updated_at`.
+- Tool `search_sessions {query, limit?}` (up to 10) searches the digests of the project except the current session, by vector similarity when the user has an embedding model and by full-text rank otherwise, and returns `{sessionId, title, date, summary, score}`.
+- The desktop shows suggested memories at the top of the memory list with Keep and Dismiss, and their number next to the Memory item of the project menu.
 
 ### Desktop
 
@@ -140,8 +139,8 @@ Implementation notes: the module is `dev.pointer.memory` (`MemoryStore` on `Jdbc
 
 1. Table, service, REST, desktop management, prompt section with index and pinned memories. Implemented.
 2. Agent tools with undo; Telegram `/remember` and `/memories`; the composer `#` shortcut. Implemented and checked live with `glm-5.3-flash`: asked to remember a commit convention, the agent called `memory_save` (kind `feedback`, project scope, with a Why line); in a new session it called `memory_read` and wrote a one-line Conventional Commits message.
-3. Suggested memories from idle sessions.
-4. Session digests and `search_sessions`.
+3. Suggested memories from idle sessions. Implemented.
+4. Session digests and `search_sessions`. Implemented and checked live with `glm-5.3-flash` and `nomic-embed-text`: after a three-message session about a cleanup script was archived, the curator wrote an accurate digest; it suggested nothing because the agent had already saved the preference and the plan itself. In a new session the agent called `search_sessions`, found that session by meaning (score 0.73) and then read the related memories.
 
 ## Tests
 

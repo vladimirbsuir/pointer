@@ -292,7 +292,8 @@
     "memoryUpdated": "updated",
     "memoryDeleted": "deleted",
     "memoryUndone": "undone",
-    "undo": "Undo"
+    "undo": "Undo",
+    "search_sessions": "Search past sessions \"{{target}}\""
   },
   "permissions": {
     "tools": "Tools",

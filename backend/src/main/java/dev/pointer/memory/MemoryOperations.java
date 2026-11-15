@@ -19,6 +19,8 @@ class MemoryOperations {
     private static final int DEFAULT_SEARCH_LIMIT = 8;
     private static final int MAX_SEARCH_LIMIT = 20;
     private static final int MAX_READ_NAMES = 10;
+    private static final int DEFAULT_SESSION_RESULTS = 5;
+    private static final int MAX_SESSION_RESULTS = 10;
 
     @Bean
     ServerOperation memorySaveOperation(MemoryService memories, SessionService sessions) {
@@ -91,6 +93,46 @@ class MemoryOperations {
                 (userId, request) -> memories.deleteByName(
                                 userId, projectFor(request.arguments(), request), text(request.arguments(), "name"))
                         .toResult());
+    }
+
+    @Bean
+    ServerOperation searchSessionsOperation(DigestStore digests, MemoryEmbeddings embeddings, SessionService sessions) {
+        return new MemoryOperation("search_sessions", sessions, (userId, request) -> {
+            var query = text(request.arguments(), "query");
+            if (query == null || query.isBlank()) {
+                throw ApiException.badRequest("invalid_arguments", "Missing argument query");
+            }
+            var limit = request.arguments().get("limit") instanceof Number number
+                    ? Math.clamp(number.intValue(), 1, MAX_SESSION_RESULTS)
+                    : DEFAULT_SESSION_RESULTS;
+            var merged = new LinkedHashMap<UUID, DigestStore.Hit>();
+            embeddings
+                    .query(userId, request.deviceId(), query)
+                    .ifPresent(embedding -> digests.vectorSearch(
+                                    userId,
+                                    request.projectId(),
+                                    request.sessionId(),
+                                    embedding.modelId(),
+                                    MemoryStore.literal(embedding.vector()),
+                                    limit)
+                            .forEach(hit -> merged.put(hit.sessionId(), hit)));
+            digests.lexicalSearch(userId, request.projectId(), request.sessionId(), MemoryService.tsQuery(query), limit)
+                    .forEach(hit -> merged.putIfAbsent(hit.sessionId(), hit));
+            return Map.of(
+                    "results",
+                    merged.values().stream()
+                            .limit(limit)
+                            .map(hit -> {
+                                var entry = new LinkedHashMap<String, Object>();
+                                entry.put("sessionId", hit.sessionId().toString());
+                                entry.put("title", hit.title());
+                                entry.put("date", hit.updatedAt().toString());
+                                entry.put("summary", hit.summary());
+                                entry.put("score", Math.round(hit.score() * 1000) / 1000.0);
+                                return entry;
+                            })
+                            .toList());
+        });
     }
 
     private static UUID projectFor(Map<String, Object> arguments, ExecutionRequest request) {

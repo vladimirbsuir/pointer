@@ -59,6 +59,11 @@ pointer:
     idle-timeout: 30m
     prepare-timeout: 10m
     github-api-url: ${pointer.github.api-url}
+  memory:
+    curation-enabled: ${POINTER_MEMORY_CURATION_ENABLED:true}
+    curation-idle: ${POINTER_MEMORY_CURATION_IDLE:15m}
+    curation-max-age: 3d
+    curation-min-messages: 3
   telegram:
     bot-token: ${POINTER_TELEGRAM_BOT_TOKEN:}
     api-url: ${POINTER_TELEGRAM_API_URL:https://api.telegram.org}
