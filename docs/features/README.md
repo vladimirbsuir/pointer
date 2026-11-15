@@ -9,7 +9,7 @@ Each spec is a technical brief for implementation: what is built, where it plugs
 | # | Spec | Requirement ids | Status |
 |---|---|---|---|
 | F1 | [Issue to pull request automation](f1-issue-to-pr.md) | AUTO-1 to AUTO-6 | Approved |
-| F2 | [Hybrid code search and RAG benchmark](f2-hybrid-search.md) | CTX-8 to CTX-10 | In progress |
+| F2 | [Hybrid code search and RAG benchmark](f2-hybrid-search.md) | CTX-8 to CTX-10 | Implemented |
 | F3 | [Smart model routing](f3-model-routing.md) | ROUTE-1 to ROUTE-6 | Approved |
 | F4 | [Agent memory](f4-agent-memory.md) | MEM-1 to MEM-7 | Approved |
 

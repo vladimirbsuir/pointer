@@ -1,6 +1,6 @@
 # F2. Hybrid code search and RAG benchmark
 
-Status: In progress (phases 1 and 2 implemented) · Requirement ids: CTX-8 to CTX-10 · Depends on: semantic index (CTX-7, TOOL-14, [ADR 0013](../adr/0013-semantic-code-index.md)).
+Status: Implemented · Requirement ids: CTX-8 to CTX-10 · Depends on: semantic index (CTX-7, TOOL-14, [ADR 0013](../adr/0013-semantic-code-index.md)).
 
 ## Goal
 
@@ -70,29 +70,18 @@ Strategy `vector` takes only `limit` vector candidates and skips steps 2 and 3. 
 
 - Endpoint `POST /api/v1/projects/{projectId}/index/query` `{query, limit, strategy: vector|lexical|hybrid}` → ranked chunks `{path, symbol, startLine, endLine, score, vectorRank, lexicalRank}` and `tookMs`. Authenticated, owner only; runs the same incremental pass as the tool.
 - Dataset `infra/bench/rag/questions.json`: 40 to 50 entries `{id, query, lang: en|ru, kind: concept|identifier|behaviour, expected: [{path, symbol?}]}` written against a pinned commit of this repository. A hit is a returned chunk with a matching path and, when given, a symbol containing the expected one.
-- Script `infra/bench/rag/run.py` (standard library only): signs in with credentials from environment variables, runs every query with each strategy, writes `results-<date>.json` and a Markdown table: hit@1, recall@5, recall@10, MRR, p50 and p95 latency, per strategy and per `kind`/`lang`.
-- Agent-level check: 10 questions in Ask mode with `semantic_search` allowed and denied (tool policy), compared by tool calls, prompt tokens and answer correctness judged by hand.
+- Script `infra/bench/rag/run.py` (standard library only): signs in with credentials from environment variables, runs every query with each strategy, writes `results-<date>.json` and a Markdown table: hit@1, hit@5, hit@10 (share of questions with an acceptable file in the top k), MRR, p50 and p95 latency, per strategy and per `kind`/`lang`.
+- Agent-level check `infra/bench/rag/agent_eval.py`: 10 questions in Ask mode in an indexed project and in a second project linked to the same folder without an index, so `semantic_search` is not offered at all (a deny policy would still offer the tool). Compared by tool calls, tokens, time and answer correctness, checked automatically by file name and by hand.
 
 ## Phases
 
 1. Query and document prefixes (small, independent, rerun the first measurement). Implemented: `EmbeddingPrefixes`, migration V18; the index status reports `prefixesChanged`, and starting an update with changed prefixes rebuilds the index.
 2. Lexical column, `CodeTokens`, hybrid fusion, project setting. Implemented: migration V19, `CodeTokens`, `RankFusion`, `SearchStrategy`, the settings endpoint and the strategy switch in the index dialog. The query endpoint from phase 3 was built here too, to compare strategies on a real index.
-3. Dataset, script; results recorded in `docs/` for the thesis.
+3. Dataset, scripts and results. Implemented: 45 questions in `infra/bench/rag/questions.json`, `run.py`, `agent_eval.py`, results in [benchmarks/rag.md](../benchmarks/rag.md).
 
-## Early results
+## Results
 
-First live run on this repository (383 files, 1,297 chunks, `nomic-embed-text` with prefixes on CPU through Ollama, indexing took 629 s) with 10 hand-written questions, top 5 per strategy, after IDF weighting:
-
-| Strategy | Expected file in top 5 | At rank 1 | Typical latency |
-|---|---|---|---|
-| vector | 6 / 10 | 4 / 10 | 55 to 300 ms (query embedding on CPU) |
-| lexical | 7 / 10 | 5 / 10 | 15 to 35 ms |
-| hybrid | 7 / 10 | 6 / 10 | 75 to 275 ms |
-
-- Hybrid ranked first most often; lexical alone is the fastest and strongest on exact names (`SessionEventBus`, `RankFusion`, `kill_tree`).
-- "encrypt provider API keys" finds `SecretCipher` only with IDF weighting (lexical rank 2, hybrid rank 4); vector search does not find it.
-- A Russian question against English code fails in every strategy: vector search returns the Russian Telegram texts, lexical has no shared words. Cross-lingual retrieval is a topic for the phase 3 dataset.
-- Ten questions are not a benchmark; the phase 3 dataset gives the numbers for the thesis.
+Measured in [benchmarks/rag.md](../benchmarks/rag.md): on 45 questions hybrid search reaches hit@1 0.51 and MRR 0.59 against 0.36 and 0.48 for vector search; the prefixes raise hybrid hit@1 from 0.40 to 0.51; with the index the agent answers the same questions with 26 % fewer tool calls. Russian questions against English code fail with every strategy.
 
 ## Tests
 
@@ -102,7 +91,7 @@ First live run on this repository (383 files, 1,297 chunks, `nomic-embed-text` w
 
 ## Thesis metrics
 
-- The benchmark table: vector vs lexical vs hybrid, with and without prefixes, on `nomic-embed-text` and one cloud embedding model.
+- The benchmark table: vector vs lexical vs hybrid, with and without prefixes, on `nomic-embed-text`. A cloud embedding model is not measured yet.
 - Russian queries against English code: cross-lingual retrieval quality per strategy.
 - Index build time and search latency at this repository's size (about 300 files, 900+ chunks).
 
