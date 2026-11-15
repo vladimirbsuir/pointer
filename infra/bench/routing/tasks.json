@@ -1,0 +1,66 @@
+{
+  "description": "Questions about this repository whose answer spans several files. Coverage is the share of expected files named in the answer.",
+  "tasks": [
+    {
+      "id": "t01",
+      "prompt": "Trace a tool call end to end: from the model's streamed tool call in the agent loop, through permission checks and approval, to execution on the user's device and the result returning to the model.",
+      "expected": [
+        "backend/src/main/java/dev/pointer/agent/AgentRunner.java",
+        "backend/src/main/java/dev/pointer/agent/ToolCallHandler.java",
+        "backend/src/main/java/dev/pointer/tool/PermissionService.java",
+        "backend/src/main/java/dev/pointer/execution/ExecutionService.java",
+        "desktop/src-tauri/crates/pointer-executor/src/lib.rs"
+      ]
+    },
+    {
+      "id": "t02",
+      "prompt": "Explain how context compaction works end to end: when it is triggered, which model writes the summary, how the summary is stored and how the next model request is assembled from it.",
+      "expected": [
+        "backend/src/main/java/dev/pointer/agent/AgentRunner.java",
+        "backend/src/main/java/dev/pointer/agent/ContextAssembler.java",
+        "backend/src/main/java/dev/pointer/routing/ModelRouter.java",
+        "backend/src/main/java/dev/pointer/session/SessionWriter.java"
+      ]
+    },
+    {
+      "id": "t03",
+      "prompt": "Explain how session events reach the desktop UI in order and how a client catches up after a reconnect, on both the backend and the desktop side.",
+      "expected": [
+        "backend/src/main/java/dev/pointer/session/SessionEventLog.java",
+        "backend/src/main/java/dev/pointer/session/SessionEventBus.java",
+        "backend/src/main/java/dev/pointer/gateway/GatewayHandler.java",
+        "desktop/src-tauri/src/realtime/mod.rs",
+        "desktop/src/features/sessions/use-conversation.ts"
+      ]
+    },
+    {
+      "id": "t04",
+      "prompt": "Explain how rewinding a session to an earlier turn works, including how files changed by the agent are restored, on the backend, in the executor and in the desktop UI.",
+      "expected": [
+        "backend/src/main/java/dev/pointer/review/FileChangeService.java",
+        "backend/src/main/java/dev/pointer/session/SessionWriter.java",
+        "desktop/src-tauri/crates/pointer-executor/src/files.rs",
+        "desktop/src/features/sessions/RewindControl.tsx"
+      ]
+    },
+    {
+      "id": "t05",
+      "prompt": "Explain how a session worktree is created, how tool calls are redirected into it, and how it is merged or discarded, on the backend and in the executor.",
+      "expected": [
+        "backend/src/main/java/dev/pointer/worktree/WorktreeService.java",
+        "desktop/src-tauri/crates/pointer-executor/src/worktree.rs",
+        "desktop/src-tauri/crates/pointer-executor/src/lib.rs",
+        "desktop/src/features/sessions/WorktreeControl.tsx"
+      ]
+    },
+    {
+      "id": "t06",
+      "prompt": "Explain how requests to a local model server are relayed from the backend through the desktop app, and which hosts the desktop refuses to call.",
+      "expected": [
+        "backend/src/main/java/dev/pointer/gateway/RelayService.java",
+        "backend/src/main/java/dev/pointer/provider/ProviderService.java",
+        "desktop/src-tauri/src/realtime/relay.rs"
+      ]
+    }
+  ]
+}

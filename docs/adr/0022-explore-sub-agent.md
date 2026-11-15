@@ -1,4 +1,4 @@
-# 0022. Explore sub-agent on the fast model
+# 0022. Explore sub-agent
 
 Status: Accepted.
 
@@ -8,18 +8,19 @@ Reading and searching a project fills the main model's context with file content
 
 ## Decision
 
-- **A server-side `explore` tool.** With smart routing, a fast model that is set and supports tools, and file tools available, the main model gets `explore {task, paths?}`. The agent loop handles it like `propose_plan`: nothing is sent to the device for the tool itself.
-- **A nested loop with a fresh context.** `agent/ExploreAgent` runs the fast model with its own system prompt and only the task; it does not see the conversation. It may call `list_directory`, `read_file`, `glob`, `grep` and `semantic_search`; MCP, custom, memory, web and write tools are refused. Its calls go through the normal tool handler, so permissions, approvals and the executing device are the same as for the main agent.
-- **Bounded.** At most 15 model calls; the last one, or the first after the context passes 60 % of the fast model's window, has no tools and asks for the final report. The report is cut to 8,000 characters and becomes the tool result.
+- **A server-side `explore` tool.** Whenever the session has file tools, the main model gets `explore {task, paths?}`. The agent loop handles it like `propose_plan`: nothing is sent to the device for the tool itself.
+- **The model is a setting, not a routing mode.** The sub-agent runs on the exploration model from user settings when it is set and supports tools, otherwise on the fast model when the session uses smart routing, otherwise on the session model. Delegation keeps the main context small even on one model; a cheaper model additionally moves the cost. The first version offered the tool only with smart routing and a fast model.
+- **A nested loop with a fresh context.** `agent/ExploreAgent` runs that model with its own system prompt and only the task; it does not see the conversation. It may call `list_directory`, `read_file`, `glob`, `grep` and `semantic_search`; MCP, custom, memory, web and write tools are refused. Its calls go through the normal tool handler, so permissions, approvals and the executing device are the same as for the main agent.
+- **Bounded.** At most 15 model calls; the last one, or the first after the context passes 60 % of the model's window, has no tools and asks for the final report. The report is cut to 8,000 characters and becomes the tool result.
 - **Nested items.** The sub-agent's tool calls are items with `parent_item_id` set to the `explore` item. They are excluded from the main model's context, compaction, memory curation and Telegram progress, and the desktop shows them inside the collapsed `explore` card.
 - **Failure stays local.** A model error in the sub-agent fails the `explore` tool call, not the turn; the main model reads the error and continues on its own. Cancelling the turn cancels the sub-agent.
 - **Accounting.** Sub-agent calls are recorded in `model_usage` with role and purpose `explore` and added to the session cost, so the budget counts them; they do not change the session's context size.
 
 ## Consequences
 
-- The main model's context grows by the task and the report instead of every file read; the cost of exploration moves to the fast model.
+- The main model's context grows by the task and the report instead of every file read; with a cheaper exploration model the cost of exploration moves to it. The sub-agent resends its own growing context on every turn, so total tokens and duration rise; [benchmarks/routing.md](../benchmarks/routing.md) has the numbers.
 - The report is a summary by a weaker model, so the tool description tells the main model to read the exact lines before editing.
-- The main model decides when to delegate; with routing off or without a fast model nothing changes.
+- The main model decides when to delegate.
 
 ## Rejected alternatives
 

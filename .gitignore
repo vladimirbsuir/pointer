@@ -28,3 +28,4 @@ desktop/src-tauri/gen/
 infra/bench/rag/results/
 __pycache__/
 infra/bench/memory/results/
+infra/bench/routing/results/
