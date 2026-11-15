@@ -1,5 +1,6 @@
 package dev.pointer.testing;
 
+import jakarta.websocket.ContainerProvider;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -23,6 +24,8 @@ public final class GatewayTestClient implements AutoCloseable {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
+    private static final int MAX_TEXT_MESSAGE_BYTES = 4 * 1024 * 1024;
+
     private final List<JsonNode> messages = new CopyOnWriteArrayList<>();
     private final List<Consumer<JsonNode>> handlers = new CopyOnWriteArrayList<>();
     private volatile CloseStatus closeStatus;
@@ -31,7 +34,9 @@ public final class GatewayTestClient implements AutoCloseable {
     private GatewayTestClient(int port, String accessToken) throws Exception {
         var headers = new WebSocketHttpHeaders();
         headers.setBearerAuth(accessToken);
-        session = new StandardWebSocketClient()
+        var container = ContainerProvider.getWebSocketContainer();
+        container.setDefaultMaxTextMessageBufferSize(MAX_TEXT_MESSAGE_BYTES);
+        session = new StandardWebSocketClient(container)
                 .execute(
                         new TextWebSocketHandler() {
                             @Override

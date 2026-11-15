@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   BanIcon,
+  BrainIcon,
   CheckIcon,
   ChevronRightIcon,
   ClockIcon,
@@ -15,10 +16,15 @@ import {
   SearchIcon,
   SquareTerminalIcon,
   PlugIcon,
+  Undo2Icon,
   WrenchIcon,
   XIcon,
 } from "lucide-react";
-import type { Item } from "@/shared/api/types";
+import { toast } from "sonner";
+import { undoMemory } from "@/features/memory/memory-api";
+import { queryClient } from "@/shared/api/queries";
+import { toAppError, type Item } from "@/shared/api/types";
+import { errorMessage } from "@/shared/i18n/errors";
 import { cn } from "@/shared/lib/utils";
 import { ApprovalPanel } from "./ApprovalPanel";
 import { DiffView } from "./DiffView";
@@ -47,7 +53,23 @@ const icons: Record<string, typeof WrenchIcon> = {
   web_fetch: GlobeIcon,
   semantic_search: DatabaseZapIcon,
   propose_tool: HammerIcon,
+  memory_save: BrainIcon,
+  memory_read: BrainIcon,
+  memory_search: BrainIcon,
+  memory_delete: BrainIcon,
 };
+
+const MEMORY_ACTIONS = {
+  created: "tools.memoryCreated",
+  updated: "tools.memoryUpdated",
+  deleted: "tools.memoryDeleted",
+} as const;
+
+function memoryAction(action: unknown) {
+  return typeof action === "string" && action in MEMORY_ACTIONS
+    ? MEMORY_ACTIONS[action as keyof typeof MEMORY_ACTIONS]
+    : null;
+}
 
 function searchResultsText(results: unknown) {
   if (!Array.isArray(results)) {
@@ -71,6 +93,7 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
   const { t } = useTranslation();
   const call = item as ToolCall;
   const [open, setOpen] = useState(false);
+  const [undone, setUndone] = useState(false);
   const toolName = call.toolName ?? "";
   const mcpParts = toolName.startsWith("mcp__") ? toolName.slice(5).split("__") : null;
   const Icon = icons[toolName] ?? (mcpParts ? PlugIcon : WrenchIcon);
@@ -96,6 +119,17 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
         return t("tools.semantic_search", { target: argument(call, "query") });
       case "propose_tool":
         return t("tools.propose_tool", { target: argument(call, "name") });
+      case "memory_save":
+      case "memory_delete":
+        return t(`tools.${toolName}`, { target: argument(call, "name") });
+      case "memory_read": {
+        const names = call.arguments?.names;
+        return t("tools.memory_read", {
+          target: Array.isArray(names) ? names.join(", ") : "",
+        });
+      }
+      case "memory_search":
+        return t("tools.memory_search", { target: argument(call, "query") });
       default:
         return mcpParts
           ? t("tools.mcp", { server: mcpParts[0], tool: mcpParts.slice(1).join("__") })
@@ -131,6 +165,19 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
         });
       case "propose_tool":
         return `v${String(result.version ?? "?")}`;
+      case "memory_save":
+      case "memory_delete": {
+        const action = memoryAction(result.action);
+        return undone ? t("tools.memoryUndone") : action ? t(action) : null;
+      }
+      case "memory_read":
+        return t("tools.entries", {
+          count: (result.memories as unknown[] | undefined)?.length ?? 0,
+        });
+      case "memory_search":
+        return t("tools.matches", {
+          count: (result.results as unknown[] | undefined)?.length ?? 0,
+        });
       default: {
         const change = call.fileChanges?.[0];
         return change ? `+${change.linesAdded} −${change.linesRemoved}` : null;
@@ -147,29 +194,58 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
     (call.result?.output as string | undefined) ??
     (call.result?.content as string | undefined);
   const diff = call.approvalPreview?.unifiedDiff as string | undefined;
+  const memoryId =
+    (toolName === "memory_save" || toolName === "memory_delete") && status === "succeeded"
+      ? (call.result?.memoryId as string | undefined)
+      : undefined;
+
+  const undo = async () => {
+    if (!memoryId) {
+      return;
+    }
+    try {
+      await undoMemory(memoryId);
+      setUndone(true);
+      await queryClient.invalidateQueries({ queryKey: ["memories"] });
+    } catch (error) {
+      toast.error(errorMessage(t, toAppError(error)));
+    }
+  };
   const hasDetails = Boolean(output || diff || call.error?.message || call.arguments);
 
   return (
     <div className="rounded-lg border text-sm">
-      <button
-        type="button"
-        className="flex w-full items-center gap-2 px-3 py-2 text-left"
-        onClick={() => setOpen(!open)}
-        disabled={!hasDetails}
-      >
-        <StatusIcon status={status} />
-        <Icon className="size-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate font-mono text-xs">{summary}</span>
-        {detail && <span className="shrink-0 text-xs text-muted-foreground">{detail}</span>}
-        {hasDetails && (
-          <ChevronRightIcon
-            className={cn(
-              "size-3.5 shrink-0 text-muted-foreground transition-transform",
-              open && "rotate-90",
-            )}
-          />
+      <div className="flex items-center">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
+          onClick={() => setOpen(!open)}
+          disabled={!hasDetails}
+        >
+          <StatusIcon status={status} />
+          <Icon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate font-mono text-xs">{summary}</span>
+          {detail && <span className="shrink-0 text-xs text-muted-foreground">{detail}</span>}
+          {hasDetails && (
+            <ChevronRightIcon
+              className={cn(
+                "size-3.5 shrink-0 text-muted-foreground transition-transform",
+                open && "rotate-90",
+              )}
+            />
+          )}
+        </button>
+        {memoryId && !undone && (
+          <button
+            type="button"
+            className="mr-2 flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={() => void undo()}
+          >
+            <Undo2Icon className="size-3.5" />
+            {t("tools.undo")}
+          </button>
         )}
-      </button>
+      </div>
       {awaitingApproval && (
         <div className="border-t px-3 py-3">
           <ApprovalPanel

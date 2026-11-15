@@ -1,6 +1,6 @@
 # F4. Agent memory
 
-Status: Approved · Requirement ids: MEM-1 to MEM-7 · Depends on: context assembly (CTX-1 to 5), embedding model setting (CTX-7); fast model role from [F3](f3-model-routing.md) is used when present.
+Status: In progress (phases 1 and 2 implemented) · Requirement ids: MEM-1 to MEM-7 · Depends on: context assembly (CTX-1 to 5), embedding model setting (CTX-7); fast model role from [F3](f3-model-routing.md) is used when present.
 
 ## Goal
 
@@ -20,8 +20,8 @@ Persistent memory across sessions, in the spirit of Claude Code memory: short ty
 |---|---|
 | MEM-1 | A memory has a scope (`user` or a project), a kind (`user`, `feedback`, `project`, `reference`), a unique name per scope, a one-line description and Markdown content. |
 | MEM-2 | Every turn's system prompt contains an index of the user's and the project's memories (kind, name, description), limited to a token budget; pinned memories are included in full. |
-| MEM-3 | The agent can save, update, read, search and delete memories with tools; every change appears in the conversation as an item with an undo action. |
-| MEM-4 | The user manages memories in the desktop (list, edit, pin, delete) and saves one from Telegram with `/remember`. |
+| MEM-3 | The agent can save, update, read, search and delete memories with tools; every change it makes can be undone from its tool call in the conversation. |
+| MEM-4 | The user manages memories in the desktop (list, edit, pin, delete), saves a note by starting a message with `#`, and from Telegram with `/remember`. |
 | MEM-5 | After a session becomes idle, the backend extracts suggested memories from it (corrections, rejected approvals with reasons, stated preferences); the user accepts, edits or dismisses them. |
 | MEM-6 | Memories keep usage data (last read, read count) and the session they came from; the agent is told to verify file and symbol references in a memory before acting on them. |
 | MEM-7 | The agent can search summaries of the project's past sessions. |
@@ -107,9 +107,11 @@ that is not in the code or AGENTS.md. Do not save what the repository already re
 | `memory_save` | `scope: user\|project, kind, name, description, content` (create, or update by name) | `allow` |
 | `memory_read` | `names: string[]` (max 10) | `allow` |
 | `memory_search` | `query, limit?` (vector over memories, lexical fallback) | `allow` |
-| `memory_delete` | `name, scope` | `ask` |
+| `memory_delete` | `name, scope` | `allow` |
 
-Writes produce an item of type `memory_change` `{memoryId, action: created|updated|deleted, name, scope}` that the desktop renders with an Undo button (`POST /memories/{id}/undo`).
+The tools are ordinary `tool_call` items; `memory_save` and `memory_delete` return `{memoryId, action: created|updated|deleted, name, scope}` and the desktop renders an Undo button on them (`POST /memories/{id}/undo`). Deleting only sets `status = deleted`, so every agent change is reversible and `memory_delete` needs no approval by default; a user who wants one sets the tool policy to `ask`.
+
+Implementation notes: the module is `dev.pointer.memory` (`MemoryStore` on `JdbcClient`, `MemoryService`, `MemoryPrompt`, `MemoryOperations` registering the four `ServerOperation` beans, `MemoryEmbeddings`); migration V20 seeds the tools with kind `read`. Embeddings are computed in a virtual thread after the transaction commits and are optional: without an embedding model search is full-text only and the index keeps its default order. The index is reordered by similarity to the turn's message only when it does not fit the budget.
 
 ### Extraction (phase 3)
 
@@ -127,17 +129,17 @@ Writes produce an item of type `memory_change` `{memoryId, action: created|updat
 
 - Settings → Memory (user scope) and Project → Memory tab: list with kind filter, search, edit dialog, pin, delete, revision history, suggested section.
 - Conversation: `memory_change` items with Undo; `memory_read` shown as a compact tool call.
-- Composer: `#` prefix to save the rest of the message as a user memory without sending it to the agent.
+- Composer: a message starting with `#` is saved with `POST /memories/remember` to the session's project instead of being sent; the name is a slug of the first words.
 
 ### Telegram
 
-- `/remember <text>`: saves a `user` kind memory to the current project, name derived by the fast model or slug of the first words.
-- `/memories`: last 10 memories of the current project.
+- `/remember <text>`: saves a `user` kind memory to the project of the selected session, or to the user scope without one; the name is a slug of the first words.
+- `/memories`: last 10 memories visible in that project.
 
 ## Phases
 
-1. Table, service, REST, desktop management, prompt section with index and pinned memories.
-2. Agent tools with `memory_change` items and undo; Telegram `/remember`.
+1. Table, service, REST, desktop management, prompt section with index and pinned memories. Implemented.
+2. Agent tools with undo; Telegram `/remember` and `/memories`; the composer `#` shortcut. Implemented and checked live with `glm-5.3-flash`: asked to remember a commit convention, the agent called `memory_save` (kind `feedback`, project scope, with a Why line); in a new session it called `memory_read` and wrote a one-line Conventional Commits message.
 3. Suggested memories from idle sessions.
 4. Session digests and `search_sessions`.
 

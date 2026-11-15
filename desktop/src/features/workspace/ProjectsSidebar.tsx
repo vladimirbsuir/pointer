@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  BrainIcon,
   ChevronRightIcon,
   CloudIcon,
   DatabaseZapIcon,
@@ -35,6 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu";
+import { ProjectMemoryDialog } from "@/features/memory/ProjectMemoryDialog";
 import { createRemoteSession, createSession } from "./create-session";
 import { ProjectRepositoryDialog } from "./ProjectRepositoryDialog";
 import { ProjectIndexDialog } from "./ProjectIndexDialog";
@@ -136,6 +138,7 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
   const [expanded, setExpanded] = useState(true);
   const [indexOpen, setIndexOpen] = useState(false);
   const [repositoryOpen, setRepositoryOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const { data: sessions } = useSessions(project.id);
   const { data: remote } = useRemoteStatus();
   const { data: remoteSessions } = useRemoteSessions(project.id);
@@ -248,6 +251,10 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
               <DatabaseZapIcon />
               {t("shell.semanticIndex")}
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setMemoryOpen(true)}>
+              <BrainIcon />
+              {t("memory.menu")}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -263,6 +270,7 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
         open={indexOpen}
         onOpenChange={setIndexOpen}
       />
+      <ProjectMemoryDialog project={project} open={memoryOpen} onOpenChange={setMemoryOpen} />
       {expanded && (
         <div className="ml-4 flex flex-col">
           {sessions?.map((session) => (

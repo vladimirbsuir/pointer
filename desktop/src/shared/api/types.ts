@@ -76,6 +76,28 @@ export type SessionStatus =
 
 export type SessionMode = "ask" | "plan" | "agent";
 
+export type MemoryKind = "user" | "feedback" | "project" | "reference";
+
+export type MemoryStatus = "active" | "suggested" | "dismissed" | "deleted";
+
+export type Memory = {
+  id: string;
+  projectId: string | null;
+  scope: "user" | "project";
+  kind: MemoryKind;
+  name: string;
+  description: string;
+  content: string;
+  status: MemoryStatus;
+  pinned: boolean;
+  source: "agent" | "user" | "extracted" | "telegram";
+  sourceSessionId: string | null;
+  readCount: number;
+  lastReadAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type SlashCommand = {
   id: string;
   name: string;

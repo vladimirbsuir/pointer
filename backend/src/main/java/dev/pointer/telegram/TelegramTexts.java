@@ -24,10 +24,22 @@ final class TelegramTexts {
                             + "/sessions: choose a session\n"
                             + "/new: start a session in a project\n"
                             + "/stop: stop the running turn\n"
+                            + "/remember text: save a memory for the agent\n"
+                            + "/memories: recent memories\n"
                             + "/unlink: unlink this chat\n\n"
                             + "Other messages go to the selected session. Reply to an approval request with text to deny it with that message."),
             Map.entry("unlinked", "This chat is unlinked from Pointer."),
             Map.entry("noSessions", "No sessions yet. Start one with /new."),
+            Map.entry(
+                    "remember.empty",
+                    "Write what to remember after the command, for example: /remember use pnpm, not npm"),
+            Map.entry("remember.saved", "🧠 Saved to memory {0} ({1}). The agent sees it in new turns."),
+            Map.entry("remember.scopeProject", "for the project of the selected session"),
+            Map.entry("remember.scopeUser", "for all projects"),
+            Map.entry("memories.title", "🧠 <b>Recent memories</b>"),
+            Map.entry("memories.none", "No memories yet. Save one with /remember."),
+            Map.entry("command.remember", "Save a memory for the agent"),
+            Map.entry("command.memories", "Show recent memories"),
             Map.entry(
                     "sessionsTitle",
                     "Recent sessions. The selected one receives your messages and shows live progress."),
@@ -106,10 +118,22 @@ final class TelegramTexts {
                             + "/sessions: выбрать сессию\n"
                             + "/new: начать сессию в проекте\n"
                             + "/stop: остановить текущий ход\n"
+                            + "/remember текст: сохранить в память агента\n"
+                            + "/memories: последние записи памяти\n"
                             + "/unlink: отвязать этот чат\n\n"
                             + "Остальные сообщения уходят в выбранную сессию. Ответьте текстом на запрос подтверждения, чтобы отклонить его с этим сообщением."),
             Map.entry("unlinked", "Чат отвязан от Pointer."),
             Map.entry("noSessions", "Сессий пока нет. Начните новую через /new."),
+            Map.entry(
+                    "remember.empty",
+                    "Напишите после команды, что запомнить, например: /remember используй pnpm, а не npm"),
+            Map.entry("remember.saved", "🧠 Сохранено в память {0} ({1}). Агент увидит это в новых ходах."),
+            Map.entry("remember.scopeProject", "для проекта выбранной сессии"),
+            Map.entry("remember.scopeUser", "для всех проектов"),
+            Map.entry("memories.title", "🧠 <b>Последние записи памяти</b>"),
+            Map.entry("memories.none", "Память пока пуста. Сохраните запись через /remember."),
+            Map.entry("command.remember", "Сохранить в память агента"),
+            Map.entry("command.memories", "Последние записи памяти"),
             Map.entry("sessionsTitle", "Последние сессии. Выбранная получает ваши сообщения и показывает ход работы."),
             Map.entry("untitled", "Новая сессия"),
             Map.entry("noProjects", "Проектов пока нет. Добавьте проект в приложении Pointer."),
@@ -169,7 +193,7 @@ final class TelegramTexts {
             Map.entry("command.help", "Как пользоваться ботом"),
             Map.entry("command.unlink", "Отвязать этот чат"));
 
-    static final List<String> COMMANDS = List.of("sessions", "new", "stop", "help", "unlink");
+    static final List<String> COMMANDS = List.of("sessions", "new", "stop", "remember", "memories", "help", "unlink");
 
     private TelegramTexts() {}
 

@@ -5,6 +5,7 @@ import dev.pointer.customtool.ProposeTool;
 import dev.pointer.execution.ExecutionListener;
 import dev.pointer.execution.ExecutionRequest;
 import dev.pointer.execution.ExecutionService;
+import dev.pointer.memory.MemoryPrompt;
 import dev.pointer.project.ProjectService;
 import dev.pointer.provider.ProviderService;
 import dev.pointer.provider.ResolvedModel;
@@ -71,6 +72,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private final ToolRegistry toolRegistry;
     private final ProjectService projectService;
     private final ExecutionService execution;
+    private final MemoryPrompt memoryPrompt;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<UUID, RunningTurn> running = new ConcurrentHashMap<>();
 
@@ -149,7 +151,7 @@ public class AgentRunner implements LiveItemSnapshots {
                     context.mode(),
                     context.worktree(),
                     turn.cancellation);
-            var project = projectContext(scope);
+            var project = projectContext(scope).withMemory(memorySection(scope));
             var globalInstructions = settingsService.get(userId).globalInstructions();
             var summarizer = new Summarizer(scope, model, turn, project, globalInstructions);
             if (Turn.COMPACTION.equals(context.kind())) {
@@ -275,6 +277,18 @@ public class AgentRunner implements LiveItemSnapshots {
         var estimate = ContextAssembler.estimateTokens(sent);
         writer.resetContextTokens(scope.userId(), scope.sessionId(), estimate, model.contextWindow());
         return estimate;
+    }
+
+    private String memorySection(ToolCallHandler.TurnScope scope) {
+        try {
+            var query = sessionService
+                    .turnMessage(scope.sessionId(), scope.turnId())
+                    .orElse(null);
+            return memoryPrompt.section(scope.userId(), scope.projectId(), query, scope.deviceId());
+        } catch (RuntimeException exception) {
+            log.warn("Building the memory section for session {} failed", scope.sessionId(), exception);
+            return null;
+        }
     }
 
     private ContextAssembler.ProjectContext projectContext(ToolCallHandler.TurnScope scope) {

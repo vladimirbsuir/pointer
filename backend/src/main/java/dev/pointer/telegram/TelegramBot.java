@@ -8,6 +8,7 @@ import dev.pointer.common.error.ApiException;
 import dev.pointer.container.RemoteDtos;
 import dev.pointer.container.RemoteSessionService;
 import dev.pointer.execution.ExecutionService;
+import dev.pointer.memory.MemoryService;
 import dev.pointer.project.ProjectService;
 import dev.pointer.session.ApprovalService;
 import dev.pointer.session.SessionDtos;
@@ -30,6 +31,8 @@ class TelegramBot {
     private static final int LAST_ANSWER_LIMIT = 1500;
     private static final String START = "/start";
 
+    private static final int MEMORY_LIST_LIMIT = 10;
+
     private final TelegramApi api;
     private final TelegramLinkService links;
     private final TelegramNotifier notifier;
@@ -40,6 +43,7 @@ class TelegramBot {
     private final ExecutionService execution;
     private final AgentRunner runner;
     private final RemoteSessionService remote;
+    private final MemoryService memories;
 
     void handle(TelegramTypes.Update update) {
         if (update.message() != null) {
@@ -71,7 +75,7 @@ class TelegramBot {
             return;
         }
         if (content.startsWith("/")) {
-            command(chat, commandName(content));
+            command(chat, commandName(content), commandArgument(content));
             return;
         }
         var replyTo = message.replyTo();
@@ -108,8 +112,10 @@ class TelegramBot {
         api.sendMessage(chatId, text(locale, "linked", "<b>" + escape(account) + "</b>"), null);
     }
 
-    private void command(Chat chat, String name) {
+    private void command(Chat chat, String name, String argument) {
         switch (name) {
+            case "remember" -> remember(chat, argument);
+            case "memories" -> listMemories(chat);
             case "sessions" -> listSessions(chat);
             case "new" -> listProjects(chat);
             case "stop" -> stop(chat);
@@ -333,6 +339,50 @@ class TelegramBot {
                         ProjectService.ProjectResponse::id,
                         ProjectService.ProjectResponse::name,
                         (first, second) -> first));
+    }
+
+    private void remember(Chat chat, String text) {
+        if (text.isBlank()) {
+            chat.reply(text(chat.locale, "remember.empty"));
+            return;
+        }
+        var projectId = selectedProject(chat);
+        var memory = memories.remember(chat.link.userId(), projectId, text, "telegram");
+        var scope = projectId == null
+                ? text(chat.locale, "remember.scopeUser")
+                : text(chat.locale, "remember.scopeProject");
+        chat.reply(text(chat.locale, "remember.saved", "<b>" + escape(memory.name()) + "</b>", scope));
+    }
+
+    private void listMemories(Chat chat) {
+        var recent = memories.recent(chat.link.userId(), selectedProject(chat), MEMORY_LIST_LIMIT);
+        if (recent.isEmpty()) {
+            chat.reply(text(chat.locale, "memories.none"));
+            return;
+        }
+        var lines = new StringBuilder(text(chat.locale, "memories.title"));
+        for (var memory : recent) {
+            lines.append("\n• <b>")
+                    .append(escape(memory.name()))
+                    .append("</b>: ")
+                    .append(escape(memory.description()));
+        }
+        chat.reply(lines.toString());
+    }
+
+    private UUID selectedProject(Chat chat) {
+        var sessionId = chat.link.selectedSessionId();
+        return sessionId == null
+                ? null
+                : directory
+                        .session(chat.link.userId(), sessionId)
+                        .map(SessionDtos.SessionResponse::projectId)
+                        .orElse(null);
+    }
+
+    private static String commandArgument(String content) {
+        var parts = content.split("\\s+", 2);
+        return parts.length < 2 ? "" : parts[1].strip();
     }
 
     private static String commandName(String content) {

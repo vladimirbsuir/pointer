@@ -157,6 +157,20 @@ Priority levels:
 | REM-2 | Through the Telegram bot the user can list sessions, send messages, receive progress and final answers, and approve or deny tool calls. | HL |
 | REM-3 | A session can run on a server-side executor: a container that clones a GitHub repository and pushes results to a branch. | HL |
 
+### 2.12 Memory (MEM)
+
+Specified in [F4](features/f4-agent-memory.md).
+
+| ID | Requirement | Priority |
+|---|---|---|
+| MEM-1 | A memory has a scope (the user or a project), a kind (`user`, `feedback`, `project`, `reference`), a unique name per scope, a one-line description and Markdown content. | F4 |
+| MEM-2 | Every turn's system prompt contains an index of the user's and the project's memories within a token budget; pinned memories are included in full. | F4 |
+| MEM-3 | The agent saves, updates, reads, searches and deletes memories with tools; every change it makes can be undone from the conversation. | F4 |
+| MEM-4 | The user manages memories in the desktop app, saves a note with a `#` message and from Telegram with `/remember`. | F4 |
+| MEM-5 | Memories are suggested from finished sessions; the user accepts or dismisses them. | F4 |
+| MEM-6 | Memories keep their source session and read counters; the agent is told to verify what a memory says before relying on it. | F4 |
+| MEM-7 | The agent can search summaries of the project's past sessions. | F4 |
+
 ## 3. Non-functional requirements
 
 | ID | Requirement |

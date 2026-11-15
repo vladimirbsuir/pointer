@@ -192,6 +192,10 @@ public class SessionService {
     }
 
     @Transactional(readOnly = true)
+    public Optional<UUID> ownerOf(UUID sessionId) {
+        return sessions.findById(sessionId).map(AgentSession::getUserId);
+    }
+
     public AgentSession owned(UUID userId, UUID sessionId) {
         return sessions.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> ApiException.notFound("session_not_found", "Session does not exist"));

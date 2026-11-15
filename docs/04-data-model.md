@@ -469,3 +469,29 @@ Server sessions on a per-session container (REM-3, [ADR 0016](adr/0016-remote-ex
 | `created_at`, `updated_at` | timestamptz | |
 
 Index: (`status`, `last_active_at`).
+
+### Memory
+
+Agent memory ([F4](features/f4-agent-memory.md)), accessed with plain SQL because of the `vector` type.
+
+`memories`: one row per memory.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK `users`, cascade |
+| `project_id` | uuid | FK `projects`, cascade; null for the user scope |
+| `kind` | text | `user`, `feedback`, `project`, `reference` |
+| `name` | text | Kebab-case, 2 to 64 characters; unique per user and scope among `active` and `suggested` rows |
+| `description` | text | One line shown in the prompt index |
+| `content` | text | Markdown, at most 4,000 characters |
+| `status` | text | `active`, `suggested`, `dismissed`, `deleted` |
+| `pinned` | boolean | Pinned memories are put into the prompt in full |
+| `source` | text | `agent`, `user`, `extracted`, `telegram` |
+| `source_session_id` | uuid | FK `sessions`, `ON DELETE SET NULL` |
+| `embedding` | vector | Nullable; computed after commit with the user's embedding model |
+| `embedding_model_id` | uuid | FK `models`, `ON DELETE SET NULL` |
+| `read_count`, `last_read_at` | integer, timestamptz | Updated by `memory_read` |
+| `created_at`, `updated_at` | timestamptz | |
+
+`memory_revisions`: the state before each change (`kind`, `description`, `content`, `status`, `pinned`; all null for the creation), newest first per memory; undo restores the newest revision and deletes it.

@@ -10,8 +10,10 @@ import {
   XIcon,
 } from "lucide-react";
 import { readFile, suggestFiles } from "./session-files";
-import { useSlashCommands } from "@/shared/api/queries";
-import type { SessionMode } from "@/shared/api/types";
+import { api, unwrap } from "@/shared/api/client";
+import { queryClient, useSlashCommands } from "@/shared/api/queries";
+import { toAppError, type SessionMode } from "@/shared/api/types";
+import { errorMessage } from "@/shared/i18n/errors";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
 import { Textarea } from "@/shared/ui/textarea";
@@ -90,7 +92,9 @@ export function Composer({
     commandQuery === null
       ? []
       : matchingCommands(commands ?? [], commandQuery).slice(0, VISIBLE_SUGGESTIONS);
-  const canSend = text.trim().length > 0 && !sending && disabledReason === null;
+  const memoryNote = text.trimStart().startsWith("#") ? text.trimStart().slice(1).trim() : null;
+  const canSend =
+    text.trim().length > 0 && !sending && (disabledReason === null || Boolean(memoryNote));
   const mentionQuery = mention?.query ?? null;
 
   useEffect(() => {
@@ -229,8 +233,28 @@ export function Composer({
     return attachments;
   };
 
+  const remember = async (note: string) => {
+    setSending(true);
+    try {
+      const memory = await unwrap(
+        api().POST("/api/v1/memories/remember", { body: { projectId, text: note } }),
+      );
+      toast.success(t("chat.remembered", { name: memory.name }));
+      setText("");
+      await queryClient.invalidateQueries({ queryKey: ["memories"] });
+    } catch (error) {
+      toast.error(errorMessage(t, toAppError(error)));
+    } finally {
+      setSending(false);
+    }
+  };
+
   const send = async () => {
     if (!canSend) {
+      return;
+    }
+    if (memoryNote) {
+      await remember(memoryNote);
       return;
     }
     setSending(true);
@@ -413,6 +437,9 @@ export function Composer({
               </span>
             ))}
           </div>
+        )}
+        {memoryNote !== null && (
+          <p className="px-3 pt-2 text-xs text-muted-foreground">{t("chat.rememberHint")}</p>
         )}
         <Textarea
           ref={textarea}

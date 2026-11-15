@@ -175,7 +175,11 @@
     "github_token_invalid": "GitHub rejected the token. Allow repository access again in settings.",
     "repository_not_found": "The GitHub repository does not exist or is not accessible.",
     "pull_request_failed": "GitHub could not open a pull request for this branch.",
-    "runner_timeout": "The server container did not become ready in time."
+    "runner_timeout": "The server container did not become ready in time.",
+    "memory_exists": "A memory with this name already exists.",
+    "invalid_memory": "Check the memory fields: name, description and content are required.",
+    "nothing_to_undo": "There is nothing to undo for this memory.",
+    "memory_not_found": "This memory no longer exists."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",
@@ -216,7 +220,9 @@
     "imagesUnsupported": "The selected model does not accept images. Enable image support for it in Settings > Providers.",
     "imageTooLarge": "Images must be at most 5 MB.",
     "tooManyImages": "You can attach up to {{count}} images.",
-    "imageUploadFailed": "Could not upload the image."
+    "imageUploadFailed": "Could not upload the image.",
+    "rememberHint": "Enter saves this note to the project memory instead of sending it to the agent.",
+    "remembered": "Saved to memory: {{name}}"
   },
   "modes": {
     "ask": "Ask",
@@ -277,7 +283,16 @@
     "mcp": "{{server}} · {{tool}}",
     "httpStatus": "HTTP {{code}}",
     "semantic_search": "Semantic search \"{{target}}\"",
-    "propose_tool": "Propose tool {{target}}"
+    "propose_tool": "Propose tool {{target}}",
+    "memory_save": "Remember {{target}}",
+    "memory_read": "Read memory {{target}}",
+    "memory_search": "Search memory \"{{target}}\"",
+    "memory_delete": "Forget {{target}}",
+    "memoryCreated": "saved",
+    "memoryUpdated": "updated",
+    "memoryDeleted": "deleted",
+    "memoryUndone": "undone",
+    "undo": "Undo"
   },
   "permissions": {
     "tools": "Tools",
@@ -479,6 +494,36 @@
       "ready": "Running",
       "stopped": "Stopped, starts on the next message",
       "failed": "Failed to start"
+    }
+  },
+  "memory": {
+    "title": "Memory",
+    "userDescription": "Facts the agent remembers in every project: who you are and how you want it to work. The agent saves them itself when you state a preference or correct it; you can edit them here.",
+    "projectDescription": "Facts the agent remembers only in this project: decisions, constraints and where to find things. Memories are personal and are not stored in the repository.",
+    "empty": "No memories yet.",
+    "add": "Add memory",
+    "edit": "Edit memory",
+    "delete": "Delete memory",
+    "deleted": "Memory {{name}} deleted.",
+    "undo": "Undo",
+    "pin": "Pin: always show the full text to the agent",
+    "unpin": "Unpin",
+    "name": "Name",
+    "kind": "Kind",
+    "descriptionLabel": "Description",
+    "descriptionHint": "One line the agent sees in the memory index to decide whether to read the memory.",
+    "content": "Content",
+    "suggested_one": "{{count}} suggested memory from recent sessions",
+    "suggested_other": "{{count}} suggested memories from recent sessions",
+    "accept": "Keep this memory",
+    "dismiss": "Dismiss",
+    "menu": "Memory",
+    "dialogTitle": "Memory · {{project}}",
+    "kinds": {
+      "user": "User",
+      "feedback": "Feedback",
+      "project": "Project",
+      "reference": "Reference"
     }
   }
 }

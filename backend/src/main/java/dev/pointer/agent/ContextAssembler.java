@@ -146,6 +146,9 @@ class ContextAssembler {
                     .append(":\n")
                     .append(project.rulesContent().strip());
         }
+        if (project != null && project.memory() != null && !project.memory().isBlank()) {
+            prompt.append("\n\n").append(project.memory().strip());
+        }
         return prompt.toString();
     }
 
@@ -268,10 +271,24 @@ class ContextAssembler {
     }
 
     record ProjectContext(
-            String name, String gitBranch, String rulesFile, String rulesContent, String os, String shell) {
+            String name,
+            String gitBranch,
+            String rulesFile,
+            String rulesContent,
+            String os,
+            String shell,
+            String memory) {
+
+        ProjectContext(String name, String gitBranch, String rulesFile, String rulesContent, String os, String shell) {
+            this(name, gitBranch, rulesFile, rulesContent, os, shell, null);
+        }
 
         ProjectContext(String name) {
-            this(name, null, null, null, null, null);
+            this(name, null, null, null, null, null, null);
+        }
+
+        ProjectContext withMemory(String section) {
+            return new ProjectContext(name, gitBranch, rulesFile, rulesContent, os, shell, section);
         }
     }
 }

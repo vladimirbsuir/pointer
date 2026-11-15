@@ -4,6 +4,7 @@ import { core } from "./core";
 import type {
   CustomTool,
   CustomToolVersion,
+  Memory,
   ProjectIndex,
   Project,
   Provider,
@@ -31,6 +32,8 @@ export const queryKeys = {
   remote: ["remote"] as const,
   remoteSessions: (projectId: string) => ["remoteSessions", projectId] as const,
   remoteWorkspace: (sessionId: string) => ["remoteWorkspace", sessionId] as const,
+  memories: (projectId: string | null, status: string) =>
+    ["memories", projectId ?? "user", status] as const,
 };
 
 const TRANSITIONAL_REMOTE_STATUSES = new Set(["queued", "starting", "preparing"]);
@@ -101,6 +104,18 @@ export function useProjectIndex(projectId: string, enabled = true) {
         api().GET("/api/v1/projects/{projectId}/index", { params: { path: { projectId } } }),
       )) as ProjectIndex,
     refetchInterval: (query) => (query.state.data?.status === "indexing" ? 1000 : false),
+  });
+}
+
+export function useMemories(projectId: string | null, status: "active" | "suggested") {
+  return useQuery({
+    queryKey: queryKeys.memories(projectId, status),
+    queryFn: async () =>
+      (await unwrap(
+        api().GET("/api/v1/memories", {
+          params: { query: { projectId: projectId ?? undefined, status } },
+        }),
+      )) as Memory[],
   });
 }
 
