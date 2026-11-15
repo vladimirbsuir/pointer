@@ -53,6 +53,12 @@ public class SettingsService {
             requireOwnedModel(userId, request.planModelId());
             userSettings.changePlanModel(request.planModelId(), now);
         }
+        if (Boolean.TRUE.equals(request.clearExploreModel())) {
+            userSettings.changeExploreModel(null, now);
+        } else if (request.exploreModelId() != null) {
+            requireOwnedModel(userId, request.exploreModelId());
+            userSettings.changeExploreModel(request.exploreModelId(), now);
+        }
         if (Boolean.TRUE.equals(request.clearEmbeddingModel())) {
             userSettings.changeEmbeddingModel(null, now);
         } else if (request.embeddingModelId() != null) {
@@ -74,7 +80,10 @@ public class SettingsService {
     public RoutingSettings routing(UUID userId) {
         var userSettings = find(userId);
         return new RoutingSettings(
-                userSettings.getRoutingDefault(), userSettings.getFastModelId(), userSettings.getPlanModelId());
+                userSettings.getRoutingDefault(),
+                userSettings.getFastModelId(),
+                userSettings.getPlanModelId(),
+                userSettings.getExploreModelId());
     }
 
     @Transactional(readOnly = true)
@@ -99,7 +108,8 @@ public class SettingsService {
                 userSettings.getEmbeddingModelId(),
                 userSettings.getRoutingDefault(),
                 userSettings.getFastModelId(),
-                userSettings.getPlanModelId());
+                userSettings.getPlanModelId(),
+                userSettings.getExploreModelId());
     }
 
     public record SettingsResponse(
@@ -108,9 +118,10 @@ public class SettingsService {
             UUID embeddingModelId,
             String routingDefault,
             UUID fastModelId,
-            UUID planModelId) {}
+            UUID planModelId,
+            UUID exploreModelId) {}
 
-    public record RoutingSettings(String routingDefault, UUID fastModelId, UUID planModelId) {}
+    public record RoutingSettings(String routingDefault, UUID fastModelId, UUID planModelId, UUID exploreModelId) {}
 
     public record UpdateSettingsRequest(
             @Size(max = 20_000) String globalInstructions,
@@ -122,7 +133,9 @@ public class SettingsService {
             UUID fastModelId,
             Boolean clearFastModel,
             UUID planModelId,
-            Boolean clearPlanModel) {
+            Boolean clearPlanModel,
+            UUID exploreModelId,
+            Boolean clearExploreModel) {
 
         public UpdateSettingsRequest(
                 String globalInstructions,
@@ -136,6 +149,8 @@ public class SettingsService {
                     clearDefaultModel,
                     embeddingModelId,
                     clearEmbeddingModel,
+                    null,
+                    null,
                     null,
                     null,
                     null,

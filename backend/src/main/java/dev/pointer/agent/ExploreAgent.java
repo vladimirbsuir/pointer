@@ -58,8 +58,9 @@ class ExploreAgent {
                                     "type",
                                     "string",
                                     "description",
-                                    "What to find out, with every detail the sub-agent needs and what the report"
-                                            + " should contain."),
+                                    "What to find out, stated narrowly: the question, the detail the sub-agent"
+                                            + " needs to recognize the answer, and what the report must contain."
+                                            + " Ask only for what you need next."),
                             "paths",
                             Map.of(
                                     "type",
@@ -79,8 +80,7 @@ class ExploreAgent {
     private final JsonMapper json;
 
     static boolean offered(ModelRouter.ModelPlan routes) {
-        return ModelRouter.FAST.equals(routes.fast().role())
-                && routes.fast().model().supportsTools();
+        return routes.explore().model().supportsTools();
     }
 
     static boolean allows(ToolDefinition tool) {
@@ -95,7 +95,7 @@ class ExploreAgent {
             int step,
             String providerCallId,
             String argumentsJson,
-            ModelRouter.RoutedModel fast,
+            ModelRouter.RoutedModel explorer,
             RoutedClient.Failover failover,
             ContextAssembler.ProjectContext project) {
         var arguments = parseArguments(argumentsJson);
@@ -114,7 +114,7 @@ class ExploreAgent {
             return;
         }
         try {
-            var report = investigate(scope, itemId, request(task, arguments.get("paths")), fast, failover, project);
+            var report = investigate(scope, itemId, request(task, arguments.get("paths")), explorer, failover, project);
             if (scope.cancellation().isCancelled()) {
                 writer.completeItem(
                         scope.userId(), scope.sessionId(), itemId, Item.CANCELLED, Map.of("toolStatus", "cancelled"));
@@ -151,11 +151,10 @@ class ExploreAgent {
             ToolCallHandler.TurnScope scope,
             UUID itemId,
             String request,
-            ModelRouter.RoutedModel fast,
+            ModelRouter.RoutedModel explorer,
             RoutedClient.Failover failover,
             ContextAssembler.ProjectContext project) {
-        var explorer = new ModelRouter.RoutedModel(fast.model(), UsageLedger.EXPLORE);
-        var window = Objects.requireNonNullElse(fast.model().contextWindow(), DEFAULT_CONTEXT_WINDOW);
+        var window = Objects.requireNonNullElse(explorer.model().contextWindow(), DEFAULT_CONTEXT_WINDOW);
         var tools = registry.available(scope.userId(), scope.projectId(), scope.deviceId()).stream()
                 .filter(ExploreAgent::allows)
                 .map(tool -> new ChatRequest.ToolDefinition(

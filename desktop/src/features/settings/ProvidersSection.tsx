@@ -11,6 +11,7 @@ import {
   PlusIcon,
   RefreshCwIcon,
   StarIcon,
+  TelescopeIcon,
   Trash2Icon,
   ZapIcon,
 } from "lucide-react";
@@ -209,16 +210,14 @@ function ProviderCard({ provider }: { provider: Provider }) {
       await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
     });
 
-  const toggleRole = (role: "fast" | "plan", modelId: string, active: boolean) =>
+  const toggleRole = (role: "fast" | "plan" | "explore", modelId: string, active: boolean) =>
     run(async () => {
-      const body =
-        role === "fast"
-          ? active
-            ? { clearFastModel: true }
-            : { fastModelId: modelId }
-          : active
-            ? { clearPlanModel: true }
-            : { planModelId: modelId };
+      const bodies = {
+        fast: active ? { clearFastModel: true } : { fastModelId: modelId },
+        plan: active ? { clearPlanModel: true } : { planModelId: modelId },
+        explore: active ? { clearExploreModel: true } : { exploreModelId: modelId },
+      };
+      const body = bodies[role];
       await unwrap(api().PUT("/api/v1/me/settings", { body }));
       await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
     });
@@ -315,6 +314,7 @@ function ProviderCard({ provider }: { provider: Provider }) {
             const isEmbedding = settings?.embeddingModelId === model.id;
             const isFast = settings?.fastModelId === model.id;
             const isPlan = settings?.planModelId === model.id;
+            const isExplore = settings?.exploreModelId === model.id;
             return (
               <li key={model.id}>
                 <div className="flex items-center gap-2 px-4 py-1.5 text-sm">
@@ -378,6 +378,15 @@ function ProviderCard({ provider }: { provider: Provider }) {
                   <Button
                     variant="ghost"
                     size="icon-xs"
+                    disabled={busy || (!isExplore && (!model.enabled || !model.supportsTools))}
+                    title={isExplore ? t("providers.isExplore") : t("providers.makeExplore")}
+                    onClick={() => void toggleRole("explore", model.id, isExplore)}
+                  >
+                    <TelescopeIcon className={cn(isExplore && "text-orange-500")} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
                     disabled={busy || (!isEmbedding && !model.enabled)}
                     title={isEmbedding ? t("providers.isEmbedding") : t("providers.makeEmbedding")}
                     onClick={() => void toggleEmbedding(model.id, isEmbedding)}
@@ -423,6 +432,7 @@ function RoutingCard({ providers }: { providers: Provider[] }) {
     models.find((model) => model.id === modelId)?.displayName ?? null;
   const fast = name(settings?.fastModelId);
   const plan = name(settings?.planModelId);
+  const explore = name(settings?.exploreModelId);
 
   const setDefault = async (smart: boolean) => {
     try {
@@ -454,6 +464,10 @@ function RoutingCard({ providers }: { providers: Provider[] }) {
         <span className="flex items-center gap-1">
           <ListChecksIcon className="size-3.5 text-violet-500" />
           {t("providers.planModel")}: {plan ?? t("providers.roleNotSet")}
+        </span>
+        <span className="flex items-center gap-1">
+          <TelescopeIcon className="size-3.5 text-orange-500" />
+          {t("providers.exploreModel")}: {explore ?? t("providers.exploreNotSet")}
         </span>
       </div>
     </div>

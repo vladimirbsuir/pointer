@@ -28,6 +28,7 @@ public class UserSettings {
     private String routingDefault;
     private UUID fastModelId;
     private UUID planModelId;
+    private UUID exploreModelId;
 
     @JdbcTypeCode(SqlTypes.JSON)
     private Map<String, Object> preferences;
@@ -70,6 +71,11 @@ public class UserSettings {
 
     void changePlanModel(UUID planModelId, Instant now) {
         this.planModelId = planModelId;
+        this.updatedAt = now;
+    }
+
+    void changeExploreModel(UUID exploreModelId, Instant now) {
+        this.exploreModelId = exploreModelId;
         this.updatedAt = now;
     }
 

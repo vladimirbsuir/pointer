@@ -80,35 +80,100 @@ class ExploreTests extends AgentIntegrationTest {
     }
 
     @Test
-    void exploreIsNotOfferedWithoutSmartRoutingOrAFastModelWithTools() throws Exception {
+    void exploreRunsOnTheSessionModelWithoutSmartRouting() throws Exception {
         var setup = setUp(false);
-        var fast = enableExplore(setup);
-        updateSession(setup, Map.of("routing", "off"));
-        llm.enqueueText("First.");
+        llm.enqueueToolCall("call_main", "explore", EXPLORE_CALL);
+        llm.enqueueText("REPORT: nothing found.");
+        llm.enqueueText("Nothing.");
 
         try (var device = executor(setup, new CopyOnWriteArrayList<>(), Map.of())) {
-            send(setup, "Hello", null);
+            send(setup, "Where is the greeting?", null);
             device.awaitEvent("turn.completed", TIMEOUT);
-            device.await(message -> llm.requests().size() >= 2, TIMEOUT);
+        }
 
-            updateSession(setup, Map.of("routing", "smart"));
+        var sent = llm.requests();
+        assertThat(toolNames(sent.get(0))).contains("explore");
+        assertThat(model(sent.get(1))).isEqualTo("fake-model");
+        assertThat(sent.get(1)).contains("read-only investigator");
+        assertThat(toolNames(sent.get(1))).doesNotContain("explore", "write_file");
+        assertThat(sent.get(2)).contains("REPORT: nothing found.");
+        assertThat(usage(setup).entries())
+                .extracting(entry -> entry.modelLabel() + "/" + entry.role() + "/" + entry.purpose())
+                .contains("fake-model/explore/explore");
+    }
+
+    @Test
+    void aConfiguredExploreModelIsUsedInBothRoutingModesAndSkippedWithoutToolSupport() throws Exception {
+        var setup = setUp(false);
+        enableExplore(setup);
+        var scout = addModel(setup, "scout-model");
+        updateSettings(setup, Map.of("exploreModelId", scout.toString()));
+
+        try (var device = executor(setup, new CopyOnWriteArrayList<>(), Map.of())) {
+            assertThat(explorerOf(setup, device, 1)).isEqualTo("scout-model");
+
+            updateSession(setup, Map.of("routing", "off"));
+            assertThat(explorerOf(setup, device, 2)).isEqualTo("scout-model");
+
             client.patch()
                     .uri(
                             "/api/v1/providers/{providerId}/models/{modelId}",
                             provider(setup).id(),
-                            fast)
+                            scout)
                     .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
                     .body(Map.of("supportsTools", false))
                     .exchange()
                     .expectStatus()
                     .isOk();
-            llm.enqueueText("Second.");
-            send(setup, "Hello again", null);
-            device.await(message -> llm.requests().size() >= 3, TIMEOUT);
-        }
+            assertThat(explorerOf(setup, device, 3)).isEqualTo("fake-model");
 
-        assertThat(toolNames(llm.requests().get(0))).contains("read_file").doesNotContain("explore");
-        assertThat(toolNames(llm.requests().get(2))).contains("read_file").doesNotContain("explore");
+            updateSession(setup, Map.of("routing", "smart"));
+            assertThat(explorerOf(setup, device, 4)).isEqualTo("fast-model");
+
+            updateSettings(setup, Map.of("clearExploreModel", true));
+            assertThat(explorerOf(setup, device, 5)).isEqualTo("fast-model");
+        }
+    }
+
+    private String explorerOf(Setup setup, GatewayTestClient device, int turn) {
+        var before = llm.requests().size();
+        llm.enqueueToolCall("call_main_" + turn, "explore", EXPLORE_CALL);
+        llm.enqueueText("REPORT " + turn);
+        llm.enqueueText("Answer " + turn);
+        send(setup, "Question " + turn, null);
+        device.await(message -> completedTurns(device) == turn, TIMEOUT);
+        if (turn == 1) {
+            device.await(message -> llm.requests().size() >= before + 4, TIMEOUT);
+        }
+        return model(llm.requests().get(before + 1));
+    }
+
+    private static long completedTurns(GatewayTestClient device) {
+        return device.events().stream()
+                .filter(event -> GatewayTestClient.eventKind(event).equals("turn.completed"))
+                .count();
+    }
+
+    private UUID addModel(Setup setup, String key) {
+        return client.post()
+                .uri("/api/v1/providers/{id}/models", provider(setup).id())
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .body(Map.of("modelKey", key, "contextWindow", 64000))
+                .exchange()
+                .expectBody(ProviderDtos.ModelResponse.class)
+                .returnResult()
+                .getResponseBody()
+                .id();
+    }
+
+    private void updateSettings(Setup setup, Map<String, Object> body) {
+        client.put()
+                .uri("/api/v1/me/settings")
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .body(body)
+                .exchange()
+                .expectStatus()
+                .isOk();
     }
 
     @Test

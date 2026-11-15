@@ -112,6 +112,7 @@ Connection presence is kept in memory, not in the database.
 | `embedding_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL`; model used for semantic indexes (CTX-7) |
 | `routing_default` | text | `off` (default) or `smart`; routing of new sessions (ROUTE-1) |
 | `fast_model_id`, `plan_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL`; role models for smart routing (ROUTE-2) |
+| `explore_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL`; model of the `explore` sub-agent in both routing modes (ROUTE-4) |
 | `preferences` | jsonb | Theme, notification and UI preferences |
 | `updated_at` | timestamptz | |
 
@@ -537,7 +538,7 @@ Agent memory ([F4](features/f4-agent-memory.md)), accessed with plain SQL becaus
 | `turn_id` | uuid | FK `turns`, `ON DELETE SET NULL`; null for calls outside a turn (memory curation) |
 | `model_id` | uuid | FK `models`, `ON DELETE SET NULL` |
 | `model_label` | text | Display name at the time of the call |
-| `role` | text | `main`; `plan`, `fast`, `fallback` and `explore` with smart routing |
+| `role` | text | `main`, `explore`; `plan`, `fast` and `fallback` with smart routing |
 | `purpose` | text | `step`, `title`, `compaction`, `memory`, `explore` |
 | `prompt_tokens`, `completion_tokens` | bigint | As reported by the provider |
 | `cost_usd` | numeric(12,6) | Nullable; from model prices at the time of the call |

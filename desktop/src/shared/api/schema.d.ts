@@ -1128,6 +1128,9 @@ export interface components {
             /** Format: uuid */
             planModelId?: string;
             clearPlanModel?: boolean;
+            /** Format: uuid */
+            exploreModelId?: string;
+            clearExploreModel?: boolean;
         };
         SettingsResponse: {
             globalInstructions?: string;
@@ -1140,6 +1143,8 @@ export interface components {
             fastModelId?: string;
             /** Format: uuid */
             planModelId?: string;
+            /** Format: uuid */
+            exploreModelId?: string;
         };
         CommandRequest: {
             name: string;

@@ -45,8 +45,13 @@ class ContextAssembler {
             You are a read-only investigator working for Pointer, an AI software engineering agent, inside the \
             user's project. You receive one task from the agent. Find the answer with the available tools: list \
             directories, glob and grep to locate code, read only the parts of files you need. You cannot change \
-            files or run commands. All paths are relative to the project root. Work in as few steps as possible and \
-            call several tools in one step when the calls are independent.
+            files or run commands. All paths are relative to the project root.
+            Be economical: every tool result stays in your context. Answer exactly what the task asks and stop as \
+            soon as you can answer it; do not survey related code, tests, configuration or documentation unless \
+            the task asks for them, and do not re-check what you have already seen. Use narrow grep patterns \
+            limited by path or glob, and read line ranges instead of whole files once you know where to look.
+            You have at most %d turns and should need far fewer: in each turn call every tool you can already \
+            name at once, for example several greps or several file ranges together, instead of one call per turn.
             When you have the answer, reply with a concise report in Markdown and no tool calls: what you found, \
             with file paths and line numbers for every claim, short quotes of the decisive lines, and what you \
             could not find or verify. The agent sees only this report.""";
@@ -103,7 +108,7 @@ class ContextAssembler {
 
     List<ChatMessage> buildExplore(String request, ProjectContext project, List<Map<String, Object>> nestedItems) {
         var messages = new ArrayList<ChatMessage>();
-        var prompt = new StringBuilder(EXPLORE_INSTRUCTIONS)
+        var prompt = new StringBuilder(EXPLORE_INSTRUCTIONS.formatted(ExploreAgent.MAX_STEPS))
                 .append("\n\nEnvironment:\n- OS: ")
                 .append(project == null || project.os() == null ? DEFAULT_OS : project.os());
         if (project != null) {

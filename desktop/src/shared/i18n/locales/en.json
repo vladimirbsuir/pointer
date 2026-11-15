@@ -270,8 +270,12 @@
     "isFast": "Fast model for titles, compaction and memory",
     "makePlan": "Use as the planning model for Plan mode",
     "isPlan": "Planning model for Plan mode",
+    "makeExplore": "Use for the exploration sub-agent",
+    "isExplore": "Model of the exploration sub-agent",
+    "exploreModel": "Exploration sub-agent",
+    "exploreNotSet": "not set: the fast model with smart routing, otherwise the session model",
     "routingDefault": "Smart routing for new sessions",
-    "routingDescription": "With smart routing, titles, context compaction and memory curation use the fast model, and Plan mode uses the planning model. Each session can turn it on or off in its header. Mark models with the rabbit and checklist buttons below.",
+    "routingDescription": "With smart routing, titles, context compaction and memory curation use the fast model, and Plan mode uses the planning model. Each session can turn it on or off in its header. The agent can always delegate reading and searching to the exploration sub-agent; it runs on the model marked with the telescope. Mark models with the rabbit, checklist and telescope buttons below.",
     "fastModel": "Fast model",
     "planModel": "Planning model",
     "roleNotSet": "not set, the session model is used"

@@ -93,6 +93,7 @@ export function useSettings() {
         routingDefault: (data.routingDefault ?? "off") as "off" | "smart",
         fastModelId: data.fastModelId ?? null,
         planModelId: data.planModelId ?? null,
+        exploreModelId: data.exploreModelId ?? null,
       };
     },
   });

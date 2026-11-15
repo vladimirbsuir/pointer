@@ -166,7 +166,7 @@ Specified in [F3](features/f3-model-routing.md).
 | ROUTE-1 | Routing is a session setting `off` or `smart`; new sessions take the default from user settings, which is `off`. | F3 |
 | ROUTE-2 | Settings define a `fast` model and an optional `plan` model; the session model is the `main` role. | F3 |
 | ROUTE-3 | With smart routing, title generation, compaction and memory curation use the `fast` model and Plan-mode turns the `plan` model. | F3 |
-| ROUTE-4 | With smart routing, the main model can delegate read-only exploration to a sub-agent on the `fast` model. | F3 |
+| ROUTE-4 | The main model can delegate read-only exploration to a sub-agent that runs on the exploration model from settings, otherwise on the `fast` model with smart routing, otherwise on the session model. | F3 |
 | ROUTE-5 | With smart routing, a failing model call is retried and then sent to the next model of its fallback list. | F3 |
 | ROUTE-6 | A session can have a budget in USD that stops turns once reached; usage and cost are recorded per model and purpose. | F3 |
 

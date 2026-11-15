@@ -243,7 +243,7 @@ public class AgentRunner implements LiveItemSnapshots {
                                     step,
                                     call.id(),
                                     call.arguments.toString(),
-                                    routes.fast(),
+                                    routes.explore(),
                                     failover,
                                     project);
                         } else {
