@@ -1,0 +1,78 @@
+{
+  "description": "Preferences that are not recorded in the repository. Each is taught in its own session and then probed in a new one.",
+  "scenarios": [
+    {
+      "id": "p01-language",
+      "teach": "Отвечай мне всегда по-русски, даже если я пишу по-английски.",
+      "probe": "Explain in a few sentences what a race condition is.",
+      "checks": [{"type": "min_cyrillic_share", "value": 0.5}]
+    },
+    {
+      "id": "p02-pnpm",
+      "teach": "Для JavaScript и TypeScript я использую только pnpm, никогда npm или yarn.",
+      "probe": "How do I add the zod library to the desktop app? Give the command.",
+      "checks": [
+        {"type": "regex", "value": "pnpm (add|install|i) "},
+        {"type": "not_regex", "value": "(?<!p)npm (install|i|add) |yarn add"}
+      ]
+    },
+    {
+      "id": "p03-brief",
+      "teach": "Отвечай коротко: не больше пяти строк, без вступлений и без итоговых резюме.",
+      "probe": "What does Flyway do in a Spring Boot application?",
+      "checks": [{"type": "max_lines", "value": 6}]
+    },
+    {
+      "id": "p04-no-emoji",
+      "teach": "Никогда не используй эмодзи в ответах, мне это мешает.",
+      "probe": "Give me a checklist for releasing a new version of a desktop app.",
+      "checks": [{"type": "no_emoji"}]
+    },
+    {
+      "id": "p05-date-format",
+      "teach": "Когда пишешь даты, всегда используй формат ДД.ММ.ГГГГ.",
+      "probe": "When was Java 21 released? Give the exact date.",
+      "checks": [{"type": "regex", "value": "\\b\\d{2}\\.\\d{2}\\.\\d{4}\\b"}]
+    },
+    {
+      "id": "p06-branch-names",
+      "teach": "Ветки я называю так: feature/<номер задачи>-<кратко через дефис>, например feature/142-login-form.",
+      "probe": "Suggest a git branch name for task 318 about adding a dark theme.",
+      "checks": [{"type": "regex", "value": "feature/318-[a-z0-9-]+"}]
+    },
+    {
+      "id": "p07-commit-task",
+      "teach": "В конце сообщения коммита всегда добавляй номер задачи в скобках, например (#123).",
+      "probe": "Write a commit message for fixing the login timeout, task 77.",
+      "checks": [{"type": "regex", "value": "\\(#77\\)"}]
+    },
+    {
+      "id": "p08-vitest",
+      "teach": "Для тестов фронтенда я выбираю Vitest, Jest не предлагай.",
+      "probe": "Which test runner should I set up for the desktop frontend? Give the install command.",
+      "checks": [
+        {"type": "regex", "value": "(?i)vitest"},
+        {"type": "not_regex", "value": "(?i)(add|install|i)( -D| --save-dev)? jest\\b"}
+      ]
+    },
+    {
+      "id": "p09-hours",
+      "teach": "Все оценки сроков давай в часах, а не в днях.",
+      "probe": "Estimate how long it takes to add a settings page with three fields to the desktop app.",
+      "checks": [
+        {"type": "regex", "value": "(?i)hours?|час|\\d\\s*ч\\b"},
+        {"type": "not_regex", "value": "(?i)\\b\\d+(\\.\\d+)?\\s*(-\\s*\\d+\\s*)?(days?|дн(я|ей|ь))\\b"}
+      ]
+    },
+    {
+      "id": "p10-pathlib",
+      "teach": "В примерах на Python всегда используй pathlib и аннотации типов, без os.path.",
+      "probe": "Write a Python function that returns the total size of all files in a folder.",
+      "checks": [
+        {"type": "regex", "value": "pathlib|Path\\("},
+        {"type": "regex", "value": "\\)\\s*->"},
+        {"type": "not_regex", "value": "os\\.path"}
+      ]
+    }
+  ]
+}

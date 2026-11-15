@@ -151,9 +151,8 @@ One model call per session produces both the session summary and the suggested m
 
 ## Thesis metrics
 
-- Preference retention: 10 scripted preferences or corrections stated in one session, then a task in a new session where each applies; share followed with memory on vs off.
-- Prompt overhead of the memory section in tokens versus number of memories.
-- Suggested memory precision: share accepted without edits over real use.
+- Preference retention, measured in [benchmarks/memory.md](../benchmarks/memory.md): ten preferences stated once in Russian were followed in new sessions in 10 of 10 cases with memory against 4 of 10 without (8 of 8 against 2 of 8 for the preferences not derivable from the repository). The agent saved all of them without being asked; the index of ten memories costs about 270 input tokens.
+- Suggested memory precision: share accepted without edits over real use; to be collected from daily use.
 
 ## Open questions
 
