@@ -168,14 +168,41 @@ public class SessionWriter {
     public Map<String, Object> createItem(
             UUID userId, UUID sessionId, UUID turnId, String type, Map<String, Object> payload) {
         var session = lockOwned(userId, sessionId);
-        return saveItem(session, turnId, type, Item.IN_PROGRESS, payload).toView();
+        return saveItem(session, turnId, null, type, Item.IN_PROGRESS, payload).toView();
+    }
+
+    @Transactional
+    public Map<String, Object> createNestedItem(
+            UUID userId, UUID sessionId, UUID turnId, UUID parentItemId, String type, Map<String, Object> payload) {
+        var session = lockOwned(userId, sessionId);
+        return saveItem(session, turnId, parentItemId, type, Item.IN_PROGRESS, payload)
+                .toView();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> nestedItems(UUID sessionId, UUID parentItemId) {
+        return items.findBySessionIdAndParentItemIdOrderByPosition(sessionId, parentItemId).stream()
+                .map(Item::toView)
+                .toList();
+    }
+
+    @Transactional
+    public void recordSideUsage(
+            UUID userId, UUID sessionId, UUID turnId, long promptTokens, long completionTokens, BigDecimal cost) {
+        var session = lockOwned(userId, sessionId);
+        var turn = turns.findById(turnId).orElseThrow();
+        turn.addUsage(promptTokens, completionTokens);
+        turns.save(turn);
+        session.recordUsage(session.getContextTokens(), promptTokens, completionTokens, cost, clock.instant());
+        sessions.save(session);
+        publishUsage(session, null);
     }
 
     @Transactional
     public Map<String, Object> appendNotice(
             UUID userId, UUID sessionId, UUID turnId, String type, Map<String, Object> payload) {
         var session = lockOwned(userId, sessionId);
-        return saveItem(session, turnId, type, Item.COMPLETED, payload).toView();
+        return saveItem(session, turnId, null, type, Item.COMPLETED, payload).toView();
     }
 
     @Transactional
@@ -266,7 +293,7 @@ public class SessionWriter {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> conversation(UUID sessionId) {
-        return items.findVisibleBySessionId(sessionId).stream()
+        return items.findConversationBySessionId(sessionId).stream()
                 .map(Item::toView)
                 .toList();
     }
@@ -455,8 +482,19 @@ public class SessionWriter {
     }
 
     private Item saveItem(AgentSession session, UUID turnId, String type, String status, Map<String, Object> payload) {
+        return saveItem(session, turnId, null, type, status, payload);
+    }
+
+    private Item saveItem(
+            AgentSession session,
+            UUID turnId,
+            UUID parentItemId,
+            String type,
+            String status,
+            Map<String, Object> payload) {
         var position = eventLog.nextPosition(session.getId());
-        var item = items.save(new Item(session.getId(), turnId, position, type, status, payload, clock.instant()));
+        var item = items.save(
+                new Item(session.getId(), turnId, parentItemId, position, type, status, payload, clock.instant()));
         eventLog.append(
                 session.getUserId(),
                 session.getId(),

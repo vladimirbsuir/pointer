@@ -33,6 +33,7 @@ public class Item extends BaseEntity {
 
     private UUID sessionId;
     private UUID turnId;
+    private UUID parentItemId;
     private long position;
     private String type;
     private String status;
@@ -48,6 +49,7 @@ public class Item extends BaseEntity {
     Item(
             UUID sessionId,
             UUID turnId,
+            UUID parentItemId,
             long position,
             String type,
             String status,
@@ -56,6 +58,7 @@ public class Item extends BaseEntity {
         super(Ids.newId());
         this.sessionId = sessionId;
         this.turnId = turnId;
+        this.parentItemId = parentItemId;
         this.position = position;
         this.type = type;
         this.status = status;
@@ -92,6 +95,9 @@ public class Item extends BaseEntity {
         view.put("status", status);
         view.put("createdAt", createdAt);
         view.put("completedAt", completedAt);
+        if (parentItemId != null) {
+            view.put("parentItemId", parentItemId);
+        }
         view.putAll(payload);
         return view;
     }

@@ -311,6 +311,11 @@
     "memoryDeleted": "удалено",
     "memoryUndone": "отменено",
     "undo": "Отменить",
+    "explore": "Исследование: {{target}}",
+    "exploreCalls_one": "{{count}} вызов",
+    "exploreCalls_few": "{{count}} вызова",
+    "exploreCalls_many": "{{count}} вызовов",
+    "exploreCalls_other": "{{count}} вызова",
     "search_sessions": "Поиск по прошлым сессиям «{{target}}»"
   },
   "permissions": {

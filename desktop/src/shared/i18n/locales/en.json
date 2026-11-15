@@ -311,6 +311,9 @@
     "memoryDeleted": "deleted",
     "memoryUndone": "undone",
     "undo": "Undo",
+    "explore": "Explore: {{target}}",
+    "exploreCalls_one": "{{count}} tool call",
+    "exploreCalls_other": "{{count}} tool calls",
     "search_sessions": "Search past sessions \"{{target}}\""
   },
   "permissions": {

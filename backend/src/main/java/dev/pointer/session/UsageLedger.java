@@ -21,6 +21,7 @@ public class UsageLedger {
     public static final String TITLE = "title";
     public static final String COMPACTION = "compaction";
     public static final String MEMORY = "memory";
+    public static final String EXPLORE = "explore";
 
     private final JdbcClient jdbc;
     private final Clock clock;

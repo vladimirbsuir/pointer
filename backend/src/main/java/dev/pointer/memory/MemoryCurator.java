@@ -208,6 +208,9 @@ public class MemoryCurator {
     static String transcript(List<Map<String, Object>> items) {
         var parts = new ArrayList<String>();
         for (var item : items) {
+            if (item.get("parentItemId") != null) {
+                continue;
+            }
             var line = switch (String.valueOf(item.get("type"))) {
                 case "user_message" -> "User: " + text(item.get("text"));
                 case "assistant_message" -> "Agent: " + text(item.get("text"));

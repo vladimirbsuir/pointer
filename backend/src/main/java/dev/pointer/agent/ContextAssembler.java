@@ -41,6 +41,16 @@ class ContextAssembler {
             "agent",
             "Mode: Agent. Carry out the user's task end to end: inspect, change files, run commands to verify.");
 
+    private static final String EXPLORE_INSTRUCTIONS = """
+            You are a read-only investigator working for Pointer, an AI software engineering agent, inside the \
+            user's project. You receive one task from the agent. Find the answer with the available tools: list \
+            directories, glob and grep to locate code, read only the parts of files you need. You cannot change \
+            files or run commands. All paths are relative to the project root. Work in as few steps as possible and \
+            call several tools in one step when the calls are independent.
+            When you have the answer, reply with a concise report in Markdown and no tool calls: what you found, \
+            with file paths and line numbers for every claim, short quotes of the decisive lines, and what you \
+            could not find or verify. The agent sees only this report.""";
+
     private static final String COMPACTION_SYSTEM = """
             You summarize a conversation between a user and Pointer, an AI software engineering agent.
             The agent continues the work with only your summary, so it must keep everything needed to proceed.""";
@@ -87,6 +97,22 @@ class ContextAssembler {
                 default -> {}
             }
         }
+        group.flushInto(messages);
+        return messages;
+    }
+
+    List<ChatMessage> buildExplore(String request, ProjectContext project, List<Map<String, Object>> nestedItems) {
+        var messages = new ArrayList<ChatMessage>();
+        var prompt = new StringBuilder(EXPLORE_INSTRUCTIONS)
+                .append("\n\nEnvironment:\n- OS: ")
+                .append(project == null || project.os() == null ? DEFAULT_OS : project.os());
+        if (project != null) {
+            prompt.append("\n- Project: ").append(project.name());
+        }
+        messages.add(ChatMessage.system(prompt.toString()));
+        messages.add(ChatMessage.user(request));
+        var group = new StepGroup();
+        nestedItems.forEach(item -> group.add(item, messages));
         group.flushInto(messages);
         return messages;
     }

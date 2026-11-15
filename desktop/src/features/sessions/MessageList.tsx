@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { Item } from "@/shared/api/types";
 import { AttachmentImage } from "./AttachmentImage";
+import { ExploreCard } from "./ExploreCard";
 import { Markdown } from "./Markdown";
 import { PlanCard } from "./PlanCard";
 import { RewindControl } from "./RewindControl";
@@ -26,21 +27,24 @@ type MessageListProps = {
 };
 
 const STICK_TO_BOTTOM_PX = 120;
+const NO_ITEMS: Item[] = [];
 
 export function MessageList({ sessionId, items, running, turnError, onRewound }: MessageListProps) {
   const { t } = useTranslation();
   const container = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
-  const visible = items.filter((item) =>
-    [
-      "user_message",
-      "assistant_message",
-      "reasoning",
-      "tool_call",
-      "plan",
-      "compaction_summary",
-      "model_switched",
-    ].includes(item.type),
+  const visible = items.filter(
+    (item) =>
+      !item.parentItemId &&
+      [
+        "user_message",
+        "assistant_message",
+        "reasoning",
+        "tool_call",
+        "plan",
+        "compaction_summary",
+        "model_switched",
+      ].includes(item.type),
   );
   const lastText = visible.at(-1)?.text?.length ?? 0;
 
@@ -78,6 +82,11 @@ export function MessageList({ sessionId, items, running, turnError, onRewound }:
           <MessageItem
             key={item.id}
             item={item}
+            nested={
+              item.toolName === "explore"
+                ? items.filter((other) => other.parentItemId === item.id)
+                : NO_ITEMS
+            }
             sessionId={sessionId}
             running={running}
             onRewound={onRewound}
@@ -119,14 +128,19 @@ export function MessageList({ sessionId, items, running, turnError, onRewound }:
 
 type MessageItemProps = {
   item: Item;
+  nested: Item[];
   sessionId: string;
   running: boolean;
   onRewound: (text: string) => void;
 };
 
-function MessageItem({ item, sessionId, running, onRewound }: MessageItemProps) {
+function MessageItem({ item, nested, sessionId, running, onRewound }: MessageItemProps) {
   const { t } = useTranslation();
   const text = item.text ?? "";
+
+  if (item.type === "tool_call" && item.toolName === "explore") {
+    return <ExploreCard item={item} nested={nested} sessionId={sessionId} />;
+  }
 
   if (item.type === "tool_call") {
     return <ToolCallCard item={item} sessionId={sessionId} />;

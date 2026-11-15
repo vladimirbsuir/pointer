@@ -42,6 +42,17 @@ interface ItemRepository extends JpaRepository<Item, UUID> {
             order by i.position""")
     List<Item> findVisibleBySessionId(UUID sessionId);
 
+    @Query("""
+            select i from Item i
+            where i.sessionId = :sessionId
+              and i.parentItemId is null
+              and (i.turnId is null or i.turnId not in (
+                  select t.id from Turn t where t.sessionId = :sessionId and t.rewoundAt is not null))
+            order by i.position""")
+    List<Item> findConversationBySessionId(UUID sessionId);
+
+    List<Item> findBySessionIdAndParentItemIdOrderByPosition(UUID sessionId, UUID parentItemId);
+
     List<Item> findBySessionIdAndTurnIdIsNullOrderByPosition(UUID sessionId);
 
     List<Item> findBySessionIdAndType(UUID sessionId, String type);

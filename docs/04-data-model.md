@@ -316,12 +316,13 @@ The conversation as the model sees it.
 | `session_id` | uuid | FK `sessions` |
 | `turn_id` | uuid | FK `turns`, nullable for items queued between turns |
 | `position` | bigint | Order within the session |
+| `parent_item_id` | uuid | FK `items`, cascade, nullable; set on tool calls made by the `explore` sub-agent (ROUTE-4) |
 | `type` | text | `user_message`, `assistant_message`, `reasoning`, `tool_call`, `plan`, `compaction_summary`, `model_switched` |
 | `status` | text | `in_progress`, `completed`, `failed`, `cancelled` |
 | `payload` | jsonb | Type-specific fields from [protocol 5.2](03-protocol.md#52-items) |
 | `created_at`, `completed_at` | timestamptz | |
 
-Unique: (`session_id`, `position`). Context assembly reads items from the latest `compaction_summary` onward.
+Unique: (`session_id`, `position`). Context assembly reads items from the latest `compaction_summary` onward and skips items with a parent.
 
 Tool call payload keeps the provider's call id (`providerCallId`) so results can be paired with calls when the history is sent back to the model.
 
@@ -536,7 +537,7 @@ Agent memory ([F4](features/f4-agent-memory.md)), accessed with plain SQL becaus
 | `turn_id` | uuid | FK `turns`, `ON DELETE SET NULL`; null for calls outside a turn (memory curation) |
 | `model_id` | uuid | FK `models`, `ON DELETE SET NULL` |
 | `model_label` | text | Display name at the time of the call |
-| `role` | text | `main`; `plan`, `fast` and `fallback` with smart routing; `explore` reserved |
+| `role` | text | `main`; `plan`, `fast`, `fallback` and `explore` with smart routing |
 | `purpose` | text | `step`, `title`, `compaction`, `memory`, `explore` |
 | `prompt_tokens`, `completion_tokens` | bigint | As reported by the provider |
 | `cost_usd` | numeric(12,6) | Nullable; from model prices at the time of the call |

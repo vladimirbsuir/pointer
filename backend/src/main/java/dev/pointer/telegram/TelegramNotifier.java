@@ -172,6 +172,9 @@ class TelegramNotifier implements SessionEventListener {
     }
 
     private void itemChanged(UUID userId, UUID sessionId, long chatId, String kind, Map<String, Object> item) {
+        if (item.get("parentItemId") != null) {
+            return;
+        }
         var type = String.valueOf(item.get("type"));
         var progress = turns.get(uuid(item.get("turnId")));
         switch (type) {

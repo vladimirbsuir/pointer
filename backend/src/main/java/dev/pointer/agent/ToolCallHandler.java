@@ -52,6 +52,26 @@ class ToolCallHandler {
     private final CustomToolService customTools;
 
     void handle(TurnScope scope, int step, String providerCallId, String toolName, String argumentsJson) {
+        handle(scope, null, step, providerCallId, toolName, argumentsJson);
+    }
+
+    void handleNested(
+            TurnScope scope,
+            UUID parentItemId,
+            int step,
+            String providerCallId,
+            String toolName,
+            String argumentsJson) {
+        handle(scope, parentItemId, step, providerCallId, toolName, argumentsJson);
+    }
+
+    private void handle(
+            TurnScope scope,
+            UUID parentItemId,
+            int step,
+            String providerCallId,
+            String toolName,
+            String argumentsJson) {
         var arguments = parseArguments(argumentsJson);
         var payload = new LinkedHashMap<String, Object>();
         payload.put("step", step);
@@ -60,7 +80,10 @@ class ToolCallHandler {
         payload.put("argumentsJson", argumentsJson == null || argumentsJson.isBlank() ? "{}" : argumentsJson);
         payload.put("providerCallId", providerCallId);
         payload.put("toolStatus", "pending");
-        var item = writer.createItem(scope.userId(), scope.sessionId(), scope.turnId(), Item.TOOL_CALL, payload);
+        var item = parentItemId == null
+                ? writer.createItem(scope.userId(), scope.sessionId(), scope.turnId(), Item.TOOL_CALL, payload)
+                : writer.createNestedItem(
+                        scope.userId(), scope.sessionId(), scope.turnId(), parentItemId, Item.TOOL_CALL, payload);
         var itemId = (UUID) item.get("id");
 
         if (arguments == null) {
@@ -71,6 +94,10 @@ class ToolCallHandler {
                 .orElse(null);
         if (tool == null) {
             fail(scope, itemId, "unknown_tool", "There is no tool named " + toolName);
+            return;
+        }
+        if (parentItemId != null && !ExploreAgent.allows(tool)) {
+            deny(scope, itemId, "Tool " + toolName + " is not available to the explore sub-agent.");
             return;
         }
         if (!tool.availableIn(scope.mode())) {

@@ -58,6 +58,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private static final int MAX_STEPS = 50;
     private static final int MAX_SWITCH_REASON_LENGTH = 300;
     private static final String AGENT = "agent";
+    private static final String READ_FILE = "read_file";
     private static final int DEFAULT_CONTEXT_WINDOW = 128_000;
     private static final double AUTO_COMPACT_RATIO = 0.8;
     private static final String PROJECT_CONTEXT_OPERATION = "pointer.project_context";
@@ -80,6 +81,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private final MemoryPrompt memoryPrompt;
     private final UsageLedger ledger;
     private final ModelRouter modelRouter;
+    private final ExploreAgent explore;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<UUID, RunningTurn> running = new ConcurrentHashMap<>();
 
@@ -209,7 +211,8 @@ public class AgentRunner implements LiveItemSnapshots {
                     firstMessages = messages;
                 }
                 var tools = model.supportsTools()
-                        ? toolDefinitions(userId, context.projectId(), context.executorDeviceId(), context.mode())
+                        ? toolDefinitions(
+                                userId, context.projectId(), context.executorDeviceId(), context.mode(), routes)
                         : List.<ChatRequest.ToolDefinition>of();
                 var listener = new TurnListener(userId, sessionId, turnId, step, turn, Item.ASSISTANT_MESSAGE);
                 var used = failover.stream(
@@ -234,6 +237,15 @@ public class AgentRunner implements LiveItemSnapshots {
                             planProposed |= toolCalls.proposePlan(scope, step, call.id(), call.arguments.toString());
                         } else if (ProposeTool.NAME.equals(call.name()) && AGENT.equals(context.mode())) {
                             toolCalls.proposeTool(scope, step, call.id(), call.arguments.toString());
+                        } else if (ExploreAgent.NAME.equals(call.name()) && ExploreAgent.offered(routes)) {
+                            explore.run(
+                                    scope,
+                                    step,
+                                    call.id(),
+                                    call.arguments.toString(),
+                                    routes.fast(),
+                                    failover,
+                                    project);
                         } else {
                             toolCalls.handle(scope, step, call.id(), call.name(), call.arguments.toString());
                         }
@@ -266,7 +278,8 @@ public class AgentRunner implements LiveItemSnapshots {
         }
     }
 
-    private List<ChatRequest.ToolDefinition> toolDefinitions(UUID userId, UUID projectId, UUID deviceId, String mode) {
+    private List<ChatRequest.ToolDefinition> toolDefinitions(
+            UUID userId, UUID projectId, UUID deviceId, String mode, ModelRouter.ModelPlan routes) {
         var definitions = new ArrayList<ChatRequest.ToolDefinition>();
         toolRegistry.available(userId, projectId, deviceId).stream()
                 .filter(tool -> tool.availableIn(mode))
@@ -275,6 +288,9 @@ public class AgentRunner implements LiveItemSnapshots {
                 .forEach(definitions::add);
         if ("plan".equals(mode)) {
             definitions.add(PlanTool.DEFINITION);
+        }
+        if (ExploreAgent.offered(routes) && definitions.stream().anyMatch(tool -> READ_FILE.equals(tool.name()))) {
+            definitions.add(ExploreAgent.DEFINITION);
         }
         if (AGENT.equals(mode)) {
             execution

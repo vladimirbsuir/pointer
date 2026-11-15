@@ -241,7 +241,7 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
           onClick={() => setOpen(!open)}
           disabled={!hasDetails}
         >
-          <StatusIcon status={status} />
+          <ToolStatusIcon status={status} />
           <Icon className="size-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate font-mono text-xs">{summary}</span>
           {detail && <span className="shrink-0 text-xs text-muted-foreground">{detail}</span>}
@@ -299,7 +299,7 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
   );
 }
 
-function StatusIcon({ status }: { status: string }) {
+export function ToolStatusIcon({ status }: { status: string }) {
   switch (status) {
     case "running":
     case "pending":

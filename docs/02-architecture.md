@@ -101,7 +101,7 @@ A module exposes a small public API (services, DTOs, domain events) and keeps ev
 | `provider` | Provider and model configuration including vision support and prices for cost estimates, key encryption, the LLM client, direct and relay transports. |
 | `project` | Projects and project-level settings. |
 | `session` | Sessions, turns, items, image attachments, the event log, event fan-out to subscribers, the usage ledger and session budgets ([ADR 0020](adr/0020-model-roles-and-usage-ledger.md)). |
-| `agent` | The agent loop, modes, context assembly, compaction, title generation, the budget check before each step. |
+| `agent` | The agent loop, modes, context assembly, compaction, title generation, the budget check before each step, the `explore` sub-agent ([ADR 0022](adr/0022-explore-sub-agent.md)). |
 | `routing` | Model roles for smart routing: the planning model for Plan mode and the fast model for titles, compaction and memory curation, with fallback to the session model ([ADR 0020](adr/0020-model-roles-and-usage-ledger.md)); `RoutedClient` retries a failed call and walks the model's fallback list ([ADR 0021](adr/0021-model-failover.md)). |
 | `memory` | Agent memory: typed memories with revisions, the prompt index, the memory tools, suggested memories and session digests from a scheduled curation job, `search_sessions` ([ADR 0019](adr/0019-agent-memory.md)). |
 | `tool` | Tool registry, tool definitions and schemas, permission policies and evaluation. |
