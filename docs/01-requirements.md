@@ -184,6 +184,17 @@ Specified in [F4](features/f4-agent-memory.md).
 | MEM-6 | Memories keep their source session and read counters; the agent is told to verify what a memory says before relying on it. | F4 |
 | MEM-7 | The agent can search summaries of the project's past sessions. | F4 |
 
+### 2.14 Issue automation (AUTO)
+
+| ID | Requirement | Priority |
+|---|---|---|
+| AUTO-1 | A project with a repository can enable an automation: trigger label, base branch, model, check command, number of checks per run, optional budget. | F1 |
+| AUTO-2 | Labelling an issue with the trigger label starts a server session; a manual run from the desktop or Telegram `/issue N` does the same. | F1 |
+| AUTO-3 | The session prompt is built from the issue title, body and comments; the agent runs in Agent mode with auto-approve. | F1 |
+| AUTO-4 | After each turn the backend runs the check command in the container; on failure the output is sent back to the agent as a follow-up message, up to the limit of checks. | F1 |
+| AUTO-5 | On success a pull request that closes the issue is opened; on final failure a draft pull request with the failing output is opened. Status is commented on the issue. | F1 |
+| AUTO-6 | Runs are listed per project with status, checks, cost, duration and links; Telegram notifies on start, failed checks, success and failure. | F1 |
+
 ## 3. Non-functional requirements
 
 | ID | Requirement |

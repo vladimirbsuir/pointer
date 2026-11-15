@@ -112,13 +112,14 @@ A module exposes a small public API (services, DTOs, domain events) and keeps ev
 | `customtool` | Agent-proposed custom tools: proposal validation, versions, approval outcome, management REST ([ADR 0014](adr/0014-agent-proposed-custom-tools.md)). |
 | `telegram` | Telegram remote control: account linking, long polling of the Bot API, commands, inline approvals, progress and answer notifications ([ADR 0015](adr/0015-telegram-remote-control.md)). |
 | `container` | Remote execution: server sessions on a per-session Docker container running the headless runner, GitHub repository access, commit and push after each turn, pull requests, idle stop ([ADR 0016](adr/0016-remote-execution-in-containers.md)). |
+| `automation` | Issue to pull request automation: per-project settings, the GitHub webhook, runs driven by a `SessionEventListener` through agent turn, check command, retry and pull request ([ADR 0023](adr/0023-issue-to-pull-request-automation.md)). |
 | `rag` | Semantic project index: scanning and chunking through the executor, embeddings through the user's provider with model prefixes, pgvector and full-text storage, hybrid ranking for the server-side `semantic_search` operation ([ADR 0013](adr/0013-semantic-code-index.md), [ADR 0018](adr/0018-hybrid-code-search.md)). |
 | `gateway` | WebSocket endpoint: authentication, protocol parsing, routing to modules. |
 | `common` | Cross-cutting basics: error model, ids, clock, JSON. |
 
 DTOs are records; Lombok is limited to constructor injection and entity getters ([ADR 0012](adr/0012-lombok-for-boilerplate.md)).
 
-Highlight modules plug in without touching the agent loop: `rag`, `customtool`, `telegram`, `container` and `memory` (whose tools are server operations and whose prompt section is one more part of the context). Tools whose operation has a `ServerOperation` bean are executed by the backend instead of the device; `ExecutionService` routes them, and the registry hides them when they are unavailable for the project.
+Highlight modules plug in without touching the agent loop: `rag`, `customtool`, `telegram`, `container`, `automation` and `memory` (whose tools are server operations and whose prompt section is one more part of the context). Tools whose operation has a `ServerOperation` bean are executed by the backend instead of the device; `ExecutionService` routes them, and the registry hides them when they are unavailable for the project.
 
 ### 4.2 Agent loop
 
@@ -372,4 +373,5 @@ The backend image and the runner images (`latest` with toolchains, `slim` for sm
 | Custom tools | Registry entries with source `custom`, the server-side `propose_tool` approved like a tool call, the executor operation `custom_tool.run` running the approved script on the device. | Dispatch of `propose_tool`; the tool list is rebuilt before every model call |
 | Agent memory | `memory` module: four `ServerOperation` tools and `search_sessions`, a scheduled curation job, a memory section built by `MemoryPrompt`. | The project context gets the memory section once per turn |
 | Model routing and budgets | `routing` module chooses the model per role; `UsageLedger` records every call. | The step model and the auxiliary model come from `ModelRouter`; the budget is checked before each step |
+| Issue automation | `automation` module: a `SessionEventListener` reacts to `turn.completed` of the run's server session, runs the check command through the `container` module and sends follow-up messages with `AgentRunner.send`. | None |
 | Remote execution | A runner device per session in a container, started by the `container` module through the `ExecutorReadiness` hook; commit and push through a `SessionEventListener` on `turn.completed`. | None; the environment section of the system prompt reports the executor's OS and shell |

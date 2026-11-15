@@ -38,6 +38,9 @@ erDiagram
     turns ||--o{ items : produces
     items ||--o| approvals : needs
     items ||--o{ file_changes : causes
+    projects ||--o| automations : has
+    automations ||--o{ automation_runs : starts
+    sessions ||--o| automation_runs : "works on"
 ```
 
 ## 3. Accounts
@@ -487,6 +490,50 @@ Server sessions on a per-session container (REM-3, [ADR 0016](adr/0016-remote-ex
 | `created_at`, `updated_at` | timestamptz | |
 
 Index: (`status`, `last_active_at`).
+
+### Issue automation
+
+Issue to pull request automation (AUTO-1 to AUTO-6, [ADR 0023](adr/0023-issue-to-pull-request-automation.md)).
+
+`automations`: the settings of one project.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK; part of the webhook URL |
+| `user_id` | uuid | FK `users`, cascade |
+| `project_id` | uuid | FK `projects`, cascade, unique |
+| `enabled` | boolean | Off stops manual runs and the label trigger |
+| `trigger_label` | text | Default `pointer` |
+| `base_branch` | text | Nullable; the repository default when empty |
+| `model_id` | uuid | FK `models`, set null; the user's default model when empty |
+| `check_command` | text | Nullable; without it a run succeeds after the first turn that pushed changes |
+| `max_attempts` | integer | 1 to 10, default 3; checks per run |
+| `budget_usd` | numeric(10,4) | Nullable; becomes the budget of the run's session |
+| `webhook_id` | bigint | Nullable; id of the repository webhook on GitHub |
+| `webhook_secret_encrypted` | bytea | AES-GCM like provider keys; 32 random bytes |
+| `created_at`, `updated_at` | timestamptz | |
+
+`automation_runs`: one row per run of an issue.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `automation_id` | uuid | FK `automations`, cascade |
+| `session_id` | uuid | FK `sessions`, set null; the server session of the run |
+| `issue_number` | integer | |
+| `issue_title` | text | |
+| `trigger` | text | `label`, `desktop`, `telegram` |
+| `status` | text | `queued`, `running`, `checking`, `succeeded`, `failed`, `cancelled` |
+| `failure_reason` | text | Nullable; `needs_input`, `check_failed`, `budget_exceeded`, `agent_failed`, `start_failed`, `workspace_failed`, `pull_request_failed`, `error` |
+| `error` | text | Nullable; message of the failure when there is one |
+| `attempts` | integer | Finished runs of the check command |
+| `last_check_output` | text | Nullable; last 200 lines of the last check |
+| `pull_request_url` | text | Nullable; the pull request or the draft |
+| `status_comment_id` | bigint | Nullable; the issue comment that is edited on every change |
+| `cost_usd` | numeric(12,6) | Copied from the session cost |
+| `started_at`, `finished_at` | timestamptz | `finished_at` nullable |
+
+Indexes: unique (`automation_id`, `issue_number`) where `status` is `queued`, `running` or `checking`, so a repeated trigger for an issue with an active run is a no-op; (`automation_id`, `started_at` desc); (`session_id`).
 
 ### Memory
 

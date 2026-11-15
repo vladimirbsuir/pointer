@@ -1,6 +1,6 @@
 # F1. Issue to pull request automation
 
-Status: Approved · Requirement ids: AUTO-1 to AUTO-6 · Depends on: remote execution (REM-3, [ADR 0016](../adr/0016-remote-execution-in-containers.md)), Telegram (REM-1, 2, [ADR 0015](../adr/0015-telegram-remote-control.md)); budget limit from [F3](f3-model-routing.md) is used when present.
+Status: Implemented ([ADR 0023](../adr/0023-issue-to-pull-request-automation.md)) · Requirement ids: AUTO-1 to AUTO-6 · Depends on: remote execution (REM-3, [ADR 0016](../adr/0016-remote-execution-in-containers.md)), Telegram (REM-1, 2, [ADR 0015](../adr/0015-telegram-remote-control.md)); budget limit from [F3](f3-model-routing.md) is used when present.
 
 ## Goal
 
@@ -27,7 +27,7 @@ A GitHub issue with a trigger label becomes a server session that implements it,
 
 ## Design
 
-### Data model (`Vn__automations.sql`)
+### Data model (`V27__automations.sql`)
 
 ```sql
 CREATE TABLE automations (
@@ -71,11 +71,13 @@ CREATE UNIQUE INDEX automation_runs_active_issue_idx
 
 The partial unique index makes a repeated label event for an issue with an active run a no-op.
 
+As built, `automation_runs` also has `failure_reason` and `error`, and `attempts` counts finished checks (a run that passes its first check has `attempts = 1`); see [04-data-model.md](../04-data-model.md).
+
 ### Backend: new module `automation`
 
 | Class | Responsibility |
 |---|---|
-| `AutomationController` | CRUD `/api/v1/projects/{projectId}/automation`, `POST .../automation/runs` (manual run by issue number), `GET .../automation/runs`, `POST .../runs/{runId}/cancel`. |
+| `AutomationController` | `GET`, `PUT`, `DELETE` `/api/v1/projects/{projectId}/automation`, `POST .../automation/runs` (manual run by issue number), `GET .../automation/runs`, `POST .../runs/{runId}/cancel`. |
 | `GitHubWebhookController` | `POST /api/v1/webhooks/github/{automationId}`, unauthenticated, verifies `X-Hub-Signature-256` (HMAC-SHA256 with the decrypted secret, constant-time compare). Handles `issues` with `action=labeled` and the trigger label; ignores everything else with 204. |
 | `AutomationService` | Enable/disable: creates or deletes the repository webhook through the GitHub API (`POST /repos/{owner}/{repo}/hooks`, events `issues`, content type JSON). Starts runs. |
 | `AutomationRunner` | Implements `SessionEventListener`; drives the run state machine below. |
@@ -104,30 +106,39 @@ queued ──slot──▶ running ──turn finished, files changed──▶ c
 7. Success: create the pull request (title = issue title, body = agent's final message, run summary table, `Closes #N`). Final failure: draft pull request with the last check output. Update the status comment and notify Telegram.
 8. Budget: if the session cost passes `budget_usd`, cancel the turn and finish as `failed` with reason `budget_exceeded`.
 
-Recovery after a backend restart: runs in `running`/`checking` whose session turn is `interrupted` are resumed from step 4 by a startup task.
+Recovery after a backend restart: a run whose turn was `interrupted` gets a follow-up message that tells the agent to continue; a run in `checking` runs its check again at startup; a run without a session is launched again. A watcher also resumes a `running` run whose session stays idle for 30 seconds.
+
+Details settled during implementation:
+
+- A turn that finishes without anything pushed ends the run as `failed` with `needs_input`; the agent's answer is quoted in the status comment.
+- A second run for the same issue uses the branch `pointer/issue-<N>-<slug>-<k>`, because the branch of the earlier run already exists on GitHub.
+- The first line of every message the automation sends (`Implement issue #N: <title>`, `Fix the failing check for issue #N`) becomes the commit subject of that turn.
+- Other failure reasons: `agent_failed` (turn failed or hit the step limit), `workspace_failed`, `start_failed`, `pull_request_failed`, `error`.
 
 ### Protocol and events
 
-- New session event `automation.updated` `{runId, status, attempts, pullRequestUrl}` on the run's session; the desktop also polls the run list per project.
+- New session event `automation.updated` `{runId, status, attempts, maxAttempts, issueNumber, issueTitle, failureReason, pullRequestUrl}` on the run's session; the desktop polls the run list per project while a run is active.
 - Document the webhook endpoint and the REST endpoints in [03-protocol.md](../03-protocol.md).
 
 ### Desktop
 
-- Project settings → Automation: toggle, label, base branch, model picker, check command, attempts, budget; webhook state (created / missing / no public URL).
-- Project view → Runs tab: table of runs (issue link, status, attempts, cost, duration, PR link), opening a run opens its session.
-- Session header for automation sessions: issue link and attempt counter.
+- Project menu → Issue automation, Settings tab: toggle, label, base branch, model picker, check command, checks per run, budget; webhook state (created / missing / no public URL).
+- Same dialog, Runs tab: start a run by issue number; table of runs (issue link, status, checks, cost, duration, pull request link, cancel), opening a run opens its session.
+- Session header for automation sessions: a badge with the issue number and the check counter that opens the issue.
 
 ### Telegram
 
-- `/issue <number>` in a project context starts a manual run.
+- `/issue <number>` starts a manual run in the project of the selected session, or in the only project with automation turned on.
 - Notifications: run started, check failed (attempt k of n), succeeded with the PR link, failed with reason.
 
 ## Phases
 
-1. Manual runs from the desktop: tables, `AutomationRunner` with check-and-retry, PR creation, runs list. Works locally without a public URL.
-2. Label trigger: webhook creation, signature check, `pointer.public-url`.
-3. Issue status comment, Telegram `/issue` and notifications.
-4. Budget limit and restart recovery.
+All four phases are implemented.
+
+1. Manual runs from the desktop: tables, `AutomationRunner` with check-and-retry, PR creation, runs list. Works locally without a public URL. Done.
+2. Label trigger: webhook creation, signature check, `pointer.public-url`. Done.
+3. Issue status comment, Telegram `/issue` and notifications. Done.
+4. Budget limit and restart recovery. Done.
 
 ## Tests
 
@@ -135,7 +146,7 @@ Recovery after a backend restart: runs in `running`/`checking` whose session tur
 - `AutomationRunner` with a fake `ContainerRuntime`, a scripted fake LLM and a fake executor: pass on first try, pass on second attempt, exhausted attempts → draft PR, no-change turn, budget hit, cancellation.
 - `IssuePrompt` truncation.
 - `RestGitHubRepositories` against a mock server for the new endpoints.
-- Manual end-to-end on the VPS against a test repository.
+- Manual end-to-end on the VPS against a test repository: still to be done after the next deployment. Locally the flow was run on a live backend with a fake GitHub API, a fake runner and a scripted model.
 
 ## Thesis metrics
 
@@ -145,5 +156,5 @@ Recovery after a backend restart: runs in `running`/`checking` whose session tur
 
 ## Open questions
 
-- Whether the `repo` scope is enough to create repository webhooks for all repositories the user can access, or `admin:repo_hook` must be requested; verify on the first implementation.
+- The `repo` scope that Pointer already requests covers repository webhooks according to the GitHub documentation, but only for repositories where the user has admin rights; this was not yet verified against real GitHub. When GitHub refuses, the settings are saved, the dialog shows the reason and manual runs keep working.
 - Issue comments from other users as follow-up messages (conversation through the issue) are out of this version.

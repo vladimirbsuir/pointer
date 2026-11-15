@@ -317,6 +317,26 @@ Approval `preview`:
 
 For a new version of an existing tool the preview also holds `previous` with `version`, `description`, `parameters`, `interpreter` and `body` of the current version, and `scopeFixed` is true. Approving a `tool_proposal` may carry `tool` with `scope` (`user`, `project`), `defaultPolicy` (`ask`, `allow`) and `modes` (from `ask`, `plan`, `agent`; `agent` is always included). `approval.resolved` then echoes `tool`.
 
+### 5.4 `automation.updated`
+
+Appended to the server session of an automation run ([ADR 0023](adr/0023-issue-to-pull-request-automation.md)) whenever the run changes:
+
+```json
+{
+  "kind": "automation.updated",
+  "runId": "01a1e077-dbd2-75ee-9816-9c5c07255a67",
+  "status": "running",
+  "attempts": 1,
+  "maxAttempts": 3,
+  "issueNumber": 7,
+  "issueTitle": "Parser crashes on empty input",
+  "failureReason": null,
+  "pullRequestUrl": null
+}
+```
+
+`status` is `queued`, `running`, `checking`, `succeeded`, `failed` or `cancelled`. `attempts` counts finished runs of the check command; `running` with `attempts > 0` means the last check failed and the agent is fixing it. `failureReason` is set for `failed`: `needs_input`, `check_failed`, `budget_exceeded`, `agent_failed`, `start_failed`, `workspace_failed`, `pull_request_failed` or `error`.
+
 ## 6. Execution
 
 ### 6.1 `exec.request` (server в†’ client)
@@ -495,6 +515,8 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 | Tools | `GET /tools` |
 | Telegram | `GET /telegram` (`enabled`, `botUsername`, `linked`, `telegramUsername`, `linkedAt`), `POST /telegram/link` (one-time deep link `url` and `expiresAt`), `DELETE /telegram/link` ([ADR 0015](adr/0015-telegram-remote-control.md)) |
 | Remote execution | `GET /remote` (`enabled`, `repositoryAccess`), `GET /github/repositories`, `POST /projects/{id}/remote-sessions` with optional `title`, `mode`, `modelId`, `baseBranch` (`201` with `session` and `workspace`; `400 project_repository_missing`, `400 github_repository_access_required`, `503 remote_execution_disabled`), `GET /projects/{id}/remote-sessions`, `GET /sessions/{id}/remote` (`repository`, `branch`, `baseBranch`, `status`: `queued`, `starting`, `preparing`, `ready`, `stopped`, `failed`, `error`, `pushedCommit`, `branchUrl`, `pullRequestUrl`, `lastActiveAt`), `POST /sessions/{id}/remote/pull-request` (`url`; `409 nothing_pushed`), `GET /sessions/{id}/remote/files?query=`, `GET /sessions/{id}/remote/file?path=` ([ADR 0016](adr/0016-remote-execution-in-containers.md)) |
+| Issue automation | `GET /projects/{id}/automation` (`configured`, `enabled`, `triggerLabel`, `baseBranch`, `modelId`, `checkCommand`, `maxAttempts`, `budgetUsd`, `webhook`: `created`, `missing`, `no_public_url`; defaults with `configured: false` before the first save), `PUT /projects/{id}/automation` with `enabled` and the optional settings (creates the repository webhook when the server has a public URL and removes it when disabled; a webhook failure is returned in `webhookError` and does not fail the request; `400 project_repository_missing`, `400 github_repository_access_required`), `DELETE /projects/{id}/automation`, `GET /projects/{id}/automation/runs` (latest 50: `id`, `sessionId`, `issueNumber`, `issueTitle`, `issueUrl`, `trigger`: `label`, `desktop`, `telegram`, `status`, `failureReason`, `error`, `attempts`, `maxAttempts`, `lastCheckOutput`, `pullRequestUrl`, `costUsd`, `startedAt`, `finishedAt`), `POST /projects/{id}/automation/runs` with `issueNumber` (`201`; `404 automation_not_configured`, `409 automation_disabled`, `404 issue_not_found`, `400 not_an_issue`, `409 run_already_active`, `503 remote_execution_disabled`), `POST /projects/{id}/automation/runs/{runId}/cancel` (`409 run_not_active`) ([ADR 0023](adr/0023-issue-to-pull-request-automation.md)) |
+| GitHub webhook | `POST /webhooks/github/{automationId}`: unauthenticated, called by GitHub. The body must be signed with the automation's secret in `X-Hub-Signature-256` (`401 invalid_signature`; `404 automation_not_found`). An `issues` event with `action: labeled` and the trigger label answers `202` with `runId`; a repeated delivery for an issue with an active run, any other event or label, and a disabled automation answer `204` |
 | Memory | `GET /memories?projectId=&status=` (`active` by default, `suggested`, `dismissed`, `deleted`; without `projectId` the user scope), `POST /memories` with `projectId?`, `kind`, `name`, `description`, `content`, `pinned?` (`409 memory_exists`), `POST /memories/remember` with `projectId?`, `text` (name derived from the text), `PATCH /memories/{id}` with `kind`, `description`, `content`, `pinned`, `DELETE /memories/{id}` (marks it deleted), `POST /memories/{id}/undo` (restores the previous version; `409 nothing_to_undo`), `POST /memories/{id}/accept`, `POST /memories/{id}/dismiss` |
 | Custom tools | `GET /custom-tools`, `PATCH /custom-tools/{id}` with `defaultPolicy`, `modes`, `enabled`, `DELETE /custom-tools/{id}`, `GET /custom-tools/{id}/versions`, `POST /custom-tools/{id}/versions/{version}/restore` |
 

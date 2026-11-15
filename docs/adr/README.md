@@ -29,3 +29,4 @@ File name: `NNNN-short-title.md`. Status: `Proposed`, `Accepted`, `Superseded by
 | [0020](0020-model-roles-and-usage-ledger.md) | Model roles and usage ledger | Accepted |
 | [0021](0021-model-failover.md) | Model failover with retry and fallback lists | Accepted |
 | [0022](0022-explore-sub-agent.md) | Explore sub-agent | Accepted |
+| [0023](0023-issue-to-pull-request-automation.md) | Issue to pull request automation | Accepted |

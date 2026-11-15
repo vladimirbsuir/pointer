@@ -54,7 +54,7 @@ Create the settings. Add `--bundled-proxy` when the host has no reverse proxy of
 nano .env
 ```
 
-In `.env`, fill `POINTER_GITHUB_CLIENT_ID` and `POINTER_GITHUB_CLIENT_SECRET`. `POINTER_TELEGRAM_BOT_TOKEN` is optional; a bot can be polled by one backend only, so a token used by a local backend must not be reused here.
+In `.env`, fill `POINTER_GITHUB_CLIENT_ID` and `POINTER_GITHUB_CLIENT_SECRET`. `POINTER_TELEGRAM_BOT_TOKEN` is optional; a bot can be polled by one backend only, so a token used by a local backend must not be reused here. The stack sets `POINTER_PUBLIC_URL` to `https://$POINTER_DOMAIN`; issue automation ([ADR 0023](adr/0023-issue-to-pull-request-automation.md)) registers repository webhooks with this address, so GitHub must be able to reach `/api/v1/webhooks/github/*` on it.
 
 Start:
 
