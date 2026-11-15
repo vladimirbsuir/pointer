@@ -4,6 +4,8 @@ import static dev.pointer.telegram.TelegramFormat.escape;
 import static dev.pointer.telegram.TelegramTexts.text;
 
 import dev.pointer.agent.AgentRunner;
+import dev.pointer.automation.AutomationRun;
+import dev.pointer.automation.AutomationService;
 import dev.pointer.common.error.ApiException;
 import dev.pointer.container.RemoteDtos;
 import dev.pointer.container.RemoteSessionService;
@@ -44,6 +46,7 @@ class TelegramBot {
     private final AgentRunner runner;
     private final RemoteSessionService remote;
     private final MemoryService memories;
+    private final AutomationService automations;
 
     void handle(TelegramTypes.Update update) {
         if (update.message() != null) {
@@ -119,6 +122,7 @@ class TelegramBot {
             case "sessions" -> listSessions(chat);
             case "new" -> listProjects(chat);
             case "stop" -> stop(chat);
+            case "issue" -> runIssue(chat, argument);
             case "unlink" -> {
                 links.unlink(chat.link.userId());
                 chat.reply(text(chat.locale, "unlinked"));
@@ -189,6 +193,44 @@ class TelegramBot {
         }
         runner.cancel(chat.link.userId(), sessionId);
         chat.reply(text(chat.locale, "stopping"));
+    }
+
+    private void runIssue(Chat chat, String argument) {
+        var number = issueNumber(argument);
+        if (number.isEmpty()) {
+            chat.reply(text(chat.locale, "issue.usage"));
+            return;
+        }
+        var projectId = automationProject(chat);
+        if (projectId.isEmpty()) {
+            chat.reply(text(chat.locale, "issue.noProject"));
+            return;
+        }
+        try {
+            var run = automations.startManual(
+                    chat.link.userId(), projectId.get(), number.get(), AutomationRun.TRIGGER_TELEGRAM);
+            chat.reply(text(
+                    chat.locale, "issue.started", "#" + run.issueNumber(), "<b>" + escape(run.issueTitle()) + "</b>"));
+        } catch (ApiException exception) {
+            chat.reply(text(chat.locale, "failed", escape(exception.getMessage())));
+        }
+    }
+
+    private Optional<UUID> automationProject(Chat chat) {
+        var enabled = automations.enabledProjects(chat.link.userId());
+        var selected = selectedProject(chat);
+        if (selected != null && enabled.contains(selected)) {
+            return Optional.of(selected);
+        }
+        return enabled.size() == 1 ? Optional.of(enabled.getFirst()) : Optional.empty();
+    }
+
+    private static Optional<Integer> issueNumber(String argument) {
+        var digits = argument.strip().replaceFirst("^#", "");
+        if (!digits.matches("[0-9]{1,9}") || Integer.parseInt(digits) == 0) {
+            return Optional.empty();
+        }
+        return Optional.of(Integer.parseInt(digits));
     }
 
     private void sendToSession(Chat chat, long updateId, String content) {

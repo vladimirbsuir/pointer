@@ -28,6 +28,7 @@ class TelegramNotifier implements SessionEventListener {
 
     static final Duration EDIT_INTERVAL = Duration.ofMillis(1500);
 
+    private static final String AUTOMATION_UPDATED = "automation.updated";
     private static final int MAX_PROGRESS_LINES = 12;
     private static final int PREVIEW_LIMIT = 2500;
     private static final int SUMMARY_LIMIT = 60;
@@ -38,7 +39,8 @@ class TelegramNotifier implements SessionEventListener {
             "item.updated",
             "item.completed",
             "approval.requested",
-            "approval.resolved");
+            "approval.resolved",
+            AUTOMATION_UPDATED);
     private static final Set<String> ITEM_TYPES = Set.of("tool_call", "assistant_message", "plan");
     private static final List<String> SUMMARY_KEYS = List.of("path", "command", "pattern", "url", "query", "name");
 
@@ -116,6 +118,7 @@ class TelegramNotifier implements SessionEventListener {
             case "turn.completed" -> turnCompleted(event);
             case "approval.requested" -> approvalRequested(userId, sessionId, chatId, event);
             case "approval.resolved" -> approvalResolved(userId, event);
+            case AUTOMATION_UPDATED -> automationUpdated(userId, sessionId, chatId, event);
             default -> itemChanged(userId, sessionId, chatId, kind, item(event));
         }
     }
@@ -255,6 +258,32 @@ class TelegramNotifier implements SessionEventListener {
             html += ": " + escape(note);
         }
         api.editMessage(prompt.chatId(), prompt.messageId(), html, null);
+    }
+
+    private void automationUpdated(UUID userId, UUID sessionId, long chatId, Map<String, Object> event) {
+        var locale = directory.locale(userId);
+        var title = escape("#" + event.get("issueNumber") + " " + event.get("issueTitle"));
+        var attempts = event.get("attempts") instanceof Number number ? number.intValue() : 0;
+        var pullRequest = string(event, "pullRequestUrl");
+        var html = switch (string(event, "status")) {
+            case "queued" -> text(locale, "automation.started", title);
+            case "running" ->
+                attempts == 0
+                        ? null
+                        : text(locale, "automation.checkFailed", title, attempts, event.get("maxAttempts"));
+            case "succeeded" -> text(locale, "automation.succeeded", title, escape(pullRequest));
+            case "failed" -> automationFailed(locale, title, string(event, "failureReason"), pullRequest);
+            case "cancelled" -> text(locale, "automation.cancelled", title);
+            default -> null;
+        };
+        if (html != null) {
+            api.sendMessage(chatId, html, openSessionKeyboard(locale, sessionId));
+        }
+    }
+
+    private static String automationFailed(String locale, String title, String reason, String draftUrl) {
+        var html = text(locale, "automation.failed", title, text(locale, "automation.reason." + reason));
+        return draftUrl.isEmpty() ? html : html + "\n" + text(locale, "automation.draft", escape(draftUrl));
     }
 
     private void flushProgress() {

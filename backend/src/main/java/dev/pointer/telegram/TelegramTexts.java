@@ -24,6 +24,7 @@ final class TelegramTexts {
                             + "/sessions: choose a session\n"
                             + "/new: start a session in a project\n"
                             + "/stop: stop the running turn\n"
+                            + "/issue number: implement a GitHub issue on the server\n"
                             + "/remember text: save a memory for the agent\n"
                             + "/memories: recent memories\n"
                             + "/unlink: unlink this chat\n\n"
@@ -101,6 +102,26 @@ final class TelegramTexts {
             Map.entry("command.sessions", "Choose a session"),
             Map.entry("command.new", "Start a session in a project"),
             Map.entry("command.stop", "Stop the running turn"),
+            Map.entry("command.issue", "Implement a GitHub issue"),
+            Map.entry("issue.usage", "Write the issue number after the command, for example: /issue 42"),
+            Map.entry(
+                    "issue.noProject",
+                    "Choose a session of a project with automation turned on via /sessions, then repeat the command."),
+            Map.entry("issue.started", "🤖 Run for issue {0} {1} is starting on the server."),
+            Map.entry("automation.started", "🤖 <b>{0}</b>\nThe agent started working on the issue."),
+            Map.entry("automation.checkFailed", "🔁 <b>{0}</b>\nCheck {1} of {2} failed, the agent is fixing it."),
+            Map.entry("automation.succeeded", "✅ <b>{0}</b>\nThe pull request is ready: {1}"),
+            Map.entry("automation.failed", "❌ <b>{0}</b>\nThe run failed: {1}"),
+            Map.entry("automation.draft", "Draft pull request: {0}"),
+            Map.entry("automation.cancelled", "⏹ <b>{0}</b>\nThe run was cancelled."),
+            Map.entry("automation.reason.needs_input", "the agent needs more information, see the issue"),
+            Map.entry("automation.reason.check_failed", "the check command still fails"),
+            Map.entry("automation.reason.budget_exceeded", "the budget of the run is used up"),
+            Map.entry("automation.reason.agent_failed", "the agent stopped with an error"),
+            Map.entry("automation.reason.workspace_failed", "the server workspace could not be prepared"),
+            Map.entry("automation.reason.pull_request_failed", "the pull request could not be opened"),
+            Map.entry("automation.reason.start_failed", "the run could not be started"),
+            Map.entry("automation.reason.error", "unexpected error"),
             Map.entry("command.help", "How to use the bot"),
             Map.entry("command.unlink", "Unlink this chat"));
 
@@ -121,6 +142,7 @@ final class TelegramTexts {
                             + "/sessions: выбрать сессию\n"
                             + "/new: начать сессию в проекте\n"
                             + "/stop: остановить текущий ход\n"
+                            + "/issue номер: реализовать задачу GitHub на сервере\n"
                             + "/remember текст: сохранить в память агента\n"
                             + "/memories: последние записи памяти\n"
                             + "/unlink: отвязать этот чат\n\n"
@@ -196,10 +218,31 @@ final class TelegramTexts {
             Map.entry("command.sessions", "Выбрать сессию"),
             Map.entry("command.new", "Начать сессию в проекте"),
             Map.entry("command.stop", "Остановить текущий ход"),
+            Map.entry("command.issue", "Реализовать задачу GitHub"),
+            Map.entry("issue.usage", "Напишите номер задачи после команды, например: /issue 42"),
+            Map.entry(
+                    "issue.noProject",
+                    "Выберите через /sessions сессию проекта с включённой автоматизацией и повторите команду."),
+            Map.entry("issue.started", "🤖 Запуск по задаче {0} {1} стартует на сервере."),
+            Map.entry("automation.started", "🤖 <b>{0}</b>\nАгент начал работу над задачей."),
+            Map.entry("automation.checkFailed", "🔁 <b>{0}</b>\nПроверка {1} из {2} не прошла, агент исправляет."),
+            Map.entry("automation.succeeded", "✅ <b>{0}</b>\nPull request готов: {1}"),
+            Map.entry("automation.failed", "❌ <b>{0}</b>\nЗапуск не удался: {1}"),
+            Map.entry("automation.draft", "Черновик pull request: {0}"),
+            Map.entry("automation.cancelled", "⏹ <b>{0}</b>\nЗапуск отменён."),
+            Map.entry("automation.reason.needs_input", "агенту нужно больше информации, смотрите задачу"),
+            Map.entry("automation.reason.check_failed", "команда проверки по-прежнему не проходит"),
+            Map.entry("automation.reason.budget_exceeded", "бюджет запуска исчерпан"),
+            Map.entry("automation.reason.agent_failed", "агент остановился с ошибкой"),
+            Map.entry("automation.reason.workspace_failed", "не удалось подготовить рабочее окружение на сервере"),
+            Map.entry("automation.reason.pull_request_failed", "не удалось открыть pull request"),
+            Map.entry("automation.reason.start_failed", "запуск не удалось начать"),
+            Map.entry("automation.reason.error", "непредвиденная ошибка"),
             Map.entry("command.help", "Как пользоваться ботом"),
             Map.entry("command.unlink", "Отвязать этот чат"));
 
-    static final List<String> COMMANDS = List.of("sessions", "new", "stop", "remember", "memories", "help", "unlink");
+    static final List<String> COMMANDS =
+            List.of("sessions", "new", "stop", "issue", "remember", "memories", "help", "unlink");
 
     private TelegramTexts() {}
 

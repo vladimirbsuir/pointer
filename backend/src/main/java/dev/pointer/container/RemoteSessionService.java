@@ -34,6 +34,7 @@ public class RemoteSessionService {
 
     static final String PREPARE = "pointer.repo_prepare";
     static final String PUBLISH = "pointer.repo_publish";
+    static final String RUN_COMMAND = "run_command";
 
     private static final Logger log = LoggerFactory.getLogger(RemoteSessionService.class);
     private static final Duration PUBLISH_TIMEOUT = Duration.ofMinutes(5);
@@ -57,6 +58,7 @@ public class RemoteSessionService {
     private final TransactionTemplate transactions;
     private final Clock clock;
     private final Set<UUID> starting = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> runningCommands = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Object> publishLocks = new ConcurrentHashMap<>();
     private final Object slots = new Object();
     private final ScheduledExecutorService timers = Executors.newSingleThreadScheduledExecutor(
@@ -98,6 +100,11 @@ public class RemoteSessionService {
 
     public RemoteDtos.RemoteSessionResponse create(
             UUID userId, UUID projectId, RemoteDtos.CreateRemoteSessionRequest request) {
+        return create(userId, projectId, request, null);
+    }
+
+    public RemoteDtos.RemoteSessionResponse create(
+            UUID userId, UUID projectId, RemoteDtos.CreateRemoteSessionRequest request, String branch) {
         ensureEnabled();
         var project = projects.owned(userId, projectId);
         if (project.getRepository() == null) {
@@ -122,7 +129,7 @@ public class RemoteSessionService {
                 userId,
                 runner.id(),
                 repository.fullName(),
-                BRANCH_PREFIX + session.id().toString().substring(0, 8),
+                branch == null ? BRANCH_PREFIX + session.id().toString().substring(0, 8) : branch,
                 baseBranch,
                 clock.instant()));
         startAsync(workspace.getId());
@@ -150,26 +157,65 @@ public class RemoteSessionService {
     RemoteDtos.PullRequestResponse openPullRequest(UUID userId, UUID sessionId) {
         var session = sessions.get(userId, sessionId);
         var workspace = owned(userId, sessionId);
+        var title = session.title() == null || session.title().isBlank()
+                ? "Pointer session " + workspace.getBranch()
+                : session.title();
+        return openPullRequest(
+                userId,
+                sessionId,
+                new PullRequestDraft(title, "Created by Pointer from session " + session.id() + ".", false));
+    }
+
+    public RemoteDtos.PullRequestResponse openPullRequest(UUID userId, UUID sessionId, PullRequestDraft draft) {
+        var workspace = owned(userId, sessionId);
         if (workspace.getPushedCommit() == null) {
             throw ApiException.conflict("nothing_pushed", "The session has not pushed any changes yet");
         }
         var credentials = credentials(userId);
-        var title = session.title() == null || session.title().isBlank()
-                ? "Pointer session " + workspace.getBranch()
-                : session.title();
         var url = gitHub.openPullRequest(
                 credentials.accessToken(),
                 new GitHubRepositories.PullRequest(
                         workspace.getRepository(),
                         workspace.getBranch(),
                         workspace.getBaseBranch(),
-                        title,
-                        "Created by Pointer from session " + session.id() + "."));
+                        draft.title(),
+                        draft.body(),
+                        draft.draft()));
         update(workspace.getId(), current -> {
             current.pullRequestOpened(url, clock.instant());
             return current;
         });
         return new RemoteDtos.PullRequestResponse(url);
+    }
+
+    public record PullRequestDraft(String title, String body, boolean draft) {}
+
+    public Optional<RemoteDtos.RemoteWorkspaceResponse> publishNow(UUID userId, UUID sessionId, UUID turnId) {
+        publish(userId, sessionId, turnId);
+        return workspaces.findBySessionId(sessionId).map(RemoteSessionService::toResponse);
+    }
+
+    public ExecutionResult runCommand(UUID sessionId, String command, Duration timeout, Cancellation cancellation) {
+        var workspace = workspaces
+                .findBySessionId(sessionId)
+                .orElseThrow(
+                        () -> ApiException.notFound("remote_session_not_found", "The session is not on the server"));
+        touch(sessionId);
+        runningCommands.add(sessionId);
+        var limit = timeout.plus(properties.prepareTimeout());
+        var timer = timers.schedule(cancellation::cancel, limit.toMillis(), TimeUnit.MILLISECONDS);
+        try {
+            return execution
+                    .getObject()
+                    .execute(
+                            request(workspace, RUN_COMMAND, Map.of("command", command), timeout),
+                            new ExecutionListener() {},
+                            cancellation);
+        } finally {
+            timer.cancel(false);
+            runningCommands.remove(sessionId);
+            touch(sessionId);
+        }
     }
 
     List<RemoteDtos.RepositoryResponse> repositories(UUID userId) {
@@ -375,6 +421,9 @@ public class RemoteSessionService {
     }
 
     private boolean isSessionIdle(RemoteWorkspace workspace) {
+        if (runningCommands.contains(workspace.getSessionId())) {
+            return false;
+        }
         var status =
                 sessions.get(workspace.getUserId(), workspace.getSessionId()).status();
         return SessionStatus.IDLE.equals(status) || SessionStatus.ERROR.equals(status);
@@ -409,8 +458,9 @@ public class RemoteSessionService {
     }
 
     private String commitMessage(UUID sessionId, UUID turnId) {
-        var subject = sessions.turnMessage(sessionId, turnId)
-                .map(text -> text.strip().lines().findFirst().orElse("").strip())
+        var message = turnId == null ? Optional.<String>empty() : sessions.turnMessage(sessionId, turnId);
+        var subject = message.map(
+                        text -> text.strip().lines().findFirst().orElse("").strip())
                 .filter(text -> !text.isEmpty())
                 .orElse(DEFAULT_COMMIT_MESSAGE);
         return subject.length() <= MAX_COMMIT_SUBJECT

@@ -20,6 +20,9 @@ class RestGitHubRepositories implements GitHubRepositories {
             new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<List<PullRequestBody>> PULL_REQUEST_LIST =
             new ParameterizedTypeReference<>() {};
+    private static final ParameterizedTypeReference<List<CommentBody>> COMMENT_LIST =
+            new ParameterizedTypeReference<>() {};
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final RestClient client;
 
@@ -67,7 +70,8 @@ class RestGitHubRepositories implements GitHubRepositories {
                             "title", request.title(),
                             "head", request.head(),
                             "base", request.base(),
-                            "body", request.body()))
+                            "body", request.body(),
+                            "draft", request.draft()))
                     .retrieve()
                     .body(PullRequestBody.class);
             return created == null ? null : created.htmlUrl();
@@ -79,6 +83,119 @@ class RestGitHubRepositories implements GitHubRepositories {
         } catch (RestClientException exception) {
             throw ApiException.unavailable("github_unavailable", "GitHub request failed");
         }
+    }
+
+    @Override
+    public Issue issue(String accessToken, String repository, int number) {
+        try {
+            var body = client.get()
+                    .uri("/repos/" + repository + "/issues/" + number)
+                    .header(HttpHeaders.AUTHORIZATION, bearer(accessToken))
+                    .retrieve()
+                    .body(IssueBody.class);
+            if (body == null) {
+                throw issueNotFound(number);
+            }
+            return body.toIssue();
+        } catch (HttpClientErrorException exception) {
+            if (exception.getStatusCode() == HttpStatus.NOT_FOUND || exception.getStatusCode() == HttpStatus.GONE) {
+                throw issueNotFound(number);
+            }
+            throw failure(exception);
+        } catch (RestClientException exception) {
+            throw ApiException.unavailable("github_unavailable", "GitHub request failed");
+        }
+    }
+
+    @Override
+    public List<IssueComment> issueComments(String accessToken, String repository, int number, int limit) {
+        var pageSize = Math.clamp(limit, 1, MAX_PAGE_SIZE);
+        var body = call(() -> client.get()
+                .uri("/repos/" + repository + "/issues/" + number + "/comments?per_page=" + pageSize)
+                .header(HttpHeaders.AUTHORIZATION, bearer(accessToken))
+                .retrieve()
+                .body(COMMENT_LIST));
+        return body == null
+                ? List.of()
+                : body.stream().limit(limit).map(CommentBody::toComment).toList();
+    }
+
+    @Override
+    public long createIssueComment(String accessToken, String repository, int number, String body) {
+        var created = call(() -> client.post()
+                .uri("/repos/" + repository + "/issues/" + number + "/comments")
+                .header(HttpHeaders.AUTHORIZATION, bearer(accessToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("body", body))
+                .retrieve()
+                .body(IdBody.class));
+        return requireId(created);
+    }
+
+    @Override
+    public void updateIssueComment(String accessToken, String repository, long commentId, String body) {
+        call(() -> client.patch()
+                .uri("/repos/" + repository + "/issues/comments/" + commentId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(accessToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("body", body))
+                .retrieve()
+                .toBodilessEntity());
+    }
+
+    @Override
+    public long createHook(String accessToken, String repository, Hook hook) {
+        var config = Map.of("url", hook.url(), "content_type", "json", "secret", hook.secret(), "insecure_ssl", "0");
+        try {
+            var created = client.post()
+                    .uri("/repos/" + repository + "/hooks")
+                    .header(HttpHeaders.AUTHORIZATION, bearer(accessToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("name", "web", "active", true, "events", hook.events(), "config", config))
+                    .retrieve()
+                    .body(IdBody.class);
+            return requireId(created);
+        } catch (HttpClientErrorException exception) {
+            throw switch (exception.getStatusCode().value()) {
+                case 422 ->
+                    ApiException.conflict(
+                            "webhook_rejected", "GitHub rejected the webhook; check the public URL of the server");
+                case 403, 404 ->
+                    ApiException.forbidden(
+                            "webhook_forbidden", "Your GitHub account cannot manage webhooks of this repository");
+                default -> failure(exception);
+            };
+        } catch (RestClientException exception) {
+            throw ApiException.unavailable("github_unavailable", "GitHub request failed");
+        }
+    }
+
+    @Override
+    public void deleteHook(String accessToken, String repository, long hookId) {
+        try {
+            client.delete()
+                    .uri("/repos/" + repository + "/hooks/" + hookId)
+                    .header(HttpHeaders.AUTHORIZATION, bearer(accessToken))
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (HttpClientErrorException exception) {
+            if (exception.getStatusCode() != HttpStatus.NOT_FOUND) {
+                throw failure(exception);
+            }
+        } catch (RestClientException exception) {
+            throw ApiException.unavailable("github_unavailable", "GitHub request failed");
+        }
+    }
+
+    private static long requireId(IdBody body) {
+        if (body == null) {
+            throw ApiException.unavailable("github_unavailable", "GitHub returned an empty response");
+        }
+        return body.id();
+    }
+
+    private static ApiException issueNotFound(int number) {
+        return ApiException.notFound("issue_not_found", "Issue #" + number + " does not exist in the repository");
     }
 
     private String existingPullRequest(String accessToken, PullRequest request) {
@@ -131,4 +248,32 @@ class RestGitHubRepositories implements GitHubRepositories {
     }
 
     record PullRequestBody(@JsonProperty("html_url") String htmlUrl) {}
+
+    record IdBody(long id) {}
+
+    record UserBody(String login) {}
+
+    record IssueBody(
+            int number,
+            String title,
+            String body,
+            UserBody user,
+            @JsonProperty("html_url") String htmlUrl,
+            @JsonProperty("pull_request") Map<String, Object> pullRequest) {
+
+        Issue toIssue() {
+            return new Issue(number, title, body == null ? "" : body, login(user), htmlUrl, pullRequest != null);
+        }
+    }
+
+    record CommentBody(UserBody user, String body) {
+
+        IssueComment toComment() {
+            return new IssueComment(login(user), body == null ? "" : body);
+        }
+    }
+
+    private static String login(UserBody user) {
+        return user == null || user.login() == null ? "unknown" : user.login();
+    }
 }

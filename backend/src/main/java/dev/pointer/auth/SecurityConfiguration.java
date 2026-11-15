@@ -43,6 +43,7 @@ class SecurityConfiguration {
         "/api/v1/auth/github/authorize-url",
         "/api/v1/auth/github/callback",
         "/api/v1/runner/token",
+        "/api/v1/webhooks/github/**",
         "/actuator/health",
         "/v3/api-docs/**",
         "/swagger-ui/**",
