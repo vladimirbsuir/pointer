@@ -53,6 +53,54 @@ export type RemoteWorkspace = {
   lastActiveAt: string;
 };
 
+export type AutomationWebhook = "created" | "missing" | "no_public_url";
+
+export type Automation = {
+  configured: boolean;
+  enabled: boolean;
+  triggerLabel: string;
+  baseBranch: string | null;
+  modelId: string | null;
+  checkCommand: string | null;
+  maxAttempts: number;
+  budgetUsd: number | null;
+  webhook: AutomationWebhook;
+  webhookError: string | null;
+  updatedAt: string | null;
+};
+
+export type AutomationRunStatus =
+  "queued" | "running" | "checking" | "succeeded" | "failed" | "cancelled";
+
+export type AutomationFailureReason =
+  | "needs_input"
+  | "check_failed"
+  | "budget_exceeded"
+  | "agent_failed"
+  | "start_failed"
+  | "workspace_failed"
+  | "pull_request_failed"
+  | "error";
+
+export type AutomationRun = {
+  id: string;
+  sessionId: string | null;
+  issueNumber: number;
+  issueTitle: string;
+  issueUrl: string | null;
+  trigger: "label" | "desktop" | "telegram";
+  status: AutomationRunStatus;
+  failureReason: AutomationFailureReason | null;
+  error: string | null;
+  attempts: number;
+  maxAttempts: number;
+  lastCheckOutput: string | null;
+  pullRequestUrl: string | null;
+  costUsd: number;
+  startedAt: string;
+  finishedAt: string | null;
+};
+
 export type GitHubRepository = Required<Schemas["RepositoryResponse"]>;
 
 export type ProjectIndex = {

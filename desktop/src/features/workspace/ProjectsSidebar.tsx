@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  BotIcon,
   BrainIcon,
   ChevronRightIcon,
   CloudIcon,
@@ -37,6 +38,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu";
+import { ProjectAutomationDialog } from "@/features/automation/ProjectAutomationDialog";
 import { ProjectMemoryDialog } from "@/features/memory/ProjectMemoryDialog";
 import { createRemoteSession, createSession } from "./create-session";
 import { ProjectRepositoryDialog } from "./ProjectRepositoryDialog";
@@ -140,6 +142,7 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
   const [indexOpen, setIndexOpen] = useState(false);
   const [repositoryOpen, setRepositoryOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [automationOpen, setAutomationOpen] = useState(false);
   const { data: suggestedMemories } = useMemories(project.id, "suggested");
   const { data: sessions } = useSessions(project.id);
   const { data: remote } = useRemoteStatus();
@@ -249,6 +252,10 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
                 ? t("repository.menuWithName", { repository: project.repository })
                 : t("repository.menu")}
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setAutomationOpen(true)}>
+              <BotIcon />
+              {t("automation.menu")}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setIndexOpen(true)}>
               <DatabaseZapIcon />
               {t("shell.semanticIndex")}
@@ -278,6 +285,11 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
         onOpenChange={setIndexOpen}
       />
       <ProjectMemoryDialog project={project} open={memoryOpen} onOpenChange={setMemoryOpen} />
+      <ProjectAutomationDialog
+        project={project}
+        open={automationOpen}
+        onOpenChange={setAutomationOpen}
+      />
       {expanded && (
         <div className="ml-4 flex flex-col">
           {sessions?.map((session) => (

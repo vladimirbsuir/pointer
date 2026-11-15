@@ -2,6 +2,8 @@ import { QueryClient, useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "./client";
 import { core } from "./core";
 import type {
+  Automation,
+  AutomationRun,
   CustomTool,
   CustomToolVersion,
   Memory,
@@ -32,6 +34,8 @@ export const queryKeys = {
   remote: ["remote"] as const,
   remoteSessions: (projectId: string) => ["remoteSessions", projectId] as const,
   remoteWorkspace: (sessionId: string) => ["remoteWorkspace", sessionId] as const,
+  automation: (projectId: string) => ["automation", projectId] as const,
+  automationRuns: (projectId: string) => ["automationRuns", projectId] as const,
   memories: (projectId: string | null, status: string) =>
     ["memories", projectId ?? "user", status] as const,
 };
@@ -71,6 +75,39 @@ export function useRemoteWorkspace(sessionId: string, enabled: boolean, sessionB
       sessionBusy || TRANSITIONAL_REMOTE_STATUSES.has(query.state.data?.status ?? "")
         ? REMOTE_POLL_MS
         : false,
+  });
+}
+
+const ACTIVE_RUN_STATUSES = new Set(["queued", "running", "checking"]);
+const RUNS_POLL_MS = 3000;
+
+export function isActiveRun(run: AutomationRun) {
+  return ACTIVE_RUN_STATUSES.has(run.status);
+}
+
+export function useAutomation(projectId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.automation(projectId),
+    enabled,
+    queryFn: async () =>
+      (await unwrap(
+        api().GET("/api/v1/projects/{projectId}/automation", { params: { path: { projectId } } }),
+      )) as Automation,
+  });
+}
+
+export function useAutomationRuns(projectId: string, enabled: boolean, watching = false) {
+  return useQuery({
+    queryKey: queryKeys.automationRuns(projectId),
+    enabled: enabled && projectId !== "",
+    queryFn: async () =>
+      (await unwrap(
+        api().GET("/api/v1/projects/{projectId}/automation/runs", {
+          params: { path: { projectId } },
+        }),
+      )) as AutomationRun[],
+    refetchInterval: (query) =>
+      watching || (query.state.data ?? []).some(isActiveRun) ? RUNS_POLL_MS : false,
   });
 }
 

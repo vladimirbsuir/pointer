@@ -4,6 +4,7 @@ import { SessionUsageDialog } from "./SessionUsageDialog";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { FileDiffIcon, FoldVerticalIcon, SquareTerminalIcon } from "lucide-react";
+import { AutomationBadge } from "@/features/automation/AutomationBadge";
 import { useWorkspace } from "@/features/workspace/workspace-store";
 import { api, unwrap } from "@/shared/api/client";
 import { enabledModels, useProviders, useRemoteSessions } from "@/shared/api/queries";
@@ -142,6 +143,9 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
               onChanged={(updated) => patchSession({ ...updated, status: session.status })}
             />
             {remote && <RemoteControl sessionId={sessionId} busy={running} />}
+            {remote && (
+              <AutomationBadge projectId={session.projectId} sessionId={sessionId} busy={running} />
+            )}
           </div>
           <div className="flex items-center gap-2">
             <UsageIndicator

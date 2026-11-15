@@ -179,7 +179,15 @@
     "memory_exists": "A memory with this name already exists.",
     "invalid_memory": "Check the memory fields: name, description and content are required.",
     "nothing_to_undo": "There is nothing to undo for this memory.",
-    "memory_not_found": "This memory no longer exists."
+    "memory_not_found": "This memory no longer exists.",
+    "automation_not_configured": "Set up the automation of the project first.",
+    "automation_disabled": "The automation of the project is turned off.",
+    "run_already_active": "A run for this issue is already in progress.",
+    "run_not_active": "The run has already finished.",
+    "issue_not_found": "The issue does not exist in the repository.",
+    "not_an_issue": "This number belongs to a pull request, not an issue.",
+    "webhook_forbidden": "Your GitHub account cannot manage webhooks of this repository.",
+    "webhook_rejected": "GitHub rejected the webhook; check the public URL of the server."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",
@@ -575,5 +583,82 @@
       "explore": "Exploration"
     },
     "role": "Role"
+  },
+  "automation": {
+    "menu": "Issue automation…",
+    "title": "Issue automation of {{project}}",
+    "description": "A GitHub issue becomes a server session: the agent implements it, the check command verifies the result and a pull request is opened.",
+    "tabs": {
+      "runs": "Runs",
+      "settings": "Settings"
+    },
+    "noRepository": "Set the GitHub repository of the project first.",
+    "noAccess": "Allow repository access in Settings → Account → GitHub.",
+    "remoteDisabled": "Remote execution is not configured on the server, so runs cannot start.",
+    "notConfigured": "The automation is not set up yet. Turn it on in the Settings tab.",
+    "disabled": "The automation is turned off.",
+    "enabled": "Automation is on",
+    "enabledHint": "Runs can be started manually, from Telegram with /issue and by the trigger label.",
+    "triggerLabel": "Trigger label",
+    "triggerLabelHint": "Adding this label to an issue starts a run.",
+    "baseBranch": "Base branch",
+    "baseBranchHint": "Leave empty to use the default branch of the repository.",
+    "model": "Model",
+    "modelHint": "Used by the agent in automation sessions. Without a choice the default model is used.",
+    "defaultModel": "Default model",
+    "checkCommand": "Check command",
+    "checkCommandHint": "Runs in the container after each turn that changed files, for example npm test. Exit code 0 means success. Leave empty to skip the check.",
+    "maxAttempts": "Checks per run",
+    "maxAttemptsHint": "After this many failed checks a draft pull request is opened.",
+    "budget": "Budget per run, $",
+    "budgetHint": "The run stops when the session cost reaches the budget. Leave empty for no limit.",
+    "saved": "Automation saved.",
+    "webhook": {
+      "created": "The repository webhook is set up: the trigger label starts runs.",
+      "missing": "The repository webhook is not set up, so the trigger label does not start runs.",
+      "no_public_url": "The server has no public URL, so the trigger label is unavailable. Start runs manually.",
+      "failed": "The webhook could not be created: {{error}}"
+    },
+    "issueNumber": "Issue number",
+    "run": "Run on issue",
+    "started": "Run for issue #{{number}} started.",
+    "noRuns": "No runs yet.",
+    "columns": {
+      "issue": "Issue",
+      "status": "Status",
+      "checks": "Checks",
+      "cost": "Cost",
+      "duration": "Time"
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Agent working",
+      "checking": "Checking",
+      "succeeded": "Pull request ready",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "reason": {
+      "needs_input": "The agent needs more information; see the issue.",
+      "check_failed": "The check command still fails.",
+      "budget_exceeded": "The budget of the run is used up.",
+      "agent_failed": "The agent stopped with an error.",
+      "start_failed": "The run could not be started.",
+      "workspace_failed": "The server workspace could not be prepared.",
+      "pull_request_failed": "The pull request could not be opened.",
+      "error": "An unexpected error stopped the run."
+    },
+    "trigger": {
+      "label": "Label",
+      "desktop": "Manual",
+      "telegram": "Telegram"
+    },
+    "openSession": "Open session",
+    "openIssue": "Open issue #{{number}}",
+    "openPullRequest": "Open pull request",
+    "openDraft": "Open draft pull request",
+    "cancel": "Cancel run",
+    "checks": "{{done}} of {{max}}",
+    "sessionBadge": "#{{number}} · check {{done}}/{{max}}"
   }
 }
