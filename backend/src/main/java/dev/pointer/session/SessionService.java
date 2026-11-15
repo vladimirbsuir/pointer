@@ -47,6 +47,11 @@ public class SessionService {
         var mode = request.mode() == null ? DEFAULT_MODE : request.mode();
         var title = request.title() == null ? null : request.title().strip();
         var created = new AgentSession(userId, projectId, deviceId, title, mode, modelId, clock.instant());
+        created.changeRouting(
+                request.routing() != null
+                        ? request.routing()
+                        : settingsService.routing(userId).routingDefault(),
+                clock.instant());
         if (request.budgetUsd() != null) {
             created.changeBudget(positiveOrNull(request.budgetUsd()), clock.instant());
         }
@@ -100,6 +105,9 @@ public class SessionService {
         }
         if (request.budgetUsd() != null) {
             session.changeBudget(positiveOrNull(request.budgetUsd()), now);
+        }
+        if (request.routing() != null) {
+            session.changeRouting(request.routing(), now);
         }
         sessions.save(session);
         var event = eventLog.append(userId, sessionId, "session.updated", settingsPayload(session));
@@ -253,6 +261,7 @@ public class SessionService {
         payload.put("modelId", session.getModelId());
         payload.put("autoApprove", session.isAutoApprove());
         payload.put("budgetUsd", session.getBudgetUsd());
+        payload.put("routing", session.getRouting());
         payload.put("archived", session.getArchivedAt() != null);
         payload.put("worktree", worktreePayload(session));
         return payload;
@@ -284,6 +293,7 @@ public class SessionService {
                 session.getTotalOutputTokens(),
                 session.getEstimatedCost(),
                 session.getBudgetUsd(),
+                session.getRouting(),
                 session.getExecutorDeviceId(),
                 session.getWorktreeBranch() == null
                         ? null

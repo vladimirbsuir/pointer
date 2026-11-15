@@ -2,6 +2,7 @@ package dev.pointer.user;
 
 import dev.pointer.common.error.ApiException;
 import dev.pointer.provider.ProviderService;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.Clock;
 import java.util.UUID;
@@ -37,6 +38,21 @@ public class SettingsService {
             }
             userSettings.changeDefaultModel(request.defaultModelId(), now);
         }
+        if (request.routingDefault() != null) {
+            userSettings.changeRoutingDefault(request.routingDefault(), now);
+        }
+        if (Boolean.TRUE.equals(request.clearFastModel())) {
+            userSettings.changeFastModel(null, now);
+        } else if (request.fastModelId() != null) {
+            requireOwnedModel(userId, request.fastModelId());
+            userSettings.changeFastModel(request.fastModelId(), now);
+        }
+        if (Boolean.TRUE.equals(request.clearPlanModel())) {
+            userSettings.changePlanModel(null, now);
+        } else if (request.planModelId() != null) {
+            requireOwnedModel(userId, request.planModelId());
+            userSettings.changePlanModel(request.planModelId(), now);
+        }
         if (Boolean.TRUE.equals(request.clearEmbeddingModel())) {
             userSettings.changeEmbeddingModel(null, now);
         } else if (request.embeddingModelId() != null) {
@@ -55,8 +71,21 @@ public class SettingsService {
     }
 
     @Transactional(readOnly = true)
+    public RoutingSettings routing(UUID userId) {
+        var userSettings = find(userId);
+        return new RoutingSettings(
+                userSettings.getRoutingDefault(), userSettings.getFastModelId(), userSettings.getPlanModelId());
+    }
+
+    @Transactional(readOnly = true)
     public UUID embeddingModel(UUID userId) {
         return find(userId).getEmbeddingModelId();
+    }
+
+    private void requireOwnedModel(UUID userId, UUID modelId) {
+        if (!providerService.modelBelongsTo(userId, modelId)) {
+            throw ApiException.notFound("model_not_found", "Model does not exist");
+        }
     }
 
     private UserSettings find(UUID userId) {
@@ -67,15 +96,51 @@ public class SettingsService {
         return new SettingsResponse(
                 userSettings.getGlobalInstructions(),
                 userSettings.getDefaultModelId(),
-                userSettings.getEmbeddingModelId());
+                userSettings.getEmbeddingModelId(),
+                userSettings.getRoutingDefault(),
+                userSettings.getFastModelId(),
+                userSettings.getPlanModelId());
     }
 
-    public record SettingsResponse(String globalInstructions, UUID defaultModelId, UUID embeddingModelId) {}
+    public record SettingsResponse(
+            String globalInstructions,
+            UUID defaultModelId,
+            UUID embeddingModelId,
+            String routingDefault,
+            UUID fastModelId,
+            UUID planModelId) {}
+
+    public record RoutingSettings(String routingDefault, UUID fastModelId, UUID planModelId) {}
 
     public record UpdateSettingsRequest(
             @Size(max = 20_000) String globalInstructions,
             UUID defaultModelId,
             Boolean clearDefaultModel,
             UUID embeddingModelId,
-            Boolean clearEmbeddingModel) {}
+            Boolean clearEmbeddingModel,
+            @Pattern(regexp = "off|smart") String routingDefault,
+            UUID fastModelId,
+            Boolean clearFastModel,
+            UUID planModelId,
+            Boolean clearPlanModel) {
+
+        public UpdateSettingsRequest(
+                String globalInstructions,
+                UUID defaultModelId,
+                Boolean clearDefaultModel,
+                UUID embeddingModelId,
+                Boolean clearEmbeddingModel) {
+            this(
+                    globalInstructions,
+                    defaultModelId,
+                    clearDefaultModel,
+                    embeddingModelId,
+                    clearEmbeddingModel,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+        }
+    }
 }

@@ -23,7 +23,7 @@ class DigestStore {
 
     List<Candidate> candidates(Instant idleBefore, Instant activeAfter, int minUserMessages, int limit) {
         return jdbc.sql("""
-                        select s.id, s.user_id, s.project_id, s.model_id, s.executor_device_id, s.last_seq
+                        select s.id, s.user_id, s.project_id, s.model_id, s.executor_device_id, s.last_seq, s.routing
                         from sessions s
                         left join session_digests d on d.session_id = s.id
                         where s.status = 'idle'
@@ -47,7 +47,8 @@ class DigestStore {
                         rs.getObject("project_id", UUID.class),
                         rs.getObject("model_id", UUID.class),
                         rs.getObject("executor_device_id", UUID.class),
-                        rs.getLong("last_seq")))
+                        rs.getLong("last_seq"),
+                        "smart".equals(rs.getString("routing"))))
                 .list();
     }
 
@@ -142,7 +143,14 @@ class DigestStore {
                 rs.getDouble("score"));
     }
 
-    record Candidate(UUID sessionId, UUID userId, UUID projectId, UUID modelId, UUID deviceId, long lastSeq) {}
+    record Candidate(
+            UUID sessionId,
+            UUID userId,
+            UUID projectId,
+            UUID modelId,
+            UUID deviceId,
+            long lastSeq,
+            boolean smartRouting) {}
 
     record Hit(UUID sessionId, String title, Instant updatedAt, String summary, double score) {}
 }

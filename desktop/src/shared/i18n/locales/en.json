@@ -223,7 +223,9 @@
     "imageUploadFailed": "Could not upload the image.",
     "rememberHint": "Enter saves this note to the project memory instead of sending it to the agent.",
     "remembered": "Saved to memory: {{name}}",
-    "budgetExceeded": "The session budget is used up"
+    "budgetExceeded": "The session budget is used up",
+    "smartRouting": "Smart",
+    "smartRoutingHint": "Smart routing: titles, compaction and memory curation use the fast model, Plan mode uses the planning model (Settings → Providers)."
   },
   "modes": {
     "ask": "Ask",
@@ -257,7 +259,16 @@
     "isEmbedding": "Embedding model for semantic search",
     "queryPrefix": "Search query prefix",
     "documentPrefix": "Indexed code prefix",
-    "prefixHint": "Text the embedding model expects before queries and documents, including the trailing space. Changing it requires rebuilding indexes."
+    "prefixHint": "Text the embedding model expects before queries and documents, including the trailing space. Changing it requires rebuilding indexes.",
+    "makeFast": "Use as the fast model for titles, compaction and memory",
+    "isFast": "Fast model for titles, compaction and memory",
+    "makePlan": "Use as the planning model for Plan mode",
+    "isPlan": "Planning model for Plan mode",
+    "routingDefault": "Smart routing for new sessions",
+    "routingDescription": "With smart routing, titles, context compaction and memory curation use the fast model, and Plan mode uses the planning model. Each session can turn it on or off in its header. Mark models with the rabbit and checklist buttons below.",
+    "fastModel": "Fast model",
+    "planModel": "Planning model",
+    "roleNotSet": "not set, the session model is used"
   },
   "approval": {
     "title": "Allow this action?",
@@ -549,6 +560,7 @@
       "compaction": "Compaction",
       "memory": "Memory curation",
       "explore": "Exploration"
-    }
+    },
+    "role": "Role"
   }
 }

@@ -1,6 +1,6 @@
 # F3. Smart model routing
 
-Status: In progress (phase 1 implemented) · Requirement ids: ROUTE-1 to ROUTE-6 · Depends on: providers and models (PROV-*), cost estimates (CTX-6).
+Status: In progress (phases 1 and 2 implemented) · Requirement ids: ROUTE-1 to ROUTE-6 · Depends on: providers and models (PROV-*), cost estimates (CTX-6).
 
 ## Goal
 
@@ -69,7 +69,7 @@ CREATE INDEX model_usage_session_idx ON model_usage (session_id, created_at);
 
 | Class | Responsibility |
 |---|---|
-| `ModelRouter` | `ModelPlan plan(userId, session, executorDeviceId)` → resolved models per role. With `off` every role is the session model and no fallbacks. Local models are skipped for server sessions (same rule as [ADR 0016](../adr/0016-remote-execution-in-containers.md)). |
+| `ModelRouter` | `ModelPlan plan(userId, smart, mainModel, mode, executorDeviceId)` → routed models per role (`main`, `step`, `fast`). With `off` every role is the session model. A role model that cannot be resolved falls back to the session model; local models are resolved like the session model, and a compaction that fails on them is retried with the step model. |
 | `RoutedClient` | Wraps `OpenAiCompatibleClient.stream`: picks the model for a purpose, applies retry and fallback, records `model_usage`, checks the budget. |
 | `ExploreTool` | Server-side handling of `explore` in `AgentRunner` (like `PlanTool`/`ProposeTool`): nested loop with the `fast` model. |
 | `BudgetGuard` | Reads session cost plus the current step's estimate; throws `BudgetExceeded`, mapped to turn reason `budget_exceeded`. |
@@ -111,7 +111,7 @@ CREATE INDEX model_usage_session_idx ON model_usage (session_id, created_at);
 ## Phases
 
 1. `model_usage`, per-model usage view, session budget (useful on its own and for [F1](f1-issue-to-pr.md)). Implemented: migration V22 (`sessions.budget_usd`, `model_usage` with a nullable `turn_id`, the `budget_exceeded` turn status), `session/UsageLedger` writing a row for every call with reported usage (agent steps, titles, compaction, memory curation), `GET /sessions/{id}/usage`, `budgetUsd` on session create and update (0 removes it). The budget is checked before every agent step against `sessions.estimated_cost`, which counts steps and compaction; titles and memory curation appear in the ledger but not in the budget. Without model prices the cost is unknown and the budget does not apply. The desktop opens a usage dialog from the header indicator (table by model and purpose, budget field) and shows the spent amount against the budget; Telegram reports `budget_exceeded` as a stop. Checked live with `glm-5.3-flash` and test prices: a budget below the cost of the first turn stopped the second turn before any model call.
-2. Roles and routing of auxiliary calls and Plan-mode turns.
+2. Roles and routing of auxiliary calls and Plan-mode turns. Implemented: migration V23 (`user_settings.routing_default`, `fast_model_id`, `plan_model_id`; `sessions.routing`), `routing/ModelRouter` (its own package because both `agent` and `memory` use it). With `smart` routing, Plan-mode steps use the plan model when it is set and supports tools; titles, compaction and memory curation use the fast model. Compaction takes the fast model only when its context window holds the conversation with a 20 % margin, and retries with the step model when the fast model fails before streaming. A role model that is not set or cannot be resolved falls back to the session model. `model_usage.role` records `main`, `plan` or `fast`. The desktop marks the fast and planning models with buttons in the model list, shows them with the default switch at the top of Settings → Providers, and has a Smart switch in the session header. Checked live: a Plan-mode session on `deepseek-v4.1-flash` with smart routing ran its six steps on `gpt-6-luna` (plan role) and generated the title with `glm-5.3-flash` (fast role).
 3. Fallback lists and retry.
 4. `explore` sub-agent with nested items.
 

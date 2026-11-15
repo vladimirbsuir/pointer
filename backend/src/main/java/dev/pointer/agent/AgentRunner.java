@@ -15,6 +15,7 @@ import dev.pointer.provider.llm.ChatRequest;
 import dev.pointer.provider.llm.LlmException;
 import dev.pointer.provider.llm.OpenAiCompatibleClient;
 import dev.pointer.provider.llm.StreamListener;
+import dev.pointer.routing.ModelRouter;
 import dev.pointer.session.Item;
 import dev.pointer.session.LiveItemSnapshots;
 import dev.pointer.session.SessionDtos;
@@ -76,6 +77,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private final ExecutionService execution;
     private final MemoryPrompt memoryPrompt;
     private final UsageLedger ledger;
+    private final ModelRouter modelRouter;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<UUID, RunningTurn> running = new ConcurrentHashMap<>();
 
@@ -144,7 +146,14 @@ public class AgentRunner implements LiveItemSnapshots {
         running.put(sessionId, turn);
         try {
             var context = writer.turnContext(userId, sessionId, turnId);
-            var model = providerService.resolve(userId, context.modelId(), context.executorDeviceId());
+            var main = providerService.resolve(userId, context.modelId(), context.executorDeviceId());
+            var routes = modelRouter.plan(
+                    userId,
+                    sessionService.owned(userId, sessionId).isSmartRouting(),
+                    main,
+                    context.mode(),
+                    context.executorDeviceId());
+            var model = routes.step().model();
             var scope = new ToolCallHandler.TurnScope(
                     userId,
                     sessionId,
@@ -156,7 +165,7 @@ public class AgentRunner implements LiveItemSnapshots {
                     turn.cancellation);
             var project = projectContext(scope).withMemory(memorySection(scope));
             var globalInstructions = settingsService.get(userId).globalInstructions();
-            var summarizer = new Summarizer(scope, model, turn, project, globalInstructions);
+            var summarizer = new Summarizer(scope, routes, turn, project, globalInstructions);
             if (Turn.COMPACTION.equals(context.kind())) {
                 summarizer.summarize();
                 var reason = turn.cancellation.isCancelled() ? Turn.CANCELLED : Turn.COMPLETED;
@@ -206,7 +215,7 @@ public class AgentRunner implements LiveItemSnapshots {
                         listener,
                         turn.cancellation);
                 listener.completeAll(turn.cancellation.isCancelled() ? Item.CANCELLED : Item.COMPLETED, Map.of());
-                contextTokens = recordUsage(scope, model, listener.usage, messages);
+                contextTokens = recordUsage(scope, routes.step(), listener.usage, messages);
                 if (turn.cancellation.isCancelled()) {
                     reason = Turn.CANCELLED;
                 } else if (listener.toolCalls.isEmpty()) {
@@ -237,7 +246,7 @@ public class AgentRunner implements LiveItemSnapshots {
             }
             if (context.needsTitle() && !Turn.CANCELLED.equals(reason)) {
                 var titleMessages = firstMessages;
-                executor.submit(() -> generateTitle(userId, sessionId, turnId, model, titleMessages));
+                executor.submit(() -> generateTitle(userId, sessionId, turnId, routes.fast(), titleMessages));
             }
             return writer.finishTurn(userId, sessionId, turnId, reason, error);
         } catch (LlmException exception) {
@@ -272,9 +281,13 @@ public class AgentRunner implements LiveItemSnapshots {
     }
 
     private int recordUsage(
-            ToolCallHandler.TurnScope scope, ResolvedModel model, StreamListener.Usage usage, List<ChatMessage> sent) {
+            ToolCallHandler.TurnScope scope,
+            ModelRouter.RoutedModel routed,
+            StreamListener.Usage usage,
+            List<ChatMessage> sent) {
+        var model = routed.model();
         if (usage != null) {
-            ledger.record(scope.sessionId(), scope.turnId(), model, UsageLedger.MAIN, UsageLedger.STEP, usage);
+            ledger.record(scope.sessionId(), scope.turnId(), model, routed.role(), UsageLedger.STEP, usage);
             writer.recordUsage(
                     scope.userId(),
                     scope.sessionId(),
@@ -372,7 +385,8 @@ public class AgentRunner implements LiveItemSnapshots {
     }
 
     private void generateTitle(
-            UUID userId, UUID sessionId, UUID turnId, ResolvedModel model, List<ChatMessage> messages) {
+            UUID userId, UUID sessionId, UUID turnId, ModelRouter.RoutedModel routed, List<ChatMessage> messages) {
+        var model = routed.model();
         try {
             var firstUserMessage = messages.stream()
                     .filter(message -> message.role() == ChatMessage.Role.USER)
@@ -395,7 +409,7 @@ public class AgentRunner implements LiveItemSnapshots {
 
                         @Override
                         public void onUsage(Usage usage) {
-                            ledger.record(sessionId, turnId, model, UsageLedger.MAIN, UsageLedger.TITLE, usage);
+                            ledger.record(sessionId, turnId, model, routed.role(), UsageLedger.TITLE, usage);
                         }
                     },
                     new Cancellation());
@@ -423,6 +437,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private final class Summarizer {
 
         private final ToolCallHandler.TurnScope scope;
+        private final ModelRouter.ModelPlan routes;
         private final ResolvedModel model;
         private final RunningTurn turn;
         private final ContextAssembler.ProjectContext project;
@@ -430,15 +445,24 @@ public class AgentRunner implements LiveItemSnapshots {
 
         Summarizer(
                 ToolCallHandler.TurnScope scope,
-                ResolvedModel model,
+                ModelRouter.ModelPlan routes,
                 RunningTurn turn,
                 ContextAssembler.ProjectContext project,
                 String globalInstructions) {
             this.scope = scope;
-            this.model = model;
+            this.routes = routes;
+            this.model = routes.step().model();
             this.turn = turn;
             this.project = project;
             this.globalInstructions = globalInstructions;
+        }
+
+        private void stream(ResolvedModel target, List<ChatMessage> request, TurnListener listener) {
+            client.stream(
+                    target.endpoint(),
+                    new ChatRequest(target.modelKey(), request, List.of(), null),
+                    listener,
+                    turn.cancellation);
         }
 
         OptionalInt summarize() {
@@ -449,13 +473,25 @@ public class AgentRunner implements LiveItemSnapshots {
             var replaced = covered.stream()
                     .filter(item -> !Item.COMPACTION_SUMMARY.equals(item.get("type")))
                     .count();
+            var request = contextAssembler.buildCompaction(covered);
+            var routed = routes.compaction(ContextAssembler.estimateTokens(request));
             var listener = new TurnListener(
                     scope.userId(), scope.sessionId(), scope.turnId(), 0, turn, Item.COMPACTION_SUMMARY);
-            client.stream(
-                    model.endpoint(),
-                    new ChatRequest(model.modelKey(), contextAssembler.buildCompaction(covered), List.of(), null),
-                    listener,
-                    turn.cancellation);
+            try {
+                stream(routed.model(), request, listener);
+            } catch (LlmException exception) {
+                if (routed == routes.step() || !listener.text().isEmpty() || turn.cancellation.isCancelled()) {
+                    throw exception;
+                }
+                log.warn(
+                        "Compaction with {} failed, retrying with the step model: {}",
+                        routed.model().modelKey(),
+                        exception.getMessage());
+                routed = routes.step();
+                listener = new TurnListener(
+                        scope.userId(), scope.sessionId(), scope.turnId(), 0, turn, Item.COMPACTION_SUMMARY);
+                stream(routed.model(), request, listener);
+            }
             if (turn.cancellation.isCancelled()) {
                 listener.completeAll(Item.CANCELLED, Map.of());
                 return OptionalInt.empty();
@@ -466,7 +502,12 @@ public class AgentRunner implements LiveItemSnapshots {
             }
             listener.completeAll(Item.COMPLETED, Map.of("replacedItemCount", replaced));
             ledger.record(
-                    scope.sessionId(), scope.turnId(), model, UsageLedger.MAIN, UsageLedger.COMPACTION, listener.usage);
+                    scope.sessionId(),
+                    scope.turnId(),
+                    routed.model(),
+                    routed.role(),
+                    UsageLedger.COMPACTION,
+                    listener.usage);
             if (listener.usage != null) {
                 writer.recordUsage(
                         scope.userId(),
@@ -474,7 +515,7 @@ public class AgentRunner implements LiveItemSnapshots {
                         scope.turnId(),
                         listener.usage.promptTokens(),
                         listener.usage.completionTokens(),
-                        model.cost(listener.usage.promptTokens(), listener.usage.completionTokens()),
+                        routed.model().cost(listener.usage.promptTokens(), listener.usage.completionTokens()),
                         model.contextWindow());
             }
             var remaining = contextAssembler.build(

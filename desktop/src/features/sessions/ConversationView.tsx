@@ -86,6 +86,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
     modelId?: string;
     mode?: SessionMode;
     autoApprove?: boolean;
+    routing?: "off" | "smart";
   }) => {
     try {
       const updated = (await unwrap(
@@ -199,6 +200,19 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
                 onCheckedChange={(autoApprove) => void updateSession({ autoApprove })}
               />
               <span className={cn(changesOpen && "sr-only")}>{t("chat.autoApprove")}</span>
+            </label>
+            <label
+              className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+              title={t("chat.smartRoutingHint")}
+            >
+              <Switch
+                size="sm"
+                checked={session.routing === "smart"}
+                onCheckedChange={(smart) =>
+                  void updateSession({ routing: smart ? "smart" : "off" })
+                }
+              />
+              <span className={cn(changesOpen && "sr-only")}>{t("chat.smartRouting")}</span>
             </label>
             <ModelPicker
               value={session.modelId}

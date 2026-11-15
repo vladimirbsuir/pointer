@@ -1099,6 +1099,13 @@ export interface components {
             /** Format: uuid */
             embeddingModelId?: string;
             clearEmbeddingModel?: boolean;
+            routingDefault?: string;
+            /** Format: uuid */
+            fastModelId?: string;
+            clearFastModel?: boolean;
+            /** Format: uuid */
+            planModelId?: string;
+            clearPlanModel?: boolean;
         };
         SettingsResponse: {
             globalInstructions?: string;
@@ -1106,6 +1113,11 @@ export interface components {
             defaultModelId?: string;
             /** Format: uuid */
             embeddingModelId?: string;
+            routingDefault?: string;
+            /** Format: uuid */
+            fastModelId?: string;
+            /** Format: uuid */
+            planModelId?: string;
         };
         CommandRequest: {
             name: string;
@@ -1151,6 +1163,7 @@ export interface components {
             totalOutputTokens?: number;
             estimatedCost?: number;
             budgetUsd?: number;
+            routing?: string;
             /** Format: uuid */
             executorDeviceId?: string;
             worktree?: components["schemas"]["SessionWorktree"];
@@ -1318,6 +1331,7 @@ export interface components {
             /** Format: uuid */
             modelId?: string;
             budgetUsd?: number;
+            routing?: string;
         };
         CreateRemoteSessionRequest: {
             title?: string;
@@ -1506,6 +1520,7 @@ export interface components {
             autoApprove?: boolean;
             archived?: boolean;
             budgetUsd?: number;
+            routing?: string;
         };
         UpdateProviderRequest: {
             name?: string;

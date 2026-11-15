@@ -90,6 +90,9 @@ export function useSettings() {
         globalInstructions: data.globalInstructions ?? "",
         defaultModelId: data.defaultModelId ?? null,
         embeddingModelId: data.embeddingModelId ?? null,
+        routingDefault: (data.routingDefault ?? "off") as "off" | "smart",
+        fastModelId: data.fastModelId ?? null,
+        planModelId: data.planModelId ?? null,
       };
     },
   });

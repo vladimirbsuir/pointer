@@ -104,6 +104,7 @@ function applyEvent(state: ConversationState, { seq, event }: SessionEvent): Con
                 typeof event.autoApprove === "boolean"
                   ? event.autoApprove
                   : next.session.autoApprove,
+              routing: (event.routing as Session["routing"]) ?? next.session.routing,
               budgetUsd:
                 "budgetUsd" in event
                   ? ((event.budgetUsd as number | null) ?? null)

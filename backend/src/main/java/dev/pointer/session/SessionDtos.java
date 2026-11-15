@@ -16,6 +16,8 @@ public final class SessionDtos {
 
     private SessionDtos() {}
 
+    static final String ROUTING_PATTERN = "off|smart";
+
     public record SessionResponse(
             UUID id,
             UUID projectId,
@@ -30,6 +32,7 @@ public final class SessionDtos {
             long totalOutputTokens,
             BigDecimal estimatedCost,
             BigDecimal budgetUsd,
+            String routing,
             UUID executorDeviceId,
             SessionWorktree worktree,
             Instant archivedAt,
@@ -42,10 +45,11 @@ public final class SessionDtos {
             @Size(min = 1, max = 200) String title,
             @Pattern(regexp = MODE_PATTERN) String mode,
             UUID modelId,
-            @DecimalMin("0") @DecimalMax("100000") BigDecimal budgetUsd) {
+            @DecimalMin("0") @DecimalMax("100000") BigDecimal budgetUsd,
+            @Pattern(regexp = ROUTING_PATTERN) String routing) {
 
         public CreateSessionRequest(String title, String mode, UUID modelId) {
-            this(title, mode, modelId, null);
+            this(title, mode, modelId, null, null);
         }
     }
 
@@ -67,10 +71,11 @@ public final class SessionDtos {
             UUID modelId,
             Boolean autoApprove,
             Boolean archived,
-            @DecimalMin("0") @DecimalMax("100000") BigDecimal budgetUsd) {
+            @DecimalMin("0") @DecimalMax("100000") BigDecimal budgetUsd,
+            @Pattern(regexp = ROUTING_PATTERN) String routing) {
 
         public UpdateSessionRequest(String title, String mode, UUID modelId, Boolean autoApprove, Boolean archived) {
-            this(title, mode, modelId, autoApprove, archived, null);
+            this(title, mode, modelId, autoApprove, archived, null, null);
         }
     }
 

@@ -6,6 +6,8 @@ import {
   ChevronRightIcon,
   CircleDollarSignIcon,
   DatabaseZapIcon,
+  ListChecksIcon,
+  RabbitIcon,
   PlusIcon,
   RefreshCwIcon,
   StarIcon,
@@ -40,6 +42,7 @@ export function ProvidersSection() {
 
   return (
     <div className="flex flex-col gap-4">
+      <RoutingCard providers={providers ?? []} />
       {providers?.length === 0 && !adding && (
         <p className="text-sm text-muted-foreground">{t("providers.empty")}</p>
       )}
@@ -206,6 +209,20 @@ function ProviderCard({ provider }: { provider: Provider }) {
       await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
     });
 
+  const toggleRole = (role: "fast" | "plan", modelId: string, active: boolean) =>
+    run(async () => {
+      const body =
+        role === "fast"
+          ? active
+            ? { clearFastModel: true }
+            : { fastModelId: modelId }
+          : active
+            ? { clearPlanModel: true }
+            : { planModelId: modelId };
+      await unwrap(api().PUT("/api/v1/me/settings", { body }));
+      await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+    });
+
   const setDefault = (modelId: string) =>
     run(async () => {
       await unwrap(api().PUT("/api/v1/me/settings", { body: { defaultModelId: modelId } }));
@@ -296,6 +313,8 @@ function ProviderCard({ provider }: { provider: Provider }) {
           {visibleModels.map((model) => {
             const isDefault = settings?.defaultModelId === model.id;
             const isEmbedding = settings?.embeddingModelId === model.id;
+            const isFast = settings?.fastModelId === model.id;
+            const isPlan = settings?.planModelId === model.id;
             return (
               <li key={model.id}>
                 <div className="flex items-center gap-2 px-4 py-1.5 text-sm">
@@ -341,6 +360,24 @@ function ProviderCard({ provider }: { provider: Provider }) {
                   <Button
                     variant="ghost"
                     size="icon-xs"
+                    disabled={busy || (!isFast && !model.enabled)}
+                    title={isFast ? t("providers.isFast") : t("providers.makeFast")}
+                    onClick={() => void toggleRole("fast", model.id, isFast)}
+                  >
+                    <RabbitIcon className={cn(isFast && "text-emerald-500")} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    disabled={busy || (!isPlan && (!model.enabled || !model.supportsTools))}
+                    title={isPlan ? t("providers.isPlan") : t("providers.makePlan")}
+                    onClick={() => void toggleRole("plan", model.id, isPlan)}
+                  >
+                    <ListChecksIcon className={cn(isPlan && "text-violet-500")} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
                     disabled={busy || (!isEmbedding && !model.enabled)}
                     title={isEmbedding ? t("providers.isEmbedding") : t("providers.makeEmbedding")}
                     onClick={() => void toggleEmbedding(model.id, isEmbedding)}
@@ -373,6 +410,52 @@ function ProviderCard({ provider }: { provider: Provider }) {
           })}
         </ul>
       )}
+    </div>
+  );
+}
+
+function RoutingCard({ providers }: { providers: Provider[] }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { data: settings } = useSettings();
+  const models = providers.flatMap((provider) => provider.models);
+  const name = (modelId: string | null | undefined) =>
+    models.find((model) => model.id === modelId)?.displayName ?? null;
+  const fast = name(settings?.fastModelId);
+  const plan = name(settings?.planModelId);
+
+  const setDefault = async (smart: boolean) => {
+    try {
+      await unwrap(
+        api().PUT("/api/v1/me/settings", { body: { routingDefault: smart ? "smart" : "off" } }),
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+    } catch (error) {
+      toast.error(errorMessage(t, toAppError(error)));
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+      <label className="flex items-center gap-2 font-medium">
+        <Switch
+          size="sm"
+          checked={settings?.routingDefault === "smart"}
+          onCheckedChange={(smart) => void setDefault(smart)}
+        />
+        {t("providers.routingDefault")}
+      </label>
+      <p className="text-xs text-muted-foreground">{t("providers.routingDescription")}</p>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        <span className="flex items-center gap-1">
+          <RabbitIcon className="size-3.5 text-emerald-500" />
+          {t("providers.fastModel")}: {fast ?? t("providers.roleNotSet")}
+        </span>
+        <span className="flex items-center gap-1">
+          <ListChecksIcon className="size-3.5 text-violet-500" />
+          {t("providers.planModel")}: {plan ?? t("providers.roleNotSet")}
+        </span>
+      </div>
     </div>
   );
 }

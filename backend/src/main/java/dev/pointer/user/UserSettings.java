@@ -16,12 +16,18 @@ import org.hibernate.type.SqlTypes;
 @Getter
 public class UserSettings {
 
+    public static final String ROUTING_OFF = "off";
+    public static final String ROUTING_SMART = "smart";
+
     @Id
     private UUID userId;
 
     private String globalInstructions;
     private UUID defaultModelId;
     private UUID embeddingModelId;
+    private String routingDefault;
+    private UUID fastModelId;
+    private UUID planModelId;
 
     @JdbcTypeCode(SqlTypes.JSON)
     private Map<String, Object> preferences;
@@ -34,6 +40,7 @@ public class UserSettings {
         this.userId = userId;
         this.globalInstructions = "";
         this.preferences = new HashMap<>();
+        this.routingDefault = ROUTING_OFF;
         this.updatedAt = now;
     }
 
@@ -48,6 +55,21 @@ public class UserSettings {
 
     void changeDefaultModel(UUID defaultModelId, Instant now) {
         this.defaultModelId = defaultModelId;
+        this.updatedAt = now;
+    }
+
+    void changeRoutingDefault(String routingDefault, Instant now) {
+        this.routingDefault = routingDefault;
+        this.updatedAt = now;
+    }
+
+    void changeFastModel(UUID fastModelId, Instant now) {
+        this.fastModelId = fastModelId;
+        this.updatedAt = now;
+    }
+
+    void changePlanModel(UUID planModelId, Instant now) {
+        this.planModelId = planModelId;
         this.updatedAt = now;
     }
 

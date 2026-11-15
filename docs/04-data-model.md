@@ -110,6 +110,8 @@ Connection presence is kept in memory, not in the database.
 | `global_instructions` | text | PROJ-4 |
 | `default_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL` |
 | `embedding_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL`; model used for semantic indexes (CTX-7) |
+| `routing_default` | text | `off` (default) or `smart`; routing of new sessions (ROUTE-1) |
+| `fast_model_id`, `plan_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL`; role models for smart routing (ROUTE-2) |
 | `preferences` | jsonb | Theme, notification and UI preferences |
 | `updated_at` | timestamptz | |
 
@@ -267,6 +269,7 @@ Prefix rules for `run_command` (PERM-4).
 | `total_output_tokens` | bigint | |
 | `estimated_cost` | numeric(14,6) | Sum of call costs from model prices at the time of each call; null until a priced model is used (CTX-6) |
 | `budget_usd` | numeric(10,4) | Nullable; turns stop with `budget_exceeded` once `estimated_cost` reaches it (ROUTE-6) |
+| `routing` | text | `off` (default) or `smart` (ROUTE-1) |
 | `archived_at` | timestamptz | Nullable |
 | `created_at`, `updated_at` | timestamptz | |
 

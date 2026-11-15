@@ -7,6 +7,7 @@ import dev.pointer.provider.llm.ChatMessage;
 import dev.pointer.provider.llm.ChatRequest;
 import dev.pointer.provider.llm.OpenAiCompatibleClient;
 import dev.pointer.provider.llm.StreamListener;
+import dev.pointer.routing.ModelRouter;
 import dev.pointer.session.SessionService;
 import dev.pointer.session.UsageLedger;
 import java.time.Clock;
@@ -60,6 +61,7 @@ public class MemoryCurator {
     private final OpenAiCompatibleClient client;
     private final JsonMapper json;
     private final UsageLedger ledger;
+    private final ModelRouter router;
     private final Clock clock;
     private final boolean enabled;
     private final Duration idle;
@@ -77,6 +79,7 @@ public class MemoryCurator {
             OpenAiCompatibleClient client,
             JsonMapper json,
             UsageLedger ledger,
+            ModelRouter router,
             Clock clock,
             @Value("${pointer.memory.curation-enabled:true}") boolean enabled,
             @Value("${pointer.memory.curation-idle:15m}") Duration idle,
@@ -91,6 +94,7 @@ public class MemoryCurator {
         this.client = client;
         this.json = json;
         this.ledger = ledger;
+        this.router = router;
         this.clock = clock;
         this.enabled = enabled;
         this.idle = idle;
@@ -154,7 +158,12 @@ public class MemoryCurator {
     }
 
     private String complete(DigestStore.Candidate session, String transcript) {
-        var model = providers.resolve(session.userId(), session.modelId(), session.deviceId());
+        var routed = router.auxiliary(
+                session.userId(),
+                session.smartRouting(),
+                providers.resolve(session.userId(), session.modelId(), session.deviceId()),
+                session.deviceId());
+        var model = routed.model();
         var reply = new StringBuilder();
         client.stream(
                 model.endpoint(),
@@ -171,7 +180,7 @@ public class MemoryCurator {
 
                     @Override
                     public void onUsage(Usage usage) {
-                        ledger.record(session.sessionId(), null, model, UsageLedger.MAIN, UsageLedger.MEMORY, usage);
+                        ledger.record(session.sessionId(), null, model, routed.role(), UsageLedger.MEMORY, usage);
                     }
                 },
                 new Cancellation());

@@ -159,10 +159,12 @@ export type Session = Required<
     | "worktree"
     | "estimatedCost"
     | "budgetUsd"
+    | "routing"
   >
 > & {
   estimatedCost: number | null;
   budgetUsd: number | null;
+  routing: "off" | "smart";
   worktree: SessionWorktree | null;
   modelId: string | null;
   executorDeviceId: string | null;

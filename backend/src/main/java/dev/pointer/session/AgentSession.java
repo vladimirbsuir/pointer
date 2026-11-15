@@ -19,6 +19,8 @@ public class AgentSession extends BaseEntity {
 
     public static final String DEFAULT_TITLE = "New session";
     public static final String WORKTREE_ACTIVE = "active";
+    public static final String ROUTING_OFF = "off";
+    public static final String ROUTING_SMART = "smart";
 
     private UUID userId;
     private UUID projectId;
@@ -41,6 +43,7 @@ public class AgentSession extends BaseEntity {
     private long totalOutputTokens;
     private BigDecimal estimatedCost;
     private BigDecimal budgetUsd;
+    private String routing;
     private String worktreeBranch;
     private String worktreeBaseBranch;
     private String worktreeState;
@@ -61,6 +64,7 @@ public class AgentSession extends BaseEntity {
         this.mode = mode;
         this.modelId = modelId;
         this.status = SessionStatus.IDLE;
+        this.routing = ROUTING_OFF;
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -82,6 +86,15 @@ public class AgentSession extends BaseEntity {
 
     void changeModel(UUID modelId, Instant now) {
         this.modelId = modelId;
+        this.updatedAt = now;
+    }
+
+    public boolean isSmartRouting() {
+        return ROUTING_SMART.equals(routing);
+    }
+
+    void changeRouting(String routing, Instant now) {
+        this.routing = routing;
         this.updatedAt = now;
     }
 

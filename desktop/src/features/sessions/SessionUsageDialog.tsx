@@ -113,6 +113,7 @@ function UsageBody({
             <tr className="text-left">
               <th className="py-1 font-normal">{t("usage.model")}</th>
               <th className="py-1 font-normal">{t("usage.purpose")}</th>
+              <th className="py-1 font-normal">{t("usage.role")}</th>
               <th className="py-1 text-right font-normal">{t("usage.calls")}</th>
               <th className="py-1 text-right font-normal">{t("usage.tokens")}</th>
               <th className="py-1 text-right font-normal">{t("usage.cost")}</th>
@@ -123,6 +124,7 @@ function UsageBody({
               <tr key={`${entry.modelId}-${entry.role}-${entry.purpose}`} className="border-t">
                 <td className="max-w-40 truncate py-1">{entry.modelLabel}</td>
                 <td className="py-1">{t(`usage.purposes.${entry.purpose}`)}</td>
+                <td className="py-1 text-muted-foreground">{entry.role}</td>
                 <td className="py-1 text-right">{entry.calls}</td>
                 <td className="py-1 text-right">
                   {(entry.promptTokens + entry.completionTokens).toLocaleString()}
