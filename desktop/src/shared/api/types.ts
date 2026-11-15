@@ -174,7 +174,13 @@ export type Session = Required<
 };
 
 export type ItemType =
-  "user_message" | "assistant_message" | "reasoning" | "tool_call" | "plan" | "compaction_summary";
+  | "user_message"
+  | "assistant_message"
+  | "reasoning"
+  | "tool_call"
+  | "plan"
+  | "compaction_summary"
+  | "model_switched";
 
 export type Item = {
   id: string;

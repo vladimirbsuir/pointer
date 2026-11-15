@@ -172,6 +172,13 @@ public class SessionWriter {
     }
 
     @Transactional
+    public Map<String, Object> appendNotice(
+            UUID userId, UUID sessionId, UUID turnId, String type, Map<String, Object> payload) {
+        var session = lockOwned(userId, sessionId);
+        return saveItem(session, turnId, type, Item.COMPLETED, payload).toView();
+    }
+
+    @Transactional
     public Map<String, Object> completeItem(
             UUID userId, UUID sessionId, UUID itemId, String status, Map<String, Object> updates) {
         var item = items.findById(itemId)

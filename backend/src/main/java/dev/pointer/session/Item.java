@@ -24,6 +24,7 @@ public class Item extends BaseEntity {
     public static final String TOOL_CALL = "tool_call";
     public static final String PLAN = "plan";
     public static final String COMPACTION_SUMMARY = "compaction_summary";
+    public static final String MODEL_SWITCHED = "model_switched";
 
     public static final String IN_PROGRESS = "in_progress";
     public static final String COMPLETED = "completed";

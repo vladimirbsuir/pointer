@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, unwrap } from "@/shared/api/client";
-import { useSettings } from "@/shared/api/queries";
+import { useProviders, useSettings } from "@/shared/api/queries";
 import type { Model } from "@/shared/api/types";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Switch } from "@/shared/ui/switch";
+import { FallbackListEditor } from "./FallbackListEditor";
 
 type ModelOptionsEditorProps = {
   providerId: string;
@@ -35,7 +36,9 @@ export function ModelOptionsEditor({
   const [supportsVision, setSupportsVision] = useState(model.supportsVision);
   const [queryPrefix, setQueryPrefix] = useState(model.embeddingQueryPrefix ?? "");
   const [documentPrefix, setDocumentPrefix] = useState(model.embeddingDocumentPrefix ?? "");
+  const [fallbacks, setFallbacks] = useState(model.fallbackModelIds);
   const { data: settings } = useSettings();
+  const { data: providers } = useProviders();
   const showPrefixes =
     settings?.embeddingModelId === model.id ||
     Boolean(model.embeddingQueryPrefix) ||
@@ -49,7 +52,26 @@ export function ModelOptionsEditor({
     ? { embeddingQueryPrefix: queryPrefix, embeddingDocumentPrefix: documentPrefix }
     : {};
 
-  const save = () =>
+  const fallbacksChanged =
+    fallbacks.length !== model.fallbackModelIds.length ||
+    fallbacks.some((id, index) => id !== model.fallbackModelIds[index]);
+
+  const saveFallbacks = () =>
+    unwrap(
+      api().PUT("/api/v1/models/{modelId}/fallbacks", {
+        params: { path: { modelId: model.id } },
+        body: { modelIds: fallbacks },
+      }),
+    );
+
+  const save = async () => {
+    await saveOptions();
+    if (fallbacksChanged) {
+      await saveFallbacks();
+    }
+  };
+
+  const saveOptions = () =>
     unwrap(
       api().PATCH("/api/v1/providers/{providerId}/models/{modelId}", {
         ...path,
@@ -117,6 +139,12 @@ export function ModelOptionsEditor({
           <p className="w-full text-xs text-muted-foreground">{t("providers.prefixHint")}</p>
         </div>
       )}
+      <FallbackListEditor
+        model={model}
+        providers={providers ?? []}
+        value={fallbacks}
+        onChange={setFallbacks}
+      />
       <div className="ml-auto flex gap-1">
         <Button size="sm" variant="ghost" onClick={onCancel}>
           {t("common.cancel")}

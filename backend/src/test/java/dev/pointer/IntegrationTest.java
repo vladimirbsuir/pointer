@@ -13,7 +13,7 @@ import org.springframework.test.web.servlet.client.RestTestClient;
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "pointer.memory.curation-enabled=false")
+        properties = {"pointer.memory.curation-enabled=false", "pointer.routing.retry-delay=50ms"})
 @AutoConfigureRestTestClient
 public abstract class IntegrationTest {
 

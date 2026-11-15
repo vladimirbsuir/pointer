@@ -167,6 +167,18 @@ Unique: (`user_id`, `name`).
 
 Unique: (`provider_id`, `model_key`).
 
+### Model fallbacks
+
+`model_fallbacks`: the ordered models to try when a model is unavailable ([F3](features/f3-model-routing.md), ROUTE-5).
+
+| Column | Type | Notes |
+|---|---|---|
+| `model_id` | uuid | FK `models`, cascade |
+| `position` | integer | Order in the list, from 0 |
+| `fallback_model_id` | uuid | FK `models`, cascade; differs from `model_id` |
+
+Primary key: (`model_id`, `position`). Unique: (`model_id`, `fallback_model_id`).
+
 ## 5. Projects and permissions
 
 ### `projects`
@@ -304,7 +316,7 @@ The conversation as the model sees it.
 | `session_id` | uuid | FK `sessions` |
 | `turn_id` | uuid | FK `turns`, nullable for items queued between turns |
 | `position` | bigint | Order within the session |
-| `type` | text | `user_message`, `assistant_message`, `reasoning`, `tool_call`, `plan`, `compaction_summary` |
+| `type` | text | `user_message`, `assistant_message`, `reasoning`, `tool_call`, `plan`, `compaction_summary`, `model_switched` |
 | `status` | text | `in_progress`, `completed`, `failed`, `cancelled` |
 | `payload` | jsonb | Type-specific fields from [protocol 5.2](03-protocol.md#52-items) |
 | `created_at`, `completed_at` | timestamptz | |
@@ -524,7 +536,7 @@ Agent memory ([F4](features/f4-agent-memory.md)), accessed with plain SQL becaus
 | `turn_id` | uuid | FK `turns`, `ON DELETE SET NULL`; null for calls outside a turn (memory curation) |
 | `model_id` | uuid | FK `models`, `ON DELETE SET NULL` |
 | `model_label` | text | Display name at the time of the call |
-| `role` | text | `main` now; `plan`, `fast`, `explore`, `fallback` for smart routing |
+| `role` | text | `main`; `plan`, `fast` and `fallback` with smart routing; `explore` reserved |
 | `purpose` | text | `step`, `title`, `compaction`, `memory`, `explore` |
 | `prompt_tokens`, `completion_tokens` | bigint | As reported by the provider |
 | `cost_usd` | numeric(12,6) | Nullable; from model prices at the time of the call |

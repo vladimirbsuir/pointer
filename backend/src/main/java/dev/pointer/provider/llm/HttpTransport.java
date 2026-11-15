@@ -11,7 +11,11 @@ public interface HttpTransport {
 
     record Request(String method, String url, Map<String, String> headers, byte[] body) {}
 
-    record StreamResponse(int status, InputStream body, Closeable onClose) implements Closeable {
+    record StreamResponse(int status, InputStream body, Closeable onClose, String retryAfter) implements Closeable {
+
+        public StreamResponse(int status, InputStream body, Closeable onClose) {
+            this(status, body, onClose, null);
+        }
 
         public boolean isSuccess() {
             return status >= 200 && status < 300;

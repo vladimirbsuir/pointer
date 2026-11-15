@@ -17,6 +17,7 @@ public class ModelRouter {
     public static final String MAIN = "main";
     public static final String PLAN = "plan";
     public static final String FAST = "fast";
+    public static final String FALLBACK = "fallback";
     private static final String PLAN_MODE = "plan";
     private static final Logger log = LoggerFactory.getLogger(ModelRouter.class);
 

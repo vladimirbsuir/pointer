@@ -8,6 +8,7 @@ import {
   ClockIcon,
   FileTextIcon,
   FoldVerticalIcon,
+  ShuffleIcon,
 } from "lucide-react";
 import type { Item } from "@/shared/api/types";
 import { AttachmentImage } from "./AttachmentImage";
@@ -38,6 +39,7 @@ export function MessageList({ sessionId, items, running, turnError, onRewound }:
       "tool_call",
       "plan",
       "compaction_summary",
+      "model_switched",
     ].includes(item.type),
   );
   const lastText = visible.at(-1)?.text?.length ?? 0;
@@ -148,6 +150,20 @@ function MessageItem({ item, sessionId, running, onRewound }: MessageItemProps) 
           <Markdown text={text} />
         </div>
       </details>
+    );
+  }
+
+  if (item.type === "model_switched") {
+    return (
+      <div
+        className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground"
+        title={String(item.reason ?? "")}
+      >
+        <ShuffleIcon className="size-3.5 shrink-0" />
+        <span className="min-w-0 truncate">
+          {t("chat.modelSwitched", { from: String(item.from ?? ""), to: String(item.to ?? "") })}
+        </span>
+      </div>
     );
   }
 

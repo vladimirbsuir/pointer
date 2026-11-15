@@ -5,6 +5,7 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -13,6 +14,7 @@ import java.util.UUID;
 
 public final class ProviderDtos {
 
+    static final int MAX_FALLBACKS = 5;
     static final String URL_PATTERN = "https?://\\S+";
 
     private ProviderDtos() {}
@@ -40,7 +42,8 @@ public final class ProviderDtos {
             String embeddingQueryPrefix,
             String embeddingDocumentPrefix,
             String source,
-            boolean enabled) {}
+            boolean enabled,
+            List<UUID> fallbackModelIds) {}
 
     public record CreateProviderRequest(
             @NotBlank @Size(max = 100) String name,
@@ -74,6 +77,11 @@ public final class ProviderDtos {
             Boolean clearPrices,
             @Size(max = 200) String embeddingQueryPrefix,
             @Size(max = 200) String embeddingDocumentPrefix) {}
+
+    public record FallbacksResponse(List<UUID> modelIds) {}
+
+    public record ReplaceFallbacksRequest(
+            @NotNull @Size(max = MAX_FALLBACKS) List<@NotNull UUID> modelIds) {}
 
     public record ConnectionTestResponse(boolean ok, int modelCount, String errorCode, String errorMessage) {}
 }

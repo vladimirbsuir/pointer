@@ -8,8 +8,11 @@ import dev.pointer.provider.llm.LlmException;
 import dev.pointer.provider.llm.OpenAiCompatibleClient;
 import dev.pointer.provider.llm.RelayTransports;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -27,6 +30,7 @@ public class ProviderService {
 
     private final ProviderRepository providers;
     private final ProviderModelRepository models;
+    private final ModelFallbackStore fallbacks;
     private final SecretCipher cipher;
     private final OpenAiCompatibleClient client;
     private final DirectHttpTransport directTransport;
@@ -36,14 +40,14 @@ public class ProviderService {
     @Transactional(readOnly = true)
     public List<ProviderDtos.ProviderResponse> list(UUID userId) {
         var userProviders = providers.findByUserIdOrderByCreatedAt(userId);
-        var modelsByProvider =
-                models
-                        .findByProviderIdInOrderByDisplayName(
-                                userProviders.stream().map(Provider::getId).toList())
-                        .stream()
-                        .collect(Collectors.groupingBy(ProviderModel::getProviderId));
+        var userModels = models.findByProviderIdInOrderByDisplayName(
+                userProviders.stream().map(Provider::getId).toList());
+        var modelsByProvider = userModels.stream().collect(Collectors.groupingBy(ProviderModel::getProviderId));
+        var fallbackIds =
+                fallbacks.listAll(userModels.stream().map(ProviderModel::getId).toList());
         return userProviders.stream()
-                .map(provider -> toResponse(provider, modelsByProvider.getOrDefault(provider.getId(), List.of())))
+                .map(provider ->
+                        toResponse(provider, modelsByProvider.getOrDefault(provider.getId(), List.of()), fallbackIds))
                 .toList();
     }
 
@@ -58,7 +62,7 @@ public class ProviderService {
                 now);
         applyApiKey(provider, request.apiKey());
         providers.save(provider);
-        return toResponse(provider, List.of());
+        return toResponse(provider, List.of(), Map.of());
     }
 
     @Transactional
@@ -81,7 +85,7 @@ public class ProviderService {
             applyApiKey(provider, request.apiKey());
         }
         providers.save(provider);
-        return toResponse(provider, models.findByProviderId(providerId));
+        return withModels(provider);
     }
 
     @Transactional
@@ -100,7 +104,7 @@ public class ProviderService {
         discovered.stream()
                 .filter(key -> !existing.contains(key))
                 .forEach(key -> models.save(new ProviderModel(providerId, key, key, ProviderModel.DISCOVERED, now)));
-        return toResponse(provider, models.findByProviderId(providerId));
+        return withModels(provider);
     }
 
     @Transactional(readOnly = true)
@@ -134,7 +138,7 @@ public class ProviderService {
                             null, request.contextWindow(), null, null, null, null, null, null, null, null, null),
                     clock.instant());
         }
-        return toResponse(models.save(model));
+        return toResponse(models.save(model), fallbacks.list(model.getId()));
     }
 
     @Transactional
@@ -143,7 +147,7 @@ public class ProviderService {
         owned(userId, providerId);
         var model = ownedModel(providerId, modelId);
         model.update(request, clock.instant());
-        return toResponse(models.save(model));
+        return toResponse(models.save(model), fallbacks.list(model.getId()));
     }
 
     @Transactional
@@ -171,6 +175,46 @@ public class ProviderService {
                 model.getOutputPricePerMtok(),
                 model.embeddingPrefixes(),
                 endpoint(provider, preferredDeviceId));
+    }
+
+    @Transactional(readOnly = true)
+    public ProviderDtos.FallbacksResponse fallbacks(UUID userId, UUID modelId) {
+        userModel(userId, modelId);
+        return new ProviderDtos.FallbacksResponse(fallbacks.list(modelId));
+    }
+
+    @Transactional
+    public ProviderDtos.FallbacksResponse replaceFallbacks(
+            UUID userId, UUID modelId, ProviderDtos.ReplaceFallbacksRequest request) {
+        userModel(userId, modelId);
+        var ids = request.modelIds();
+        if (ids.contains(modelId)) {
+            throw ApiException.badRequest("invalid_fallbacks", "A model cannot be its own fallback");
+        }
+        if (new HashSet<>(ids).size() != ids.size()) {
+            throw ApiException.badRequest("invalid_fallbacks", "A fallback model is listed twice");
+        }
+        ids.forEach(id -> userModel(userId, id));
+        fallbacks.replace(modelId, ids);
+        return new ProviderDtos.FallbacksResponse(fallbacks.list(modelId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ResolvedModel> resolveFallbacks(UUID userId, UUID modelId, UUID preferredDeviceId) {
+        var resolved = new ArrayList<ResolvedModel>();
+        fallbacks
+                .list(modelId)
+                .forEach(fallbackId ->
+                        usable(userId, fallbackId, preferredDeviceId).ifPresent(resolved::add));
+        return resolved;
+    }
+
+    private Optional<ResolvedModel> usable(UUID userId, UUID modelId, UUID preferredDeviceId) {
+        try {
+            return Optional.of(resolve(userId, modelId, preferredDeviceId));
+        } catch (ApiException | LlmException exception) {
+            return Optional.empty();
+        }
     }
 
     @Transactional(readOnly = true)
@@ -235,6 +279,14 @@ public class ProviderService {
                 .orElseThrow(() -> ApiException.notFound("provider_not_found", "Provider does not exist"));
     }
 
+    private ProviderModel userModel(UUID userId, UUID modelId) {
+        return models.findById(modelId)
+                .filter(model -> providers
+                        .findByIdAndUserId(model.getProviderId(), userId)
+                        .isPresent())
+                .orElseThrow(() -> ApiException.notFound("model_not_found", "Model does not exist"));
+    }
+
     private ProviderModel ownedModel(UUID providerId, UUID modelId) {
         return models.findByIdAndProviderId(modelId, providerId)
                 .orElseThrow(() -> ApiException.notFound("model_not_found", "Model does not exist"));
@@ -245,7 +297,17 @@ public class ProviderService {
         return trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
     }
 
-    private static ProviderDtos.ProviderResponse toResponse(Provider provider, List<ProviderModel> providerModels) {
+    private ProviderDtos.ProviderResponse withModels(Provider provider) {
+        var providerModels = models.findByProviderId(provider.getId());
+        return toResponse(
+                provider,
+                providerModels,
+                fallbacks.listAll(
+                        providerModels.stream().map(ProviderModel::getId).toList()));
+    }
+
+    private static ProviderDtos.ProviderResponse toResponse(
+            Provider provider, List<ProviderModel> providerModels, Map<UUID, List<UUID>> fallbackIds) {
         return new ProviderDtos.ProviderResponse(
                 provider.getId(),
                 provider.getName(),
@@ -255,11 +317,11 @@ public class ProviderService {
                 provider.getApiKeyHint(),
                 providerModels.stream()
                         .sorted(Comparator.comparing(ProviderModel::getDisplayName))
-                        .map(ProviderService::toResponse)
+                        .map(model -> toResponse(model, fallbackIds.getOrDefault(model.getId(), List.of())))
                         .toList());
     }
 
-    private static ProviderDtos.ModelResponse toResponse(ProviderModel model) {
+    private static ProviderDtos.ModelResponse toResponse(ProviderModel model, List<UUID> fallbackIds) {
         return new ProviderDtos.ModelResponse(
                 model.getId(),
                 model.getProviderId(),
@@ -274,6 +336,7 @@ public class ProviderService {
                 model.getEmbeddingQueryPrefix(),
                 model.getEmbeddingDocumentPrefix(),
                 model.getSource(),
-                model.isEnabled());
+                model.isEnabled(),
+                fallbackIds);
     }
 }

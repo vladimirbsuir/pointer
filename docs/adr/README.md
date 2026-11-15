@@ -27,3 +27,4 @@ File name: `NNNN-short-title.md`. Status: `Proposed`, `Accepted`, `Superseded by
 | [0018](0018-hybrid-code-search.md) | Hybrid code search | Accepted |
 | [0019](0019-agent-memory.md) | Agent memory | Accepted |
 | [0020](0020-model-roles-and-usage-ledger.md) | Model roles and usage ledger | Accepted |
+| [0021](0021-model-failover.md) | Model failover with retry and fallback lists | Accepted |

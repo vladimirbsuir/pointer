@@ -13,9 +13,9 @@ import dev.pointer.provider.llm.Cancellation;
 import dev.pointer.provider.llm.ChatMessage;
 import dev.pointer.provider.llm.ChatRequest;
 import dev.pointer.provider.llm.LlmException;
-import dev.pointer.provider.llm.OpenAiCompatibleClient;
 import dev.pointer.provider.llm.StreamListener;
 import dev.pointer.routing.ModelRouter;
+import dev.pointer.routing.RoutedClient;
 import dev.pointer.session.Item;
 import dev.pointer.session.LiveItemSnapshots;
 import dev.pointer.session.SessionDtos;
@@ -41,6 +41,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,6 +56,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private static final Logger log = LoggerFactory.getLogger(AgentRunner.class);
     private static final int MAX_TITLE_LENGTH = 80;
     private static final int MAX_STEPS = 50;
+    private static final int MAX_SWITCH_REASON_LENGTH = 300;
     private static final String AGENT = "agent";
     private static final int DEFAULT_CONTEXT_WINDOW = 128_000;
     private static final double AUTO_COMPACT_RATIO = 0.8;
@@ -68,7 +70,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private final SessionService sessionService;
     private final ProviderService providerService;
     private final SettingsService settingsService;
-    private final OpenAiCompatibleClient client;
+    private final RoutedClient routedClient;
     private final ContextAssembler contextAssembler;
     private final SessionEventBus bus;
     private final ToolCallHandler toolCalls;
@@ -147,12 +149,13 @@ public class AgentRunner implements LiveItemSnapshots {
         try {
             var context = writer.turnContext(userId, sessionId, turnId);
             var main = providerService.resolve(userId, context.modelId(), context.executorDeviceId());
-            var routes = modelRouter.plan(
+            var smart = sessionService.owned(userId, sessionId).isSmartRouting();
+            var routes = modelRouter.plan(userId, smart, main, context.mode(), context.executorDeviceId());
+            var failover = routedClient.failover(
                     userId,
-                    sessionService.owned(userId, sessionId).isSmartRouting(),
-                    main,
-                    context.mode(),
-                    context.executorDeviceId());
+                    context.executorDeviceId(),
+                    smart,
+                    (from, to, failure) -> noteModelSwitch(userId, sessionId, turnId, from, to, failure));
             var model = routes.step().model();
             var scope = new ToolCallHandler.TurnScope(
                     userId,
@@ -165,7 +168,7 @@ public class AgentRunner implements LiveItemSnapshots {
                     turn.cancellation);
             var project = projectContext(scope).withMemory(memorySection(scope));
             var globalInstructions = settingsService.get(userId).globalInstructions();
-            var summarizer = new Summarizer(scope, routes, turn, project, globalInstructions);
+            var summarizer = new Summarizer(scope, routes, failover, turn, project, globalInstructions);
             if (Turn.COMPACTION.equals(context.kind())) {
                 summarizer.summarize();
                 var reason = turn.cancellation.isCancelled() ? Turn.CANCELLED : Turn.COMPLETED;
@@ -209,13 +212,13 @@ public class AgentRunner implements LiveItemSnapshots {
                         ? toolDefinitions(userId, context.projectId(), context.executorDeviceId(), context.mode())
                         : List.<ChatRequest.ToolDefinition>of();
                 var listener = new TurnListener(userId, sessionId, turnId, step, turn, Item.ASSISTANT_MESSAGE);
-                client.stream(
-                        model.endpoint(),
+                var used = failover.stream(
+                        routes.step(),
                         new ChatRequest(model.modelKey(), messages, tools, null),
                         listener,
                         turn.cancellation);
                 listener.completeAll(turn.cancellation.isCancelled() ? Item.CANCELLED : Item.COMPLETED, Map.of());
-                contextTokens = recordUsage(scope, routes.step(), listener.usage, messages);
+                contextTokens = recordUsage(scope, used, model.contextWindow(), listener.usage, messages);
                 if (turn.cancellation.isCancelled()) {
                     reason = Turn.CANCELLED;
                 } else if (listener.toolCalls.isEmpty()) {
@@ -246,7 +249,9 @@ public class AgentRunner implements LiveItemSnapshots {
             }
             if (context.needsTitle() && !Turn.CANCELLED.equals(reason)) {
                 var titleMessages = firstMessages;
-                executor.submit(() -> generateTitle(userId, sessionId, turnId, routes.fast(), titleMessages));
+                var titleFailover = routedClient.failover(userId, context.executorDeviceId(), smart);
+                executor.submit(
+                        () -> generateTitle(userId, sessionId, turnId, routes.fast(), titleFailover, titleMessages));
             }
             return writer.finishTurn(userId, sessionId, turnId, reason, error);
         } catch (LlmException exception) {
@@ -282,12 +287,13 @@ public class AgentRunner implements LiveItemSnapshots {
 
     private int recordUsage(
             ToolCallHandler.TurnScope scope,
-            ModelRouter.RoutedModel routed,
+            ModelRouter.RoutedModel used,
+            Integer contextWindow,
             StreamListener.Usage usage,
             List<ChatMessage> sent) {
-        var model = routed.model();
+        var model = used.model();
         if (usage != null) {
-            ledger.record(scope.sessionId(), scope.turnId(), model, routed.role(), UsageLedger.STEP, usage);
+            ledger.record(scope.sessionId(), scope.turnId(), model, used.role(), UsageLedger.STEP, usage);
             writer.recordUsage(
                     scope.userId(),
                     scope.sessionId(),
@@ -295,12 +301,31 @@ public class AgentRunner implements LiveItemSnapshots {
                     usage.promptTokens(),
                     usage.completionTokens(),
                     model.cost(usage.promptTokens(), usage.completionTokens()),
-                    model.contextWindow());
+                    contextWindow);
             return (int) (usage.promptTokens() + usage.completionTokens());
         }
         var estimate = ContextAssembler.estimateTokens(sent);
-        writer.resetContextTokens(scope.userId(), scope.sessionId(), estimate, model.contextWindow());
+        writer.resetContextTokens(scope.userId(), scope.sessionId(), estimate, contextWindow);
         return estimate;
+    }
+
+    private void noteModelSwitch(
+            UUID userId, UUID sessionId, UUID turnId, ResolvedModel from, ResolvedModel to, LlmException failure) {
+        var reason = Objects.requireNonNullElse(failure.getMessage(), failure.code());
+        writer.appendNotice(
+                userId,
+                sessionId,
+                turnId,
+                Item.MODEL_SWITCHED,
+                Map.of(
+                        "from",
+                        from.displayName(),
+                        "to",
+                        to.displayName(),
+                        "reason",
+                        reason.length() > MAX_SWITCH_REASON_LENGTH
+                                ? reason.substring(0, MAX_SWITCH_REASON_LENGTH)
+                                : reason));
     }
 
     private String memorySection(ToolCallHandler.TurnScope scope) {
@@ -385,8 +410,12 @@ public class AgentRunner implements LiveItemSnapshots {
     }
 
     private void generateTitle(
-            UUID userId, UUID sessionId, UUID turnId, ModelRouter.RoutedModel routed, List<ChatMessage> messages) {
-        var model = routed.model();
+            UUID userId,
+            UUID sessionId,
+            UUID turnId,
+            ModelRouter.RoutedModel routed,
+            RoutedClient.Failover failover,
+            List<ChatMessage> messages) {
         try {
             var firstUserMessage = messages.stream()
                     .filter(message -> message.role() == ChatMessage.Role.USER)
@@ -394,10 +423,11 @@ public class AgentRunner implements LiveItemSnapshots {
                     .findFirst()
                     .orElse("");
             var title = new StringBuilder();
-            client.stream(
-                    model.endpoint(),
+            var reported = new AtomicReference<StreamListener.Usage>();
+            var used = failover.stream(
+                    routed,
                     new ChatRequest(
-                            model.modelKey(),
+                            routed.model().modelKey(),
                             List.of(ChatMessage.system(TITLE_PROMPT), ChatMessage.user(firstUserMessage)),
                             List.of(),
                             null),
@@ -409,10 +439,11 @@ public class AgentRunner implements LiveItemSnapshots {
 
                         @Override
                         public void onUsage(Usage usage) {
-                            ledger.record(sessionId, turnId, model, routed.role(), UsageLedger.TITLE, usage);
+                            reported.set(usage);
                         }
                     },
                     new Cancellation());
+            ledger.record(sessionId, turnId, used.model(), used.role(), UsageLedger.TITLE, reported.get());
             var cleaned = cleanTitle(title.toString());
             if (!cleaned.isEmpty()) {
                 writer.applyGeneratedTitle(userId, sessionId, cleaned);
@@ -438,6 +469,7 @@ public class AgentRunner implements LiveItemSnapshots {
 
         private final ToolCallHandler.TurnScope scope;
         private final ModelRouter.ModelPlan routes;
+        private final RoutedClient.Failover failover;
         private final ResolvedModel model;
         private final RunningTurn turn;
         private final ContextAssembler.ProjectContext project;
@@ -446,21 +478,24 @@ public class AgentRunner implements LiveItemSnapshots {
         Summarizer(
                 ToolCallHandler.TurnScope scope,
                 ModelRouter.ModelPlan routes,
+                RoutedClient.Failover failover,
                 RunningTurn turn,
                 ContextAssembler.ProjectContext project,
                 String globalInstructions) {
             this.scope = scope;
             this.routes = routes;
+            this.failover = failover;
             this.model = routes.step().model();
             this.turn = turn;
             this.project = project;
             this.globalInstructions = globalInstructions;
         }
 
-        private void stream(ResolvedModel target, List<ChatMessage> request, TurnListener listener) {
-            client.stream(
-                    target.endpoint(),
-                    new ChatRequest(target.modelKey(), request, List.of(), null),
+        private ModelRouter.RoutedModel stream(
+                ModelRouter.RoutedModel target, List<ChatMessage> request, TurnListener listener) {
+            return failover.stream(
+                    target,
+                    new ChatRequest(target.model().modelKey(), request, List.of(), null),
                     listener,
                     turn.cancellation);
         }
@@ -474,23 +509,23 @@ public class AgentRunner implements LiveItemSnapshots {
                     .filter(item -> !Item.COMPACTION_SUMMARY.equals(item.get("type")))
                     .count();
             var request = contextAssembler.buildCompaction(covered);
-            var routed = routes.compaction(ContextAssembler.estimateTokens(request));
+            var planned = routes.compaction(ContextAssembler.estimateTokens(request));
+            var routed = planned;
             var listener = new TurnListener(
                     scope.userId(), scope.sessionId(), scope.turnId(), 0, turn, Item.COMPACTION_SUMMARY);
             try {
-                stream(routed.model(), request, listener);
+                routed = stream(routed, request, listener);
             } catch (LlmException exception) {
-                if (routed == routes.step() || !listener.text().isEmpty() || turn.cancellation.isCancelled()) {
+                if (planned == routes.step() || !listener.text().isEmpty() || turn.cancellation.isCancelled()) {
                     throw exception;
                 }
                 log.warn(
                         "Compaction with {} failed, retrying with the step model: {}",
-                        routed.model().modelKey(),
+                        planned.model().modelKey(),
                         exception.getMessage());
-                routed = routes.step();
                 listener = new TurnListener(
                         scope.userId(), scope.sessionId(), scope.turnId(), 0, turn, Item.COMPACTION_SUMMARY);
-                stream(routed.model(), request, listener);
+                routed = stream(routes.step(), request, listener);
             }
             if (turn.cancellation.isCancelled()) {
                 listener.completeAll(Item.CANCELLED, Map.of());

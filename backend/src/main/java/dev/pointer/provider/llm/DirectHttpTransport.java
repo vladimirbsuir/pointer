@@ -34,7 +34,11 @@ public class DirectHttpTransport implements HttpTransport {
         cancellation.attach(() -> pending.cancel(true));
         try {
             var response = pending.get();
-            return new StreamResponse(response.statusCode(), response.body(), () -> {});
+            return new StreamResponse(
+                    response.statusCode(),
+                    response.body(),
+                    () -> {},
+                    response.headers().firstValue("Retry-After").orElse(null));
         } catch (CancellationException exception) {
             throw new IOException("Request cancelled", exception);
         } catch (ExecutionException exception) {

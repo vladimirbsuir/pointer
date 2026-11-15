@@ -5,9 +5,9 @@ import dev.pointer.provider.ProviderService;
 import dev.pointer.provider.llm.Cancellation;
 import dev.pointer.provider.llm.ChatMessage;
 import dev.pointer.provider.llm.ChatRequest;
-import dev.pointer.provider.llm.OpenAiCompatibleClient;
 import dev.pointer.provider.llm.StreamListener;
 import dev.pointer.routing.ModelRouter;
+import dev.pointer.routing.RoutedClient;
 import dev.pointer.session.SessionService;
 import dev.pointer.session.UsageLedger;
 import java.time.Clock;
@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -58,7 +59,7 @@ public class MemoryCurator {
     private final MemoryEmbeddings embeddings;
     private final SessionService sessions;
     private final ProviderService providers;
-    private final OpenAiCompatibleClient client;
+    private final RoutedClient client;
     private final JsonMapper json;
     private final UsageLedger ledger;
     private final ModelRouter router;
@@ -76,7 +77,7 @@ public class MemoryCurator {
             MemoryEmbeddings embeddings,
             SessionService sessions,
             ProviderService providers,
-            OpenAiCompatibleClient client,
+            RoutedClient client,
             JsonMapper json,
             UsageLedger ledger,
             ModelRouter router,
@@ -163,12 +164,12 @@ public class MemoryCurator {
                 session.smartRouting(),
                 providers.resolve(session.userId(), session.modelId(), session.deviceId()),
                 session.deviceId());
-        var model = routed.model();
         var reply = new StringBuilder();
-        client.stream(
-                model.endpoint(),
+        var reported = new AtomicReference<StreamListener.Usage>();
+        var used = client.failover(session.userId(), session.deviceId(), session.smartRouting()).stream(
+                routed,
                 ChatRequest.of(
-                        model.modelKey(),
+                        routed.model().modelKey(),
                         List.of(
                                 ChatMessage.system(SYSTEM),
                                 ChatMessage.user(known(session) + "\n\nSession transcript:\n" + transcript))),
@@ -180,10 +181,11 @@ public class MemoryCurator {
 
                     @Override
                     public void onUsage(Usage usage) {
-                        ledger.record(session.sessionId(), null, model, routed.role(), UsageLedger.MEMORY, usage);
+                        reported.set(usage);
                     }
                 },
                 new Cancellation());
+        ledger.record(session.sessionId(), null, used.model(), used.role(), UsageLedger.MEMORY, reported.get());
         return reply.toString();
     }
 

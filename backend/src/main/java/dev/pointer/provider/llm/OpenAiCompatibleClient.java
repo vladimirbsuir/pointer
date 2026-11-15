@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -216,7 +217,15 @@ public class OpenAiCompatibleClient {
         throw new LlmException(
                 response.status() == 401 || response.status() == 403 ? "provider_unauthorized" : "provider_error",
                 message.isBlank() ? "HTTP " + response.status() : message,
-                response.status());
+                response.status(),
+                retryAfter(response.retryAfter()));
+    }
+
+    private static Duration retryAfter(String header) {
+        if (header == null || !header.strip().matches("\\d{1,6}")) {
+            return null;
+        }
+        return Duration.ofSeconds(Long.parseLong(header.strip()));
     }
 
     private static float[] vector(JsonNode node) {
