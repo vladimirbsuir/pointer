@@ -1,6 +1,6 @@
 # F5. Cache-aware context management
 
-Status: Approved · Requirement ids: CACHE-1 to CACHE-7 · Depends on: context assembly and compaction ([ADR 0009](../adr/0009-context-compaction-and-plan-approval.md)), usage ledger and model prices ([F3](f3-model-routing.md), CTX-5, CTX-6), memory section ([F4](f4-agent-memory.md)).
+Status: In progress (phase 1 implemented) · Requirement ids: CACHE-1 to CACHE-7 · Depends on: context assembly and compaction ([ADR 0009](../adr/0009-context-compaction-and-plan-approval.md)), usage ledger and model prices ([F3](f3-model-routing.md), CTX-5, CTX-6), memory section ([F4](f4-agent-memory.md)).
 
 ## Goal
 
@@ -34,7 +34,9 @@ Suspected sources of lost cache, to be confirmed by the phase 1 measurements:
 
 ## Design
 
-### Data model (`Vn__cache_aware_context.sql`)
+### Data model
+
+Phase 1 adds the measurement columns in `V28__cache_usage.sql` (`models.cached_input_price_per_mtok`, `model_usage.cached_prompt_tokens`, `prefix_tokens`, `prefix_reuse_tokens`); the later phases add the rest in their own migrations.
 
 ```sql
 ALTER TABLE models
@@ -66,9 +68,10 @@ ALTER TABLE turns
 
 - `StreamListener.Usage` gains `cachedPromptTokens` (nullable). `OpenAiCompatibleClient.parse` reads `usage.prompt_tokens_details.cached_tokens`, then `usage.prompt_cache_hit_tokens`; absent means null.
 - `ResolvedModel.cost(prompt, cached, completion)` bills `(prompt - cached)` at the input price, `cached` at the cached input price (the input price when it is not set) and `completion` at the output price. `UsageLedger.record`, session totals and `BudgetGuard` use it.
-- `routing/PrefixFingerprint`: a hash of the tool definitions, of the system message and of every message in order, kept for the latest call per (session, purpose) in a bounded in-memory map. The common run of leading hashes, converted to tokens with `ContextAssembler.estimateTokens`, is `prefix_reuse_tokens`; the estimate for the whole request is `prefix_tokens`. A restart loses the map, so the first call after it records null.
+- `routing/PrefixFingerprint`: a hash of the tool definitions, of the system message and of every message in order, kept for the latest call per (session, purpose) in a bounded in-memory map (2,000 entries, least recently used evicted). The common run of leading hashes, converted to tokens with `provider/llm/TokenEstimate` (the estimate `ContextAssembler.estimateTokens` uses), is `prefix_reuse_tokens`; the estimate for the whole request is `prefix_tokens`. A restart loses the map, so the first call after it records null. A call on another model than the previous one (failover) records 0, because that model's cache cannot serve it.
+- `UsageLedger.record` takes the request and measures every call, also those without reported usage, so that the next call compares against the right predecessor; only calls with usage get a row.
 - Prefix reuse is the share of the request that a perfect cache could serve. The provider's real hit ratio is lower because caches have a minimum prefix length, a block size and a time to live, so both numbers are shown and compared in the benchmark.
-- `GET /sessions/{id}/usage` rows gain `cachedPromptTokens`, `prefixTokens`, `prefixReuseTokens`.
+- `GET /sessions/{id}/usage` rows gain `cachedPromptTokens` and `cacheReportedPromptTokens` (prompt tokens of the calls that reported caching, the denominator of the hit ratio), `prefixTokens` and `prefixReuseTokens` (summed over calls that had a predecessor, the denominator and numerator of the reuse ratio).
 
 ### Stable prefix (CACHE-3, CACHE-6)
 
@@ -119,7 +122,7 @@ Invariant, checked by a property test: for the items of a session between two co
 
 ## Phases
 
-1. Measurement (CACHE-1, CACHE-2): migration, usage parsing, cached price in cost, `PrefixFingerprint`, usage view, desktop columns, and the baseline benchmark run on the current context assembly. Shippable alone: the numbers answer which test providers report cached tokens and how much of each session is reusable today.
+1. Measurement (CACHE-1, CACHE-2): migration, usage parsing, cached price in cost, `PrefixFingerprint`, usage view, desktop columns, and the baseline benchmark run on the current context assembly. Shippable alone: the numbers answer which test providers report cached tokens and how much of each session is reusable today. **Implemented**; baseline in [benchmarks/cache.md](../benchmarks/cache.md), script [`infra/bench/cache/run.py`](../../infra/bench/cache/run.py).
 2. Stable prefix (CACHE-3, CACHE-6): snapshot column and rendering, tool ordering, cache key, the append-only property test; repeat the baseline run.
 3. Strategies (CACHE-4): masking and hybrid with block alignment, setting, desktop selector.
 4. Cache-reusing compaction and the soft trigger (CACHE-5), the full benchmark (CACHE-7) and an ADR that supersedes the compaction part of [ADR 0009](../adr/0009-context-compaction-and-plan-approval.md).
@@ -145,7 +148,7 @@ Task set: scripted sessions of twelve turns over this repository, built from the
 
 ## Open questions
 
-- Whether any provider available for tests reports cached tokens. If none does, the benchmark relies on prefix reuse and the price model, and the thesis says so.
+- Answered in phase 1: Experiential Labs (`deepseek-v4.1-flash`, `gpt-6-luna`) and TokenHarbor (`deepseek-v4.1-flash:free`) report `prompt_tokens_details.cached_tokens`; VyceAI sends the field as well.
 - Provider caches differ in minimum prefix length, block size and lifetime; the property for the lifetime is a single default, and measuring it per provider is not planned.
 - Mode changes reset the cache because the tool list and mode text sit in the prefix; keeping all tools in every mode would stop this but changes agent behaviour in Ask and Plan modes. The benchmark counts mode switches, which decides whether it matters.
 - Native cache breakpoints for providers that need explicit markers (for example Anthropic's `cache_control`) require the specialized adapter of PROV-8 and are not planned.
