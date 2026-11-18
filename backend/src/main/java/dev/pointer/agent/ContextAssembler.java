@@ -75,6 +75,8 @@ class ContextAssembler {
     private static final String CONTEXT_OPEN =
             "<context>\nCurrent environment and memory. This block replaces any earlier context block.\n";
     private static final String CONTEXT_CLOSE = "\n</context>\n\n";
+    static final int MIN_MASKED_RESULT_CHARS = 200;
+    private static final int MAX_PLACEHOLDER_ARGUMENT_CHARS = 80;
     private static final String IMAGE_UNSUPPORTED =
             "[An image was attached here, but the current model does not accept images.]";
 
@@ -87,13 +89,14 @@ class ContextAssembler {
             ProjectContext project,
             List<Map<String, Object>> conversation,
             SequencedMap<UUID, String> snapshots,
+            MaskPolicy mask,
             boolean supportsVision) {
         var messages = new ArrayList<ChatMessage>();
         messages.add(ChatMessage.system(systemPrompt(mode, globalInstructions, project)));
         var active = activeItems(conversation);
         var pending = new LinkedHashMap<>(snapshots);
         var carried = carriedSnapshot(active, snapshots);
-        var group = new StepGroup();
+        var group = new StepGroup(new ResultMask(mask.boundary(countResults(active))));
         for (var item : active) {
             var type = String.valueOf(item.get("type"));
             switch (type) {
@@ -124,14 +127,14 @@ class ContextAssembler {
         }
         messages.add(ChatMessage.system(prompt.toString()));
         messages.add(ChatMessage.user(request));
-        var group = new StepGroup();
+        var group = new StepGroup(new ResultMask(0));
         nestedItems.forEach(item -> group.add(item, messages));
         group.flushInto(messages);
         return messages;
     }
 
-    List<ChatMessage> buildCompaction(List<Map<String, Object>> covered) {
-        var messages = build("agent", null, null, covered, new LinkedHashMap<>(), false);
+    List<ChatMessage> buildCompaction(List<Map<String, Object>> covered, MaskPolicy mask) {
+        var messages = build("agent", null, null, covered, new LinkedHashMap<>(), mask, false);
         messages.set(0, ChatMessage.system(COMPACTION_SYSTEM));
         messages.add(ChatMessage.user(COMPACTION_REQUEST));
         return messages;
@@ -173,6 +176,21 @@ class ContextAssembler {
                 .map(Map.Entry::getValue)
                 .reduce((earlier, later) -> later)
                 .orElse(null);
+    }
+
+    static int countResults(List<Map<String, Object>> items) {
+        return (int) items.stream()
+                .filter(item -> Item.TOOL_CALL.equals(item.get("type")) && item.get("providerCallId") != null)
+                .count();
+    }
+
+    static String placeholder(Map<String, Object> call, String result) {
+        var arguments = String.valueOf(call.getOrDefault("argumentsJson", "{}"));
+        if (arguments.length() > MAX_PLACEHOLDER_ARGUMENT_CHARS) {
+            arguments = arguments.substring(0, MAX_PLACEHOLDER_ARGUMENT_CHARS) + "...";
+        }
+        return "[Result of " + call.get("toolName") + "(" + arguments + ") omitted: "
+                + result.lines().count() + " lines. Run the tool again if you need it.]";
     }
 
     private static String withSnapshot(String snapshot, String text) {
@@ -273,11 +291,34 @@ class ContextAssembler {
         return result.append(text).toString();
     }
 
+    private static final class ResultMask {
+
+        private final int boundary;
+        private int next;
+
+        ResultMask(int boundary) {
+            this.boundary = boundary;
+        }
+
+        String render(Map<String, Object> call, String result) {
+            var index = Item.TOOL_CALL.equals(call.get("type")) ? next++ : Integer.MAX_VALUE;
+            if (index >= boundary || result.length() < MIN_MASKED_RESULT_CHARS) {
+                return result;
+            }
+            return placeholder(call, result);
+        }
+    }
+
     private static final class StepGroup {
 
+        private final ResultMask mask;
         private String key;
         private final StringBuilder text = new StringBuilder();
         private final List<Map<String, Object>> calls = new ArrayList<>();
+
+        StepGroup(ResultMask mask) {
+            this.mask = mask;
+        }
 
         void add(Map<String, Object> item, List<ChatMessage> messages) {
             var itemKey = item.get("turnId") + ":" + item.get("step");
@@ -313,7 +354,7 @@ class ContextAssembler {
                     var result = call.get("resultText");
                     messages.add(ChatMessage.toolResult(
                             String.valueOf(call.get("providerCallId")),
-                            result == null ? NOT_EXECUTED : String.valueOf(result)));
+                            mask.render(call, result == null ? NOT_EXECUTED : String.valueOf(result))));
                 }
             }
             key = null;

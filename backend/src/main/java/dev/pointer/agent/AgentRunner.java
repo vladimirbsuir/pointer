@@ -60,7 +60,6 @@ public class AgentRunner implements LiveItemSnapshots {
     private static final String AGENT = "agent";
     private static final String READ_FILE = "read_file";
     private static final int DEFAULT_CONTEXT_WINDOW = 128_000;
-    private static final double AUTO_COMPACT_RATIO = 0.8;
     private static final String PROJECT_CONTEXT_OPERATION = "pointer.project_context";
     private static final Duration PROJECT_CONTEXT_TIMEOUT = Duration.ofSeconds(10);
     private static final String TITLE_PROMPT = """
@@ -82,6 +81,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private final UsageLedger ledger;
     private final ModelRouter modelRouter;
     private final ExploreAgent explore;
+    private final ContextPolicy contextPolicy;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<UUID, RunningTurn> running = new ConcurrentHashMap<>();
 
@@ -151,7 +151,10 @@ public class AgentRunner implements LiveItemSnapshots {
         try {
             var context = writer.turnContext(userId, sessionId, turnId);
             var main = providerService.resolve(userId, context.modelId(), context.executorDeviceId());
-            var smart = sessionService.owned(userId, sessionId).isSmartRouting();
+            var session = sessionService.owned(userId, sessionId);
+            var smart = session.isSmartRouting();
+            var mask = contextPolicy.mask(session.getContextStrategy());
+            var compactionRatio = contextPolicy.compactionRatio(session.getContextStrategy());
             var routes = modelRouter.plan(userId, smart, main, context.mode(), context.executorDeviceId());
             var failover = routedClient.failover(
                     userId,
@@ -173,7 +176,7 @@ public class AgentRunner implements LiveItemSnapshots {
                 writer.recordContextSnapshot(sessionId, turnId, contextAssembler.snapshot(project));
             }
             var globalInstructions = settingsService.get(userId).globalInstructions();
-            var summarizer = new Summarizer(scope, routes, failover, turn, project, globalInstructions);
+            var summarizer = new Summarizer(scope, routes, failover, turn, project, globalInstructions, mask);
             if (Turn.COMPACTION.equals(context.kind())) {
                 summarizer.summarize();
                 var reason = turn.cancellation.isCancelled() ? Turn.CANCELLED : Turn.COMPLETED;
@@ -193,7 +196,7 @@ public class AgentRunner implements LiveItemSnapshots {
                     error = budget;
                     break;
                 }
-                if (contextTokens >= contextWindow * AUTO_COMPACT_RATIO) {
+                if (contextTokens >= contextWindow * compactionRatio) {
                     var compacted = summarizer.summarize();
                     if (compacted.isPresent()) {
                         contextTokens = compacted.getAsInt();
@@ -209,6 +212,7 @@ public class AgentRunner implements LiveItemSnapshots {
                         project,
                         writer.conversation(sessionId),
                         writer.contextSnapshots(sessionId),
+                        mask,
                         model.supportsVision());
                 var tools = model.supportsTools()
                         ? toolDefinitions(
@@ -484,6 +488,7 @@ public class AgentRunner implements LiveItemSnapshots {
         private final RunningTurn turn;
         private final ContextAssembler.ProjectContext project;
         private final String globalInstructions;
+        private final MaskPolicy mask;
 
         Summarizer(
                 ToolCallHandler.TurnScope scope,
@@ -491,7 +496,8 @@ public class AgentRunner implements LiveItemSnapshots {
                 RoutedClient.Failover failover,
                 RunningTurn turn,
                 ContextAssembler.ProjectContext project,
-                String globalInstructions) {
+                String globalInstructions,
+                MaskPolicy mask) {
             this.scope = scope;
             this.routes = routes;
             this.failover = failover;
@@ -499,6 +505,7 @@ public class AgentRunner implements LiveItemSnapshots {
             this.turn = turn;
             this.project = project;
             this.globalInstructions = globalInstructions;
+            this.mask = mask;
         }
 
         private ModelRouter.RoutedModel stream(
@@ -518,7 +525,7 @@ public class AgentRunner implements LiveItemSnapshots {
             var replaced = covered.stream()
                     .filter(item -> !Item.COMPACTION_SUMMARY.equals(item.get("type")))
                     .count();
-            var request = contextAssembler.buildCompaction(covered);
+            var request = contextAssembler.buildCompaction(covered, mask);
             var planned = routes.compaction(ContextAssembler.estimateTokens(request));
             var routed = planned;
             var listener = new TurnListener(
@@ -570,6 +577,7 @@ public class AgentRunner implements LiveItemSnapshots {
                     project,
                     writer.conversation(scope.sessionId()),
                     writer.contextSnapshots(scope.sessionId()),
+                    mask,
                     model.supportsVision());
             var tokens = ContextAssembler.estimateTokens(remaining);
             writer.resetContextTokens(scope.userId(), scope.sessionId(), tokens, model.contextWindow());

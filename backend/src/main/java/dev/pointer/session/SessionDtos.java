@@ -1,5 +1,6 @@
 package dev.pointer.session;
 
+import dev.pointer.user.SettingsService;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Pattern;
@@ -33,6 +34,7 @@ public final class SessionDtos {
             BigDecimal estimatedCost,
             BigDecimal budgetUsd,
             String routing,
+            String contextStrategy,
             UUID executorDeviceId,
             SessionWorktree worktree,
             Instant archivedAt,
@@ -46,10 +48,12 @@ public final class SessionDtos {
             @Pattern(regexp = MODE_PATTERN) String mode,
             UUID modelId,
             @DecimalMin("0") @DecimalMax("100000") BigDecimal budgetUsd,
-            @Pattern(regexp = ROUTING_PATTERN) String routing) {
+            @Pattern(regexp = ROUTING_PATTERN) String routing,
+
+            @Pattern(regexp = SettingsService.CONTEXT_STRATEGY_PATTERN) String contextStrategy) {
 
         public CreateSessionRequest(String title, String mode, UUID modelId) {
-            this(title, mode, modelId, null, null);
+            this(title, mode, modelId, null, null, null);
         }
     }
 
@@ -76,10 +80,12 @@ public final class SessionDtos {
             Boolean autoApprove,
             Boolean archived,
             @DecimalMin("0") @DecimalMax("100000") BigDecimal budgetUsd,
-            @Pattern(regexp = ROUTING_PATTERN) String routing) {
+            @Pattern(regexp = ROUTING_PATTERN) String routing,
+
+            @Pattern(regexp = SettingsService.CONTEXT_STRATEGY_PATTERN) String contextStrategy) {
 
         public UpdateSessionRequest(String title, String mode, UUID modelId, Boolean autoApprove, Boolean archived) {
-            this(title, mode, modelId, autoApprove, archived, null, null);
+            this(title, mode, modelId, autoApprove, archived, null, null, null);
         }
     }
 

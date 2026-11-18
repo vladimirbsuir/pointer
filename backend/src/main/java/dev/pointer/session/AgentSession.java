@@ -21,6 +21,9 @@ public class AgentSession extends BaseEntity {
     public static final String WORKTREE_ACTIVE = "active";
     public static final String ROUTING_OFF = "off";
     public static final String ROUTING_SMART = "smart";
+    public static final String CONTEXT_SUMMARY = "summary";
+    public static final String CONTEXT_MASKING = "masking";
+    public static final String CONTEXT_HYBRID = "hybrid";
 
     private UUID userId;
     private UUID projectId;
@@ -44,6 +47,7 @@ public class AgentSession extends BaseEntity {
     private BigDecimal estimatedCost;
     private BigDecimal budgetUsd;
     private String routing;
+    private String contextStrategy;
     private String worktreeBranch;
     private String worktreeBaseBranch;
     private String worktreeState;
@@ -65,6 +69,7 @@ public class AgentSession extends BaseEntity {
         this.modelId = modelId;
         this.status = SessionStatus.IDLE;
         this.routing = ROUTING_OFF;
+        this.contextStrategy = CONTEXT_SUMMARY;
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -91,6 +96,11 @@ public class AgentSession extends BaseEntity {
 
     public boolean isSmartRouting() {
         return ROUTING_SMART.equals(routing);
+    }
+
+    void changeContextStrategy(String strategy, Instant now) {
+        this.contextStrategy = strategy;
+        this.updatedAt = now;
     }
 
     void changeRouting(String routing, Instant now) {

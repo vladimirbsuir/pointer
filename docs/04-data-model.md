@@ -114,6 +114,7 @@ Connection presence is kept in memory, not in the database.
 | `default_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL` |
 | `embedding_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL`; model used for semantic indexes (CTX-7) |
 | `routing_default` | text | `off` (default) or `smart`; routing of new sessions (ROUTE-1) |
+| `context_strategy_default` | text | `summary` (default), `masking` or `hybrid`; context strategy of new sessions (CACHE-4) |
 | `fast_model_id`, `plan_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL`; role models for smart routing (ROUTE-2) |
 | `explore_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL`; model of the `explore` sub-agent in both routing modes (ROUTE-4) |
 | `preferences` | jsonb | Theme, notification and UI preferences |
@@ -288,6 +289,7 @@ Prefix rules for `run_command` (PERM-4).
 | `estimated_cost` | numeric(14,6) | Sum of call costs from model prices at the time of each call; null until a priced model is used (CTX-6) |
 | `budget_usd` | numeric(10,4) | Nullable; turns stop with `budget_exceeded` once `estimated_cost` reaches it (ROUTE-6) |
 | `routing` | text | `off` (default) or `smart` (ROUTE-1) |
+| `context_strategy` | text | `summary` (default), `masking` or `hybrid`: how the model's view of old history is shortened (CACHE-4) |
 | `archived_at` | timestamptz | Nullable |
 | `created_at`, `updated_at` | timestamptz | |
 

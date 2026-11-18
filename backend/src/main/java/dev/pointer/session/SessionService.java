@@ -52,6 +52,11 @@ public class SessionService {
                         ? request.routing()
                         : settingsService.routing(userId).routingDefault(),
                 clock.instant());
+        created.changeContextStrategy(
+                request.contextStrategy() != null
+                        ? request.contextStrategy()
+                        : settingsService.contextStrategyDefault(userId),
+                clock.instant());
         if (request.budgetUsd() != null) {
             created.changeBudget(positiveOrNull(request.budgetUsd()), clock.instant());
         }
@@ -108,6 +113,9 @@ public class SessionService {
         }
         if (request.routing() != null) {
             session.changeRouting(request.routing(), now);
+        }
+        if (request.contextStrategy() != null) {
+            session.changeContextStrategy(request.contextStrategy(), now);
         }
         sessions.save(session);
         var event = eventLog.append(userId, sessionId, "session.updated", settingsPayload(session));
@@ -266,6 +274,7 @@ public class SessionService {
         payload.put("autoApprove", session.isAutoApprove());
         payload.put("budgetUsd", session.getBudgetUsd());
         payload.put("routing", session.getRouting());
+        payload.put("contextStrategy", session.getContextStrategy());
         payload.put("archived", session.getArchivedAt() != null);
         payload.put("worktree", worktreePayload(session));
         return payload;
@@ -298,6 +307,7 @@ public class SessionService {
                 session.getEstimatedCost(),
                 session.getBudgetUsd(),
                 session.getRouting(),
+                session.getContextStrategy(),
                 session.getExecutorDeviceId(),
                 session.getWorktreeBranch() == null
                         ? null

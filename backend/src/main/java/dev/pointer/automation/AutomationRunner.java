@@ -211,7 +211,7 @@ class AutomationRunner implements SessionEventListener {
                     context.userId(),
                     sessionId,
                     new SessionDtos.UpdateSessionRequest(
-                            null, null, null, null, null, automation.getBudgetUsd(), null));
+                            null, null, null, null, null, automation.getBudgetUsd(), null, null));
         }
         var attached = store.transition(run.getId(), active -> {
             active.attachSession(sessionId);

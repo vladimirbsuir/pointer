@@ -176,7 +176,7 @@ Built before every model call, in this order:
 Between compactions every request extends the previous one, so providers can serve the earlier part from their prompt cache ([ADR 0024](adr/0024-append-only-context.md)).
 
 Token counts use the provider's reported usage when available and an estimate otherwise.
-Compaction replaces older items with a model-generated summary item. Original items stay in the database and in the client history.
+Compaction replaces older items with a model-generated summary item. With the `masking` and `hybrid` context strategies, tool results older than the newest ten are replaced by a one-line placeholder, in blocks of ten so that the request stays append-only between moves; `masking` summarizes only at 95 % of the window, `hybrid` at the usual 80 %. Original items stay in the database and in the client history.
 The thresholds and what stays verbatim are described in [ADR 0009](adr/0009-context-compaction-and-plan-approval.md).
 
 ### 4.4 Execution

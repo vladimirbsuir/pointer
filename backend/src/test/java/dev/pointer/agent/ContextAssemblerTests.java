@@ -16,10 +16,13 @@ import java.util.Random;
 import java.util.SequencedMap;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class ContextAssemblerTests {
 
     private static final String CONTEXT_BLOCK = "<context>";
+    private static final String PLACEHOLDER = "[Result of ";
     private static final ContextAssembler.ProjectContext PROJECT = new ContextAssembler.ProjectContext(
                     "demo", "main", "AGENTS.md", "Rules.", "Windows", "PowerShell")
             .withMemory("Memory:\nIndex:\n- note");
@@ -93,33 +96,143 @@ class ContextAssemblerTests {
         assertThat(withOwnSnapshot.get(2).content()).contains("- Date: two").endsWith("second");
     }
 
-    @Test
-    void buildsAreAppendOnlyBetweenCompactions() {
+    @ParameterizedTest
+    @MethodSource("policies")
+    void buildsAreAppendOnlyBetweenCompactionsAndMaskBoundaryMoves(MaskPolicy policy) {
         var random = new Random(20261118);
+        var masked = 0;
         for (var run = 0; run < 300; run++) {
             var session = GeneratedSession.generate(random);
             List<ChatMessage> previous = null;
+            var previousBoundary = 0;
             for (var boundary : session.boundaries) {
-                var messages = build(boundary.items(), boundary.snapshots());
+                var messages = build(boundary.items(), boundary.snapshots(), policy);
+                var maskBoundary =
+                        policy.boundary(ContextAssembler.countResults(ContextAssembler.activeItems(boundary.items())));
                 if (previous != null && !boundary.afterCompaction()) {
+                    var first = firstDifference(previous, messages);
                     assertThat(messages.size()).isGreaterThan(previous.size());
-                    assertThat(messages.subList(0, previous.size()))
-                            .as("run %d", run)
-                            .isEqualTo(previous);
+                    if (maskBoundary == previousBoundary) {
+                        assertThat(first).as("run %d", run).isEqualTo(previous.size());
+                    } else if (first < previous.size()) {
+                        assertThat(messages.get(first).role()).isEqualTo(ChatMessage.Role.TOOL);
+                        assertThat(messages.get(first).content()).startsWith(PLACEHOLDER);
+                    }
                 }
                 if (boundary.afterCompaction() && !boundary.snapshots().isEmpty()) {
                     assertThat(messages.stream()
                                     .filter(message -> message.content().contains(CONTEXT_BLOCK)))
                             .isNotEmpty();
                 }
-                assertThat(build(boundary.items(), boundary.snapshots())).isEqualTo(messages);
+                assertThat(build(boundary.items(), boundary.snapshots(), policy))
+                        .isEqualTo(messages);
+                masked += (int) messages.stream()
+                        .filter(message -> message.content().startsWith(PLACEHOLDER))
+                        .count();
                 previous = messages;
+                previousBoundary = maskBoundary;
             }
+        }
+        if (policy == MaskPolicy.NONE) {
+            assertThat(masked).isZero();
+        } else {
+            assertThat(masked).isPositive();
         }
     }
 
+    @Test
+    void theMaskBoundaryMovesInWholeBlocksAfterTheNewestResults() {
+        var aligned = new MaskPolicy(10, 10);
+        assertThat(aligned.boundary(0)).isZero();
+        assertThat(aligned.boundary(10)).isZero();
+        assertThat(aligned.boundary(19)).isZero();
+        assertThat(aligned.boundary(20)).isEqualTo(10);
+        assertThat(aligned.boundary(29)).isEqualTo(10);
+        assertThat(aligned.boundary(30)).isEqualTo(20);
+        var perStep = new MaskPolicy(10, 1);
+        assertThat(perStep.boundary(11)).isEqualTo(1);
+        assertThat(perStep.boundary(25)).isEqualTo(15);
+        assertThat(MaskPolicy.NONE.boundary(1_000)).isZero();
+    }
+
+    @Test
+    void maskingReplacesOldLongResultsAndKeepsCallsTextAndShortResults() {
+        var conversation = new Conversation();
+        var turn = conversation.turn("question");
+        conversation.answer(turn, 0, "let me look");
+        conversation.call(turn, 0, "call_a", "{\"path\":\"a.txt\"}", "line\n".repeat(60));
+        conversation.call(turn, 0, "call_b", "{\"path\":\"b.txt\"}", "short");
+        conversation.call(turn, 1, "call_c", "{\"path\":\"c.txt\"}", "line\n".repeat(60));
+        conversation.call(turn, 1, "call_d", "{\"path\":\"d.txt\"}", "line\n".repeat(60));
+
+        var messages = build(conversation.items, new LinkedHashMap<>(), new MaskPolicy(1, 1));
+
+        assertThat(messages)
+                .extracting(ChatMessage::content)
+                .containsExactly(
+                        messages.getFirst().content(),
+                        "question",
+                        "let me look",
+                        "[Result of read_file({\"path\":\"a.txt\"}) omitted: 60 lines. Run the tool again if you need it.]",
+                        "short",
+                        "",
+                        "[Result of read_file({\"path\":\"c.txt\"}) omitted: 60 lines. Run the tool again if you need it.]",
+                        "line\n".repeat(60));
+        assertThat(messages.get(2).toolCalls())
+                .extracting(ChatMessage.ToolCall::id)
+                .containsExactly("call_a", "call_b");
+        assertThat(build(conversation.items, new LinkedHashMap<>(), MaskPolicy.NONE))
+                .extracting(ChatMessage::content)
+                .noneMatch(content -> content.startsWith(PLACEHOLDER));
+        assertThat(assembler.buildCompaction(conversation.items, new MaskPolicy(1, 1)))
+                .extracting(ChatMessage::content)
+                .filteredOn(content -> content.startsWith(PLACEHOLDER))
+                .hasSize(2);
+    }
+
+    @Test
+    void longArgumentsAreShortenedInThePlaceholder() {
+        var call = Map.<String, Object>of(
+                "toolName", "grep", "argumentsJson", "{\"pattern\":\"" + "x".repeat(200) + "\"}");
+
+        assertThat(ContextAssembler.placeholder(call, "a\nb"))
+                .startsWith("[Result of grep({\"pattern\":\"xxx")
+                .contains("...) omitted: 2 lines.");
+    }
+
+    @Test
+    void theStrategiesMapToMaskingAndCompactionThresholds() {
+        var policy = new ContextPolicy(10, 10);
+
+        assertThat(policy.mask("summary")).isEqualTo(MaskPolicy.NONE);
+        assertThat(policy.mask("masking")).isEqualTo(new MaskPolicy(10, 10));
+        assertThat(policy.mask("hybrid")).isEqualTo(new MaskPolicy(10, 10));
+        assertThat(policy.compactionRatio("summary")).isEqualTo(0.8);
+        assertThat(policy.compactionRatio("hybrid")).isEqualTo(0.8);
+        assertThat(policy.compactionRatio("masking")).isEqualTo(0.95);
+    }
+
+    static List<MaskPolicy> policies() {
+        return List.of(MaskPolicy.NONE, new MaskPolicy(3, 3), new MaskPolicy(3, 1), new MaskPolicy(0, 2));
+    }
+
+    private static int firstDifference(List<ChatMessage> previous, List<ChatMessage> current) {
+        var index = 0;
+        while (index < previous.size()
+                && index < current.size()
+                && previous.get(index).equals(current.get(index))) {
+            index++;
+        }
+        return index;
+    }
+
     private List<ChatMessage> build(List<Map<String, Object>> items, SequencedMap<UUID, String> snapshots) {
-        return assembler.build("agent", "Be brief.", PROJECT, items, snapshots, false);
+        return build(items, snapshots, MaskPolicy.NONE);
+    }
+
+    private List<ChatMessage> build(
+            List<Map<String, Object>> items, SequencedMap<UUID, String> snapshots, MaskPolicy policy) {
+        return assembler.build("agent", "Be brief.", PROJECT, items, snapshots, policy, false);
     }
 
     private record Boundary(
@@ -195,20 +308,22 @@ class ContextAssemblerTests {
             var count = 1 + random.nextInt(3);
             for (var index = 0; index < count; index++) {
                 var callId = "call_" + calls++;
-                items.add(item(
-                        turnId,
-                        Item.TOOL_CALL,
-                        step,
-                        Map.of(
-                                "providerCallId",
-                                callId,
-                                "toolName",
-                                "read_file",
-                                "argumentsJson",
-                                "{\"path\":\"" + callId + "\"}",
-                                "resultText",
-                                "contents of " + callId)));
+                var result =
+                        random.nextInt(5) < 3 ? ("contents of " + callId + "\n").repeat(20) : "contents of " + callId;
+                call(turnId, step, callId, "{\"path\":\"" + callId + "\"}", result);
             }
+        }
+
+        void call(UUID turnId, int step, String callId, String arguments, String result) {
+            items.add(item(
+                    turnId,
+                    Item.TOOL_CALL,
+                    step,
+                    Map.of(
+                            "providerCallId", callId,
+                            "toolName", "read_file",
+                            "argumentsJson", arguments,
+                            "resultText", result)));
         }
 
         private static Map<String, Object> item(UUID turnId, String type, Integer step, Map<String, Object> fields) {

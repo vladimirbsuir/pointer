@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SettingsService {
 
+    public static final String CONTEXT_STRATEGY_PATTERN = "summary|masking|hybrid";
+
     private final UserSettingsRepository settings;
     private final ProviderService providerService;
     private final Clock clock;
@@ -40,6 +42,9 @@ public class SettingsService {
         }
         if (request.routingDefault() != null) {
             userSettings.changeRoutingDefault(request.routingDefault(), now);
+        }
+        if (request.contextStrategyDefault() != null) {
+            userSettings.changeContextStrategyDefault(request.contextStrategyDefault(), now);
         }
         if (Boolean.TRUE.equals(request.clearFastModel())) {
             userSettings.changeFastModel(null, now);
@@ -87,6 +92,11 @@ public class SettingsService {
     }
 
     @Transactional(readOnly = true)
+    public String contextStrategyDefault(UUID userId) {
+        return find(userId).getContextStrategyDefault();
+    }
+
+    @Transactional(readOnly = true)
     public UUID embeddingModel(UUID userId) {
         return find(userId).getEmbeddingModelId();
     }
@@ -109,7 +119,8 @@ public class SettingsService {
                 userSettings.getRoutingDefault(),
                 userSettings.getFastModelId(),
                 userSettings.getPlanModelId(),
-                userSettings.getExploreModelId());
+                userSettings.getExploreModelId(),
+                userSettings.getContextStrategyDefault());
     }
 
     public record SettingsResponse(
@@ -119,7 +130,8 @@ public class SettingsService {
             String routingDefault,
             UUID fastModelId,
             UUID planModelId,
-            UUID exploreModelId) {}
+            UUID exploreModelId,
+            String contextStrategyDefault) {}
 
     public record RoutingSettings(String routingDefault, UUID fastModelId, UUID planModelId, UUID exploreModelId) {}
 
@@ -135,7 +147,8 @@ public class SettingsService {
             UUID planModelId,
             Boolean clearPlanModel,
             UUID exploreModelId,
-            Boolean clearExploreModel) {
+            Boolean clearExploreModel,
+            @Pattern(regexp = CONTEXT_STRATEGY_PATTERN) String contextStrategyDefault) {
 
         public UpdateSettingsRequest(
                 String globalInstructions,
@@ -149,6 +162,7 @@ public class SettingsService {
                     clearDefaultModel,
                     embeddingModelId,
                     clearEmbeddingModel,
+                    null,
                     null,
                     null,
                     null,
