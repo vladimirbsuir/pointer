@@ -18,6 +18,7 @@ Caching also changes when compacting pays off. A long context costs little per c
   - with compaction it pays the call, one cold write of the summary and cached reads of it: `k + S·p + (N - 1)·S·q`;
   - compaction happens when the first is larger. With a warm cache this is the spec's `N·(C - S)·q > k + S·(p - q)`. System prompt and tools are cached in both cases and cancel out.
 - **Hard limit unchanged.** Compaction at 80 % of the window (95 % for the `masking` strategy) still runs before any model call, also inside a turn. The soft trigger does not apply to `masking`, whose point is to postpone the summary, and can be switched off with `pointer.context.soft-compaction=false`, which the benchmark uses for the comparison run.
+- **Earlier summaries are carried word for word.** When the covered items start with an earlier summary, the model is asked to summarize only what came after it, and the new summary item stores the earlier summary followed by the new part. A summary is therefore written once and never summarized again, as long as the carried text stays under 20 % of the window; beyond that the whole history is summarized afresh as before. The soft trigger counts the carried text as part of the context that remains after the compaction.
 - **Visible trigger.** A completed `compaction_summary` item records `trigger`: `manual`, `limit` or `soft`. The usage ledger records the cache-safe call under purpose `compaction` but measures its prefix reuse against the session's previous step call, which it extends.
 - Unchanged from ADR 0009: the current turn is never summarized, context assembly starts from the latest completed summary, manual compaction is a turn of kind `compaction`, and the original items stay in the database and the client.
 
@@ -29,10 +30,12 @@ Caching also changes when compacting pays off. A long context costs little per c
 - The estimates use the four-characters-per-token estimate and the session's own averages, so the decision can be wrong for an unusual turn; the hard limit still protects the window.
 - Calls whose provider reports no usage leave no ledger row and are missing from `N`; such providers usually have no prices either, and then the soft trigger never runs.
 - A tool call in a cache-safe answer costs one wasted call before the retry.
+- The first benchmark run on a free Kilo Gateway model showed why summaries are carried: with summaries of a summary, a constraint stated in the first turn survived two compactions and was gone after the third, both with and without the soft trigger, and the soft trigger made it happen sooner by compacting four times instead of twice. Carried summaries grow by one summary per compaction until the 20 % limit.
 
 ## Rejected alternatives
 
 - **Keeping the separate summarizer request on the step model.** Simpler, but it pays the full input price for the conversation that the cache already holds.
 - **Sending `tool_choice: "none"` instead of forbidding tools in the instruction.** It would enforce the rule, but it is a request field that some OpenAI-compatible servers render into the prompt or reject, and its effect on the cached prefix is not specified.
 - **A fixed earlier threshold (for example 50 %).** It ignores prices and cache state: with a cheap cached price a long context is fine, and without one an early compaction is often a pure loss.
+- **Only limiting how often the soft trigger fires.** It would delay the loss but not prevent it: the hard limit alone also lost the first-turn constraint after three compactions.
 - **Evaluating the soft trigger before every call.** Compacting inside a turn would summarize the tool chain the model is working on, which ADR 0009 rules out.

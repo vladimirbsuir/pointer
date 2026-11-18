@@ -113,6 +113,34 @@ Phase 4 sends a compaction on the session model as the step request with the sum
 
 Before phase 4 the compaction request had its own system prompt and no tools, so it shared no prefix with the steps and its whole prompt was billed at the input price. Now the provider served 99 % of it from the cache; at a cached price ratio of 0.1 the call's input costs about a tenth of what it did. The session's prices were set for the soft trigger (input 0.5, cached 0.05, output 0.5 USD per million tokens), and it correctly did not fire: with two to three model calls per turn and about 8,000 to 12,000 tokens to replace, the summary would have cost more than the turn saved. The soft trigger is checked by integration tests and is part of the full benchmark.
 
+## Phase 4 strategy matrix (partial)
+
+First runs of the full matrix on a free Kilo Gateway model, `nvidia/nemotron-3-ultra-550b-a55b:free`, which reports cached tokens (about 0.8 of each repeated prefix in a probe; Nvidia caches in blocks). Same twelve-turn script, no memories, context window 40,000, commit `8d9f9d5` plus the phase 4 compaction (`06906f2`), model prices set for the run with `--model-prices` (input 0.5, cached 0.05, output 2 USD per million tokens). The soft trigger is on by default and off with `pointer.context.soft-compaction=false`. Numbers cover the agent's own steps, compactions and `explore` calls. These runs predate carried summaries (`2084c35`).
+
+| | `summary`, soft off | `summary`, soft on | `masking`, blocks of 10 | `hybrid`, blocks of 10, soft on |
+|---|---|---|---|---|
+| Turns completed | 12 / 12 | 12 / 12 | 12 / 12 | 12 / 12 |
+| Model calls (compactions, of them soft) | 60 (3, 0) | 88 (5, 4) | 44 (1, 0) | 55 (2, 1) |
+| Prompt tokens | 1,220,125 | 1,300,317 | 815,732 | 951,992 |
+| Prompt tokens per call | 20,335 | 14,776 | 18,539 | 17,309 |
+| Peak context, tokens | 34,405 | 31,080 | 40,303 | 29,910 |
+| Cached share, reported | 0.808 | 0.742 | 0.779 | 0.760 |
+| Prefix reuse, estimated | 0.922 | 0.899 | 0.918 | 0.901 |
+| Compaction prompt tokens / of them cached | 96,260 / 87,680 | 121,760 / 109,600 | 40,048 / 35,072 | 51,872 / 43,840 |
+| Session cost, cached at 0.1 / 0.25 / 0.5, USD | 0.186 / 0.260 / 0.383 | 0.242 / 0.314 / 0.435 | **0.137** / 0.185 / 0.264 | 0.168 / 0.222 / 0.313 |
+| Cost per call, cached at 0.1, mUSD | 3.10 | **2.75** | 3.11 | 3.06 |
+| Tool calls, repeated | 47, 0 | 56, 0 | 31, 0 | 41, 0 |
+| `explore` calls | 0 | 15 | 0 | 0 |
+| Coverage of expected files | 0.98 | 0.96 | 0.96 | 0.96 |
+| Recall: codename / file of the fifth answer | **no** / yes | **no / no** | yes / yes | yes / yes |
+| Duration, s | 470 | 395 | 241 | 359 |
+
+- **Cache-safe compaction holds on a second provider.** 84 to 91 % of every compaction prompt was served from the cache; before phase 4 none of it was.
+- **Summaries of summaries lose early facts.** Both `summary` sessions forgot the codename stated in the first turn. In the soft-trigger session it survived the compactions of turns 6 and 7 and was missing from the summaries of turns 9, 10 and 12; without the soft trigger it was gone after the third compaction as well. Strategies that compacted once or twice kept both facts. This led to carried summaries: a later compaction keeps the earlier summary word for word and summarizes only what followed ([ADR 0025](../adr/0025-cache-aware-compaction.md)).
+- **The soft trigger fires often with this model** because its summaries are short (about 650 tokens): four soft compactions in one session. Per call it was the cheapest variant (2.75 against 3.10 mUSD, 27 % fewer prompt tokens per call), but the session made 47 % more calls, 15 of them `explore`, so its total was the highest. One run per variant cannot separate the trigger from the model's choices.
+- **Masking is again the cheapest session** and kept recall, as on the phase 3 provider; it reached its 95 % safety compaction once.
+- **Incomplete:** the `hybrid` run without the soft trigger failed from turn 6 on the gateway's free-model limit (`429 Free model usage limit reached`, about 350 requests within an hour, no reset time given), and the remaining runs are listed in the F5 spec.
+
 ## Threats to validity
 
 - One run per variant and phase; model behaviour and provider cache state vary between runs.
@@ -129,4 +157,4 @@ eval "$(python infra/bench/account.py env)"
 python infra/bench/cache/run.py --model deepseek-v4.1-flash:free --clear-memories --label nomem
 ```
 
-Add `--strategy masking` or `--strategy hybrid` for the context strategies and `--context-window 40000` to make compaction trigger within the session; the block size is the backend property `pointer.context.mask-block` (for example `./gradlew bootRun --args='--pointer.context.mask-block=1'`). Add `--memories 120` for the variant with the memory index over budget; it needs an embedding model in the account settings so that the index is ordered by relevance, and the no-memory variant needs the project's memories deleted first (`--clear-memories`; `--embedding-model <key>` sets the embedding model). Add `--model-prices` to give the model the `--price` input and output prices and the first `--ratios` value as its cached price during the run, which enables the soft compaction trigger; the prices are restored afterwards. The baseline without the soft trigger runs against a backend started with `--pointer.context.soft-compaction=false`.
+Add `--strategy masking` or `--strategy hybrid` for the context strategies and `--context-window 40000` to make compaction trigger within the session; the block size is the backend property `pointer.context.mask-block` (for example `./gradlew bootRun --args='--pointer.context.mask-block=1'`). Add `--memories 120` for the variant with the memory index over budget; it needs an embedding model in the account settings so that the index is ordered by relevance, and the no-memory variant needs the project's memories deleted first (`--clear-memories`; `--embedding-model <key>` sets the embedding model). Add `--model-prices` to give the model the `--price` input and output prices and the first `--ratios` value as its cached price during the run, which enables the soft compaction trigger; the prices are restored afterwards. The baseline without the soft trigger runs against a backend started with `--pointer.context.soft-compaction=false`. The phase 4 matrix used `--model "nvidia/nemotron-3-ultra-550b-a55b:free" --provider "Kilo Gateway" --context-window 40000 --model-prices`; the benchmark account has the Kilo Gateway provider (`https://ai-gateway.kilo.ai/api/v1`, free models only, whose ids contain `free`).
