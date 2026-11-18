@@ -1,6 +1,6 @@
 # F5. Cache-aware context management
 
-Status: In progress (phases 1 and 2 implemented) · Requirement ids: CACHE-1 to CACHE-7 · Depends on: context assembly and compaction ([ADR 0009](../adr/0009-context-compaction-and-plan-approval.md)), usage ledger and model prices ([F3](f3-model-routing.md), CTX-5, CTX-6), memory section ([F4](f4-agent-memory.md)).
+Status: In progress (phases 1 to 3 implemented) · Requirement ids: CACHE-1 to CACHE-7 · Depends on: context assembly and compaction ([ADR 0009](../adr/0009-context-compaction-and-plan-approval.md)), usage ledger and model prices ([F3](f3-model-routing.md), CTX-5, CTX-6), memory section ([F4](f4-agent-memory.md)).
 
 ## Goal
 
@@ -91,11 +91,13 @@ Invariant, checked by a property test (`ContextAssemblerTests`, 300 generated se
 ### Strategies (CACHE-4)
 
 - `summary`: today's behaviour.
-- `masking`: in `StepGroup.flushInto`, tool results older than the mask boundary are replaced by `[Result of <tool>(<short arguments>) omitted: <n> lines. Run the tool again if you need it.]`. The assistant's text and tool calls stay. Results under 200 characters are never masked, because the placeholder would not save anything. Original items stay in the database and in the client, as with compaction.
+- `masking`: masking only. The summary is not written at the usual 80 %; a safety compaction at 95 % of the window keeps a session from overflowing (`ContextPolicy.MASKING_SAFETY_RATIO`). Without it the strategy would fail long sessions, and with it at 80 % it would be the same as `hybrid`.
+- Masking in detail: in `StepGroup.flushInto`, tool results older than the mask boundary are replaced by `[Result of <tool>(<short arguments>) omitted: <n> lines. Run the tool again if you need it.]`. The assistant's text and tool calls stay. Results under 200 characters are never masked, because the placeholder would not save anything. Original items stay in the database and in the client, as with compaction.
 - `hybrid`: masking, and summarization at 80 % of the window as today; the summary input is smaller because old results are already masked.
 - Block alignment: with `keep` newest results unmasked (default 10) and blocks of `block` results (default 10), the boundary is `floor((results - keep) / block) * block` counted over the active conversation. It depends only on the number of results, so it is the same on every call, and it moves once per `block` results. Between moves the context is append-only; a move invalidates the cache from the first newly masked result, which costs one cold write of the tail. The alternative of masking one result per step invalidates the tail on every call; the benchmark compares both (`block = 1` is the per-step variant).
 - `keep` and `block` are application properties (`pointer.context.keep-results`, `pointer.context.mask-block`), not user settings.
-- Not masked: results of the explore sub-agent's nested items (already outside the main context) and the results of the turn in progress when they are within the newest `keep`.
+- Not masked: results of the explore sub-agent's nested items (already outside the main context), plans (`propose_plan`), and the results of the turn in progress when they are within the newest `keep`. The report of an `explore` call is an ordinary tool result and can be masked.
+- Implementation: `agent/MaskPolicy` (keep, block, boundary arithmetic), `agent/ContextPolicy` (strategy to mask and compaction ratio), `ContextAssembler.build` and `buildCompaction` take the policy; the property test runs under several policies and allows a difference only at the first newly masked result when the boundary moved.
 
 ### Compaction that reuses the cache (CACHE-5)
 
@@ -125,7 +127,7 @@ Invariant, checked by a property test (`ContextAssemblerTests`, 300 generated se
 
 1. Measurement (CACHE-1, CACHE-2): migration, usage parsing, cached price in cost, `PrefixFingerprint`, usage view, desktop columns, and the baseline benchmark run on the current context assembly. Shippable alone: the numbers answer which test providers report cached tokens and how much of each session is reusable today. **Implemented**; baseline in [benchmarks/cache.md](../benchmarks/cache.md), script [`infra/bench/cache/run.py`](../../infra/bench/cache/run.py).
 2. Stable prefix (CACHE-3, CACHE-6): snapshot column and rendering, tool ordering, cache key, the append-only property test; repeat the baseline run. **Implemented**; ADR 0024, results in [benchmarks/cache.md](../benchmarks/cache.md#stable-prefix).
-3. Strategies (CACHE-4): masking and hybrid with block alignment, setting, desktop selector.
+3. Strategies (CACHE-4): masking and hybrid with block alignment, setting, desktop selector. **Implemented** (migration `V30__context_strategies.sql`); results in [benchmarks/cache.md](../benchmarks/cache.md#context-strategies).
 4. Cache-reusing compaction and the soft trigger (CACHE-5), the full benchmark (CACHE-7) and an ADR that supersedes the compaction part of [ADR 0009](../adr/0009-context-compaction-and-plan-approval.md).
 
 ## Tests

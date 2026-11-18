@@ -1,6 +1,6 @@
 # Prompt cache benchmark
 
-Measurements of cache-aware context management ([F5](../features/f5-cache-aware-context.md), CACHE-1 to CACHE-3, CACHE-7): how much of a long session the provider serves from its prompt cache, how much a perfect cache could serve, and what changes it. Phase 1 measured the context assembly as it was; phase 2 made the context append-only ([ADR 0024](../adr/0024-append-only-context.md)) and repeated the runs. Later phases add their runs here.
+Measurements of cache-aware context management ([F5](../features/f5-cache-aware-context.md), CACHE-1 to CACHE-3, CACHE-7): how much of a long session the provider serves from its prompt cache, how much a perfect cache could serve, and what changes it. Phase 1 measured the context assembly as it was; phase 2 made the context append-only ([ADR 0024](../adr/0024-append-only-context.md)) and repeated the runs; phase 3 compared the context strategies. Phase 4 adds its runs here.
 
 ## Setup
 
@@ -75,11 +75,38 @@ Reusable share per turn, memory over budget:
 
 The first phase 2 build also sorted every tool by name. In Ask mode that moved `explore` from the end to the top of the tool list. Two no-memory sessions on that build delegated almost every lookup to the sub-agent (70 and 83 `explore` calls against 12 before, 0.96 and 1.04 million sub-agent prompt tokens), and both ran two to three times longer (364 and 486 s). The order was not needed for determinism, since registry tools already come sorted from the database, so the final build keeps the previous order, and delegation returned to the previous level (0 and 15 calls). For the thesis this is a side result: tool position alone shifts how much a model delegates, so tool order belongs to the agent's behaviour and has to be kept stable across experiments.
 
+## Context strategies
+
+Phase 3 added `masking` and `hybrid` next to `summary` (CACHE-4). Same twelve-turn script and model, no memories, commit `11cce6e`, with the model's context window set to 40,000 tokens so that the 80 % compaction triggers within the session (at 32,000 tokens); masking keeps the newest 10 results. The recall probe now names the fifth question by its topic instead of its number. Numbers cover the agent's own calls, steps and compactions; the few `explore` calls are listed separately.
+
+| | `summary` | `masking`, blocks of 10 | `hybrid`, blocks of 10 | `masking`, per step (block 1) |
+|---|---|---|---|---|
+| Turns completed | 12 / 12 | 12 / 12 | 12 / 12 | 12 / 12 |
+| Model calls (of them compactions) | 54 (2) | 45 (0) | 39 (1) | 60 (0) |
+| Prompt tokens | 1,033,577 | 724,099 | 785,280 | 1,016,554 |
+| Prompt tokens per call | 19,140 | 16,091 | 20,135 | 16,943 |
+| Peak context, tokens | 26,554 | 23,291 | 27,157 | 23,858 |
+| Cached share, reported | 0.879 | 0.899 | 0.863 | **0.578** |
+| Cost per prompt token, cached at 0.1 / 0.25 / 0.5 | 0.21 / 0.34 / 0.56 | 0.19 / 0.33 / 0.55 | 0.22 / 0.35 / 0.57 | 0.48 / 0.57 / 0.71 |
+| Session cost, no cache, USD | 0.535 | 0.375 | 0.407 | 0.529 |
+| Session cost, cached at 0.1, USD | 0.127 | **0.083** | 0.102 | 0.265 |
+| Tool calls, repeated | 59, 0 | 47, 0 | 41, 0 | 77, 0 |
+| `explore` calls | 0 | 4 | 9 | 0 |
+| Coverage of expected files | 0.98 | 0.98 | 0.98 | 1.00 |
+| Recall: codename / fifth answer | yes / yes | yes / yes | yes / yes | yes / yes |
+| Duration, s | 164 | 170 | 160 | 180 |
+
+- **Masking replaces compaction in a session of this length.** It never reached its 95 % safety limit, kept the peak context below the summary strategy's, which compacted twice, and sent 16 % fewer prompt tokens per call. It is also the cheapest variant: 0.083 USD at a cached ratio of 0.1, against 0.127 for `summary`. Compaction costs twice here: the summary call itself (about 20,000 prompt tokens each) and the cold rewrite of the context after it.
+- **Hybrid sits in between.** With old results already masked, the context reached the 80 % limit once instead of twice, and the session cost 0.102 USD.
+- **Block alignment is what makes masking cache-friendly.** Masking one more result on every step invalidates the cache from that result on, every call: the cached share fell from 0.90 to 0.58, an average prompt token cost 0.48 instead of 0.19 of the input price at a cached ratio of 0.1, and the session cost 3.2 times as much, more than `summary`. With blocks of ten the cache is lost once per ten results and the price of the extra unmasked results is small.
+- **No sign of lost information.** No variant repeated a tool call it had already made, coverage stayed at 0.98 to 1.00, and every session recalled both the first-turn constraint and the file of the fifth answer, including after two compactions.
+- **Session lengths still differ** (39 to 60 calls), so per-call and per-token figures are the comparable ones. The per-step `hybrid` run could not be completed: the provider's free allowance ran out after five turns, and its turns are left out.
+
 ## Threats to validity
 
 - One run per variant and phase; model behaviour and provider cache state vary between runs.
 - Prefix reuse is estimated at four characters per token and covers only calls with a predecessor in the same session and purpose, so it is a ratio, not an exact token count. The provider can serve the first call of a session from an earlier session's cache, which the estimate does not count.
-- File recall is unreliable as a probe: it failed in three of the six sessions without any compaction, and every miss named the file of another turn, so the model miscounted the questions. Later phases should ask about the fifth answer by its topic.
+- File recall by question number was unreliable: it failed in three of the six phase 1 and 2 sessions without any compaction, and every miss named the file of another turn, so the model miscounted the questions. Since phase 3 the probe names the question by its topic, and all four strategy sessions answered it correctly.
 - Prices are illustrative; the provider used is free.
 
 ## Reproducing
@@ -90,4 +117,4 @@ Keep an executor device online for the project, then:
 POINTER_EMAIL=... POINTER_PASSWORD=... POINTER_DEVICE_ID=<executor device id> POINTER_PROJECT=pointer python infra/bench/cache/run.py --model deepseek-v4.1-flash:free --label nomem
 ```
 
-Add `--memories 120` for the variant with the memory index over budget; it needs an embedding model in the account settings so that the index is ordered by relevance, and the no-memory variant needs the project's memories deleted first.
+Add `--strategy masking` or `--strategy hybrid` for the context strategies and `--context-window 40000` to make compaction trigger within the session; the block size is the backend property `pointer.context.mask-block` (for example `./gradlew bootRun --args='--pointer.context.mask-block=1'`). Add `--memories 120` for the variant with the memory index over budget; it needs an embedding model in the account settings so that the index is ordered by relevance, and the no-memory variant needs the project's memories deleted first.
