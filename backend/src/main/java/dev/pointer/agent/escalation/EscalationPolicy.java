@@ -41,6 +41,12 @@ public class EscalationPolicy {
         return value >= FIRING_THRESHOLDS.getOrDefault(signal, Integer.MAX_VALUE);
     }
 
+    static List<String> firing(List<Map<String, Integer>> stepSignals) {
+        return StruggleSignals.ALL.stream()
+                .filter(signal -> stepSignals.stream().anyMatch(step -> fires(signal, step.getOrDefault(signal, 0))))
+                .toList();
+    }
+
     public BigDecimal score(List<Map<String, Integer>> stepSignals) {
         var score = 0.0;
         for (var signal : StruggleSignals.ALL) {
@@ -48,7 +54,6 @@ public class EscalationPolicy {
                 var signals = stepSignals.get(stepSignals.size() - 1 - stepsAgo);
                 if (fires(signal, signals.getOrDefault(signal, 0))) {
                     score += weights.getOrDefault(signal, DEFAULT_WEIGHT) * Math.pow(DECAY_PER_STEP, stepsAgo);
-                    break;
                 }
             }
         }

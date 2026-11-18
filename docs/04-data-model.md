@@ -115,6 +115,7 @@ Connection presence is kept in memory, not in the database.
 | `embedding_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL`; model used for semantic indexes (CTX-7) |
 | `routing_default` | text | `off` (default) or `smart`; routing of new sessions (ROUTE-1) |
 | `context_strategy_default` | text | `summary` (default), `masking` or `hybrid`; context strategy of new sessions (CACHE-4) |
+| `escalation_default` | text | `off` (default) or `on`; escalation of new sessions (ESC-1) |
 | `fast_model_id`, `plan_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL`; role models for smart routing (ROUTE-2) |
 | `explore_model_id` | uuid | FK `models`, nullable, `ON DELETE SET NULL`; model of the `explore` sub-agent in both routing modes (ROUTE-4) |
 | `preferences` | jsonb | Theme, notification and UI preferences |
@@ -290,6 +291,7 @@ Prefix rules for `run_command` (PERM-4).
 | `budget_usd` | numeric(10,4) | Nullable; turns stop with `budget_exceeded` once `estimated_cost` reaches it (ROUTE-6) |
 | `routing` | text | `off` (default) or `smart` (ROUTE-1) |
 | `context_strategy` | text | `summary` (default), `masking` or `hybrid`: how the model's view of old history is shortened (CACHE-4) |
+| `escalation` | text | `off` (default) or `on`: with smart routing, steps start on the fast model and a struggling turn moves to the session model (ESC-1) |
 | `archived_at` | timestamptz | Nullable |
 | `created_at`, `updated_at` | timestamptz | |
 
@@ -326,7 +328,7 @@ The conversation as the model sees it.
 | `turn_id` | uuid | FK `turns`, nullable for items queued between turns |
 | `position` | bigint | Order within the session |
 | `parent_item_id` | uuid | FK `items`, cascade, nullable; set on tool calls made by the `explore` sub-agent (ROUTE-4) |
-| `type` | text | `user_message`, `assistant_message`, `reasoning`, `tool_call`, `plan`, `compaction_summary`, `model_switched` |
+| `type` | text | `user_message`, `assistant_message`, `reasoning`, `tool_call`, `plan`, `compaction_summary`, `model_switched`, `model_escalated` |
 | `status` | text | `in_progress`, `completed`, `failed`, `cancelled` |
 | `payload` | jsonb | Type-specific fields from [protocol 5.2](03-protocol.md#52-items) |
 | `created_at`, `completed_at` | timestamptz | |
@@ -603,7 +605,7 @@ Index: (`session_id`, `created_at`).
 
 ### Step signals
 
-`step_signals`: one row per model call of a message turn with the struggle signals computed from the turn's tool calls after that call's tools ran ([F6](features/f6-trajectory-escalation.md), ESC-3, ESC-5). Recorded for every session; escalation does not exist yet, so `escalated` is always false.
+`step_signals`: one row per model call of a message turn with the struggle signals computed from the turn's tool calls after that call's tools ran ([F6](features/f6-trajectory-escalation.md), ESC-3, ESC-5). Recorded for every session, whether or not escalation is on.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -613,7 +615,7 @@ Index: (`session_id`, `created_at`).
 | `step` | integer | Step number within the turn, as on the items |
 | `model_label` | text | Model that made the call |
 | `signals` | jsonb | Raw value of every signal (`repeat_call`, `error_streak`, `edit_thrash`, `malformed_call`, `denied`, `read_only_streak`), so that any score can be recomputed offline |
-| `score` | numeric(6,3) | Score of the provisional policy: each firing signal adds its weight, halved for every step since it last fired |
+| `score` | numeric(6,3) | Score of the policy: every step in which a signal fired adds the signal's weight, halved for each step since then |
 | `escalated` | boolean | Whether this step moved the turn to the session model |
 | `created_at` | timestamptz | |
 

@@ -19,6 +19,7 @@ public class UserSettings {
     public static final String ROUTING_OFF = "off";
     public static final String ROUTING_SMART = "smart";
     public static final String CONTEXT_SUMMARY = "summary";
+    public static final String ESCALATION_OFF = "off";
 
     @Id
     private UUID userId;
@@ -28,6 +29,7 @@ public class UserSettings {
     private UUID embeddingModelId;
     private String routingDefault;
     private String contextStrategyDefault;
+    private String escalationDefault;
     private UUID fastModelId;
     private UUID planModelId;
     private UUID exploreModelId;
@@ -45,6 +47,7 @@ public class UserSettings {
         this.preferences = new HashMap<>();
         this.routingDefault = ROUTING_OFF;
         this.contextStrategyDefault = CONTEXT_SUMMARY;
+        this.escalationDefault = ESCALATION_OFF;
         this.updatedAt = now;
     }
 
@@ -64,6 +67,11 @@ public class UserSettings {
 
     void changeRoutingDefault(String routingDefault, Instant now) {
         this.routingDefault = routingDefault;
+        this.updatedAt = now;
+    }
+
+    void changeEscalationDefault(String escalation, Instant now) {
+        this.escalationDefault = escalation;
         this.updatedAt = now;
     }
 

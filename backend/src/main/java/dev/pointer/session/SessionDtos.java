@@ -35,6 +35,7 @@ public final class SessionDtos {
             BigDecimal budgetUsd,
             String routing,
             String contextStrategy,
+            String escalation,
             UUID executorDeviceId,
             SessionWorktree worktree,
             Instant archivedAt,
@@ -50,10 +51,12 @@ public final class SessionDtos {
             @DecimalMin("0") @DecimalMax("100000") BigDecimal budgetUsd,
             @Pattern(regexp = ROUTING_PATTERN) String routing,
 
-            @Pattern(regexp = SettingsService.CONTEXT_STRATEGY_PATTERN) String contextStrategy) {
+            @Pattern(regexp = SettingsService.CONTEXT_STRATEGY_PATTERN) String contextStrategy,
+
+            @Pattern(regexp = SettingsService.ESCALATION_PATTERN) String escalation) {
 
         public CreateSessionRequest(String title, String mode, UUID modelId) {
-            this(title, mode, modelId, null, null, null);
+            this(title, mode, modelId, null, null, null, null);
         }
     }
 
@@ -82,10 +85,12 @@ public final class SessionDtos {
             @DecimalMin("0") @DecimalMax("100000") BigDecimal budgetUsd,
             @Pattern(regexp = ROUTING_PATTERN) String routing,
 
-            @Pattern(regexp = SettingsService.CONTEXT_STRATEGY_PATTERN) String contextStrategy) {
+            @Pattern(regexp = SettingsService.CONTEXT_STRATEGY_PATTERN) String contextStrategy,
+
+            @Pattern(regexp = SettingsService.ESCALATION_PATTERN) String escalation) {
 
         public UpdateSessionRequest(String title, String mode, UUID modelId, Boolean autoApprove, Boolean archived) {
-            this(title, mode, modelId, autoApprove, archived, null, null, null);
+            this(title, mode, modelId, autoApprove, archived, null, null, null, null);
         }
     }
 

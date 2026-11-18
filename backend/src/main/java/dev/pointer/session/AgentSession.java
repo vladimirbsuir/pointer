@@ -24,6 +24,8 @@ public class AgentSession extends BaseEntity {
     public static final String CONTEXT_SUMMARY = "summary";
     public static final String CONTEXT_MASKING = "masking";
     public static final String CONTEXT_HYBRID = "hybrid";
+    public static final String ESCALATION_OFF = "off";
+    public static final String ESCALATION_ON = "on";
 
     private UUID userId;
     private UUID projectId;
@@ -48,6 +50,7 @@ public class AgentSession extends BaseEntity {
     private BigDecimal budgetUsd;
     private String routing;
     private String contextStrategy;
+    private String escalation;
     private String worktreeBranch;
     private String worktreeBaseBranch;
     private String worktreeState;
@@ -70,6 +73,7 @@ public class AgentSession extends BaseEntity {
         this.status = SessionStatus.IDLE;
         this.routing = ROUTING_OFF;
         this.contextStrategy = CONTEXT_SUMMARY;
+        this.escalation = ESCALATION_OFF;
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -96,6 +100,15 @@ public class AgentSession extends BaseEntity {
 
     public boolean isSmartRouting() {
         return ROUTING_SMART.equals(routing);
+    }
+
+    public boolean isEscalating() {
+        return ESCALATION_ON.equals(escalation);
+    }
+
+    void changeEscalation(String escalation, Instant now) {
+        this.escalation = escalation;
+        this.updatedAt = now;
     }
 
     void changeContextStrategy(String strategy, Instant now) {

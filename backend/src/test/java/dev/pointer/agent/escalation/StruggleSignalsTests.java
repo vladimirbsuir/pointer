@@ -99,7 +99,7 @@ class StruggleSignalsTests {
     }
 
     @Test
-    void theScoreAddsWeightsOfFiringSignalsAndHalvesThemPerStep() {
+    void theScoreAddsTheWeightOfEveryFiringHalvedPerStepSinceIt() {
         var policy = new EscalationPolicy(Map.of(StruggleSignals.REPEAT_CALL, 2.0, StruggleSignals.DENIED, 1.0));
         var repeat = Map.of(StruggleSignals.REPEAT_CALL, 1);
         var quiet = Map.<String, Integer>of();
@@ -109,7 +109,8 @@ class StruggleSignalsTests {
         assertThat(policy.score(List.of(repeat))).isEqualByComparingTo("2");
         assertThat(policy.score(List.of(repeat, quiet))).isEqualByComparingTo("1");
         assertThat(policy.score(List.of(repeat, quiet, denied))).isEqualByComparingTo("1.5");
-        assertThat(policy.score(List.of(repeat, repeat))).isEqualByComparingTo("2");
+        assertThat(policy.score(List.of(repeat, repeat))).isEqualByComparingTo("3");
+        assertThat(policy.score(List.of(repeat, repeat, repeat))).isEqualByComparingTo("3.5");
     }
 
     private int signal(String name) {

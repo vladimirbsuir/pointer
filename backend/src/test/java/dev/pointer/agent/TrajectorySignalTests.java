@@ -34,7 +34,7 @@ class TrajectorySignalTests extends AgentIntegrationTest {
         assertThat(rows)
                 .extracting(row -> row.path("signals").path("repeat_call").asInt())
                 .containsExactly(0, 1, 1);
-        assertThat(rows.get(1).path("score").decimalValue()).isEqualByComparingTo("2");
+        assertThat(rows.get(1).path("score").decimalValue()).isEqualByComparingTo("2.5");
         assertThat(rows).allMatch(row -> !row.path("escalated").asBoolean());
 
         var stranger = setUp(false);

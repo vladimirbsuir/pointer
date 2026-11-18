@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class SettingsService {
 
     public static final String CONTEXT_STRATEGY_PATTERN = "summary|masking|hybrid";
+    public static final String ESCALATION_PATTERN = "off|on";
 
     private final UserSettingsRepository settings;
     private final ProviderService providerService;
@@ -45,6 +46,9 @@ public class SettingsService {
         }
         if (request.contextStrategyDefault() != null) {
             userSettings.changeContextStrategyDefault(request.contextStrategyDefault(), now);
+        }
+        if (request.escalationDefault() != null) {
+            userSettings.changeEscalationDefault(request.escalationDefault(), now);
         }
         if (Boolean.TRUE.equals(request.clearFastModel())) {
             userSettings.changeFastModel(null, now);
@@ -92,6 +96,11 @@ public class SettingsService {
     }
 
     @Transactional(readOnly = true)
+    public String escalationDefault(UUID userId) {
+        return find(userId).getEscalationDefault();
+    }
+
+    @Transactional(readOnly = true)
     public String contextStrategyDefault(UUID userId) {
         return find(userId).getContextStrategyDefault();
     }
@@ -120,7 +129,8 @@ public class SettingsService {
                 userSettings.getFastModelId(),
                 userSettings.getPlanModelId(),
                 userSettings.getExploreModelId(),
-                userSettings.getContextStrategyDefault());
+                userSettings.getContextStrategyDefault(),
+                userSettings.getEscalationDefault());
     }
 
     public record SettingsResponse(
@@ -131,7 +141,8 @@ public class SettingsService {
             UUID fastModelId,
             UUID planModelId,
             UUID exploreModelId,
-            String contextStrategyDefault) {}
+            String contextStrategyDefault,
+            String escalationDefault) {}
 
     public record RoutingSettings(String routingDefault, UUID fastModelId, UUID planModelId, UUID exploreModelId) {}
 
@@ -148,7 +159,8 @@ public class SettingsService {
             Boolean clearPlanModel,
             UUID exploreModelId,
             Boolean clearExploreModel,
-            @Pattern(regexp = CONTEXT_STRATEGY_PATTERN) String contextStrategyDefault) {
+            @Pattern(regexp = CONTEXT_STRATEGY_PATTERN) String contextStrategyDefault,
+            @Pattern(regexp = ESCALATION_PATTERN) String escalationDefault) {
 
         public UpdateSettingsRequest(
                 String globalInstructions,
@@ -162,6 +174,7 @@ public class SettingsService {
                     clearDefaultModel,
                     embeddingModelId,
                     clearEmbeddingModel,
+                    null,
                     null,
                     null,
                     null,

@@ -201,7 +201,8 @@ public class AgentRunner implements LiveItemSnapshots {
             }
             var contextWindow = model.contextWindow() == null ? DEFAULT_CONTEXT_WINDOW : model.contextWindow();
             long contextTokens = context.contextTokens();
-            var trajectory = escalation.begin(sessionId, turnId, context.mode());
+            var trajectory = escalation.begin(new EscalationController.TurnStart(
+                    userId, sessionId, turnId, context.mode(), smart && session.isEscalating(), routes, contextTokens));
             String reason = null;
             Map<String, Object> error = null;
             for (var step = 0; reason == null; step++) {
@@ -227,6 +228,7 @@ public class AgentRunner implements LiveItemSnapshots {
                     reason = Turn.CANCELLED;
                     break;
                 }
+                var tier = trajectory.tier(contextTokens);
                 var messages = contextAssembler.build(
                         context.mode(),
                         globalInstructions,
@@ -234,11 +236,11 @@ public class AgentRunner implements LiveItemSnapshots {
                         writer.conversation(sessionId),
                         writer.contextSnapshots(sessionId),
                         mask,
-                        model.supportsVision());
+                        tier.model().supportsVision());
                 var tools = stepTools.get();
                 var listener = new TurnListener(userId, sessionId, turnId, step, turn, Item.ASSISTANT_MESSAGE);
-                var request = new ChatRequest(model.modelKey(), messages, tools, null).withCacheKey(sessionId);
-                var used = failover.stream(routes.step(), request, listener, turn.cancellation);
+                var request = new ChatRequest(tier.model().modelKey(), messages, tools, null).withCacheKey(sessionId);
+                var used = failover.stream(tier, request, listener, turn.cancellation);
                 listener.completeAll(turn.cancellation.isCancelled() ? Item.CANCELLED : Item.COMPLETED, Map.of());
                 contextTokens = recordUsage(scope, used, model.contextWindow(), listener.usage, request);
                 if (turn.cancellation.isCancelled()) {

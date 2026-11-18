@@ -1,55 +1,140 @@
 package dev.pointer.agent.escalation;
 
+import dev.pointer.provider.ResolvedModel;
+import dev.pointer.routing.ModelRouter;
+import dev.pointer.session.Item;
 import dev.pointer.session.SessionWriter;
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 public class EscalationController {
 
+    public static final String REASON_STRUGGLE = "struggle";
+    public static final String REASON_CONTEXT = "context";
+    static final double FAST_CONTEXT_LIMIT = 0.8;
     private static final Logger log = LoggerFactory.getLogger(EscalationController.class);
     private static final String AGENT_MODE = "agent";
+    private static final String PLAN_MODE = "plan";
 
     private final SessionWriter writer;
     private final EscalationPolicy policy;
     private final StepSignalLog stepSignals;
+    private final BigDecimal threshold;
 
-    public Trajectory begin(UUID sessionId, UUID turnId, String mode) {
-        return new Trajectory(sessionId, turnId, AGENT_MODE.equals(mode));
+    EscalationController(
+            SessionWriter writer,
+            EscalationPolicy policy,
+            StepSignalLog stepSignals,
+            @Value("${pointer.escalation.threshold:1.5}") BigDecimal threshold) {
+        this.writer = writer;
+        this.policy = policy;
+        this.stepSignals = stepSignals;
+        this.threshold = threshold;
     }
+
+    public Trajectory begin(TurnStart start) {
+        var turnItems = turnItems(start.sessionId(), start.turnId());
+        var startsFast = start.enabled()
+                && !PLAN_MODE.equals(start.mode())
+                && fastTierUsable(start.routes(), start.contextTokens(), hasImages(turnItems));
+        return new Trajectory(
+                start, startsFast ? start.routes().fast() : start.routes().step(), startsFast);
+    }
+
+    static boolean fastTierUsable(ModelRouter.ModelPlan routes, long contextTokens, boolean hasImages) {
+        var fast = routes.fast().model();
+        var step = routes.step().model();
+        return !Objects.equals(fast.modelId(), step.modelId())
+                && fast.supportsTools()
+                && (!hasImages || fast.supportsVision())
+                && !overFastLimit(fast, contextTokens);
+    }
+
+    private static boolean overFastLimit(ResolvedModel fast, long contextTokens) {
+        return fast.contextWindow() != null && contextTokens >= fast.contextWindow() * FAST_CONTEXT_LIMIT;
+    }
+
+    private List<Map<String, Object>> turnItems(UUID sessionId, UUID turnId) {
+        return writer.conversation(sessionId).stream()
+                .filter(item -> Objects.equals(item.get("turnId"), turnId))
+                .toList();
+    }
+
+    private static boolean hasImages(List<Map<String, Object>> turnItems) {
+        return turnItems.stream()
+                .filter(item -> Item.USER_MESSAGE.equals(item.get("type")))
+                .map(item -> item.get("attachments"))
+                .filter(attachments -> attachments instanceof List<?>)
+                .flatMap(attachments -> ((List<?>) attachments).stream())
+                .anyMatch(attachment -> attachment instanceof Map<?, ?> map && "image".equals(map.get("kind")));
+    }
+
+    public record TurnStart(
+            UUID userId,
+            UUID sessionId,
+            UUID turnId,
+            String mode,
+            boolean enabled,
+            ModelRouter.ModelPlan routes,
+            long contextTokens) {}
 
     public final class Trajectory {
 
-        private final UUID sessionId;
-        private final UUID turnId;
-        private final boolean agentMode;
+        private final TurnStart start;
         private final List<Map<String, Integer>> history = new ArrayList<>();
+        private ModelRouter.RoutedModel current;
+        private boolean onFastTier;
 
-        private Trajectory(UUID sessionId, UUID turnId, boolean agentMode) {
-            this.sessionId = sessionId;
-            this.turnId = turnId;
-            this.agentMode = agentMode;
+        private Trajectory(TurnStart start, ModelRouter.RoutedModel current, boolean onFastTier) {
+            this.start = start;
+            this.current = current;
+            this.onFastTier = onFastTier;
+        }
+
+        public ModelRouter.RoutedModel tier(long contextTokens) {
+            if (onFastTier && overFastLimit(current.model(), contextTokens)) {
+                escalate(REASON_CONTEXT, BigDecimal.ZERO, List.of());
+            }
+            return current;
         }
 
         public void recordStep(int step, String modelLabel) {
             try {
-                var turnItems = writer.conversation(sessionId).stream()
-                        .filter(item -> Objects.equals(item.get("turnId"), turnId))
-                        .toList();
-                var signals = StruggleSignals.compute(turnItems, agentMode);
+                var signals = StruggleSignals.compute(
+                        turnItems(start.sessionId(), start.turnId()), AGENT_MODE.equals(start.mode()));
                 history.add(signals);
-                stepSignals.record(sessionId, turnId, step, modelLabel, signals, policy.score(history), false);
+                var score = policy.score(history);
+                var escalates = onFastTier && score.compareTo(threshold) >= 0;
+                stepSignals.record(start.sessionId(), start.turnId(), step, modelLabel, signals, score, escalates);
+                if (escalates) {
+                    escalate(REASON_STRUGGLE, score, EscalationPolicy.firing(history));
+                }
             } catch (RuntimeException exception) {
-                log.warn("Recording the signals of step {} in session {} failed", step, sessionId, exception);
+                log.warn("Recording the signals of step {} in session {} failed", step, start.sessionId(), exception);
             }
+        }
+
+        private void escalate(String reason, BigDecimal score, List<String> signals) {
+            var from = current.model();
+            current = start.routes().step();
+            onFastTier = false;
+            var notice = new LinkedHashMap<String, Object>();
+            notice.put("from", from.displayName());
+            notice.put("to", current.model().displayName());
+            notice.put("reason", reason);
+            notice.put("score", score);
+            notice.put("signals", signals);
+            writer.appendNotice(start.userId(), start.sessionId(), start.turnId(), Item.MODEL_ESCALATED, notice);
         }
     }
 }

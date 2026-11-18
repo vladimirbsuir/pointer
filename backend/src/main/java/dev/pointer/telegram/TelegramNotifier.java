@@ -41,7 +41,7 @@ class TelegramNotifier implements SessionEventListener {
             "approval.requested",
             "approval.resolved",
             AUTOMATION_UPDATED);
-    private static final Set<String> ITEM_TYPES = Set.of("tool_call", "assistant_message", "plan");
+    private static final Set<String> ITEM_TYPES = Set.of("tool_call", "assistant_message", "plan", "model_escalated");
     private static final List<String> SUMMARY_KEYS = List.of("path", "command", "pattern", "url", "query", "name");
 
     private final TelegramProperties properties;
@@ -184,6 +184,18 @@ class TelegramNotifier implements SessionEventListener {
             case "tool_call" -> {
                 if (progress != null) {
                     progress.lines.put(uuid(item.get("id")), toolLine(item));
+                    progress.dirty = true;
+                }
+            }
+            case "model_escalated" -> {
+                if (progress != null) {
+                    progress.lines.put(
+                            uuid(item.get("id")),
+                            text(
+                                    progress.locale,
+                                    "escalated",
+                                    escape(String.valueOf(item.get("from"))),
+                                    escape(String.valueOf(item.get("to")))));
                     progress.dirty = true;
                 }
             }
