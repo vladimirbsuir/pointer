@@ -1,6 +1,6 @@
 # F6. Trajectory-aware model escalation
 
-Status: Approved · Requirement ids: ESC-1 to ESC-6 · Depends on: routing, usage ledger and failover ([F3](f3-model-routing.md), [ADR 0020](../adr/0020-model-roles-and-usage-ledger.md), [ADR 0021](../adr/0021-model-failover.md)). Optional: cached-token accounting from [F5](f5-cache-aware-context.md) phase 1, the check loop of [F1](f1-issue-to-pr.md).
+Status: In progress (phase 1 implemented) · Requirement ids: ESC-1 to ESC-6 · Depends on: routing, usage ledger and failover ([F3](f3-model-routing.md), [ADR 0020](../adr/0020-model-roles-and-usage-ledger.md), [ADR 0021](../adr/0021-model-failover.md)). Optional: cached-token accounting from [F5](f5-cache-aware-context.md) phase 1, the check loop of [F1](f1-issue-to-pr.md).
 
 ## Goal
 
@@ -109,7 +109,12 @@ At the start of a turn the controller runs on the session model, without escalat
 
 ## Phases
 
-1. Signals without switching (ESC-3, ESC-5): migration, `StruggleSignals`, `step_signals` recorded for every step of every turn, whatever the escalation setting (the setting arrives in phase 2), the signals endpoint. Models do not change, so this is safe to run on real sessions and produces the data for choosing weights.
+1. Signals without switching (ESC-3, ESC-5): migration, `StruggleSignals`, `step_signals` recorded for every step of every turn, whatever the escalation setting (the setting arrives in phase 2), the signals endpoint. Models do not change, so this is safe to run on real sessions and produces the data for choosing weights. **Implemented**:
+   - Migration `V31__step_signals.sql` creates only `step_signals`; the escalation columns of `user_settings` and `sessions` come with phase 2 in their own migration.
+   - `agent/escalation`: `StruggleSignals` (pure function over the turn's top-level `tool_call` items; nested explore calls are ignored), `EscalationPolicy` (firing thresholds as in the signal table, provisional weight 1.0 per signal overridable with `pointer.escalation.weight.<signal>`, halving per step since a signal last fired), `StepSignalLog` and `EscalationController.Trajectory`, which records a row after every model call of a message turn that was not cancelled, including the final answer, with `escalated` false.
+   - Denials became distinguishable, which `denied` and `malformed_call` need: a denied tool call carries `error.code` `denied` (the user), `blocked` (permission settings) or `tool_unavailable` (not offered in the mode or to the explore sub-agent, counted as malformed). Before, all three used `denied`.
+   - `GET /sessions/{id}/turns/{turnId}/signals` returns a turn's rows. The usage view part of ESC-5 (steps per model) comes with phase 2, when steps can run on two models.
+   - `check_failed` is left for phase 4 with F1.
 2. Escalation (ESC-1, ESC-2, ESC-4): setting, controller, per-step model, notice item, pre-checks, desktop switch and notice.
 3. Calibration and policies (ESC-6): label the recorded steps by whether the fast model's turn ended in failure, fit weights and thresholds offline, compare `escalate` and `nudge`, set the defaults.
 4. F1 integration: `check_failed` signal and the escalation flag in the automation settings.
