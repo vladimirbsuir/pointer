@@ -56,6 +56,11 @@ def parse_args():
     parser.add_argument("--tasks", default=str(HERE.parent / "routing" / "tasks.json"))
     parser.add_argument("--price", default="0.5/2", help="input/output USD per million tokens")
     parser.add_argument("--ratios", default="0.1,0.25,0.5", help="cached to uncached input price ratios")
+    parser.add_argument(
+        "--model-prices",
+        action="store_true",
+        help="set --price and the first ratio as the model's prices during the run (enables the soft trigger)",
+    )
     parser.add_argument("--pause", type=int, default=0, help="seconds to wait between turns")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--out", default=str(HERE / "results"))
@@ -177,6 +182,10 @@ def coverage(text, expected):
     return round(sum(mentioned(text, path) for path in expected) / len(expected), 2) if expected else None
 
 
+def is_compaction(item):
+    return item.get("type") == "compaction_summary" and item.get("status") == "completed"
+
+
 def tool_signature(item):
     return item.get("toolName"), json.dumps(json.loads(item.get("argumentsJson") or "{}"), sort_keys=True)
 
@@ -217,7 +226,8 @@ def run_session(api, args, project, model, turns):
             "contextTokens": state.get("contextTokens"),
             "coverage": coverage(text, turn["expected"]),
             "toolCalls": sum(1 for item in new_items if item.get("type") == "tool_call"),
-            "compactions": sum(1 for item in new_items if item.get("type") == "compaction_summary"),
+            "compactions": sum(1 for item in new_items if is_compaction(item)),
+            "softCompactions": sum(1 for item in new_items if is_compaction(item) and item.get("trigger") == "soft"),
             "usage": delta(after, before),
             "answer": text,
         }
@@ -293,6 +303,7 @@ def summarize(rows, peak_context, repeated, tool_calls, price, ratios):
         "prefixReuseRatio": round(totals["reuse"] / totals["prefix"], 3) if totals["prefix"] else None,
         "peakContextTokens": peak_context,
         "compactions": sum(row["compactions"] for row in rows),
+        "softCompactions": sum(row.get("softCompactions", 0) for row in rows),
         "toolCalls": tool_calls,
         "repeatedToolCalls": repeated,
         "avgCoverage": round(sum(covered) / len(covered), 2) if covered else None,
@@ -303,6 +314,12 @@ def summarize(rows, peak_context, repeated, tool_calls, price, ratios):
         "costUncached": round(uncached, 4),
         "costByCachedPriceRatio": costs,
     }
+
+
+def original_prices(model):
+    names = ("inputPricePerMtok", "cachedInputPricePerMtok", "outputPricePerMtok")
+    prices = {name: model.get(name) for name in names if model.get(name) is not None}
+    return prices if prices else {"clearPrices": True}
 
 
 def main():
@@ -325,9 +342,24 @@ def main():
     if args.memories:
         seed_memories(api, project["id"], args.memories)
     turns = load_script(args)
-    session_id, rows, peak_context, repeated, tool_calls = run_session(api, args, project, model, turns)
     price = tuple(float(value) for value in args.price.split("/"))
     ratios = [float(value) for value in args.ratios.split(",")]
+    model_path = f"/providers/{model['providerId']}/models/{model['id']}"
+    if args.model_prices:
+        api.call(
+            "PATCH",
+            model_path,
+            {
+                "inputPricePerMtok": price[0],
+                "cachedInputPricePerMtok": round(price[0] * ratios[0], 4),
+                "outputPricePerMtok": price[1],
+            },
+        )
+    try:
+        session_id, rows, peak_context, repeated, tool_calls = run_session(api, args, project, model, turns)
+    finally:
+        if args.model_prices:
+            api.call("PATCH", model_path, original_prices(model))
     summary = summarize(rows, peak_context, repeated, tool_calls, price, ratios)
     print(json.dumps(summary, indent=2))
     out = Path(args.out)
@@ -341,6 +373,7 @@ def main():
         "memories": args.memories,
         "strategy": args.strategy,
         "contextWindow": args.context_window,
+        "modelPrices": args.model_prices,
         "script": args.script,
         "summary": summary,
         "rows": rows,
