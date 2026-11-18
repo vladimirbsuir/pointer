@@ -111,10 +111,11 @@ Phase 3 added `masking` and `hybrid` next to `summary` (CACHE-4). Same twelve-tu
 
 ## Reproducing
 
-Keep an executor device online for the project, then:
+Set up the backend, the benchmark account and the bench device as described in [the benchmark README](README.md#running-the-agent-benchmarks-locally), then:
 
 ```bash
-POINTER_EMAIL=... POINTER_PASSWORD=... POINTER_DEVICE_ID=<executor device id> POINTER_PROJECT=pointer python infra/bench/cache/run.py --model deepseek-v4.1-flash:free --label nomem
+eval "$(python infra/bench/account.py env)"
+python infra/bench/cache/run.py --model deepseek-v4.1-flash:free --clear-memories --label nomem
 ```
 
-Add `--strategy masking` or `--strategy hybrid` for the context strategies and `--context-window 40000` to make compaction trigger within the session; the block size is the backend property `pointer.context.mask-block` (for example `./gradlew bootRun --args='--pointer.context.mask-block=1'`). Add `--memories 120` for the variant with the memory index over budget; it needs an embedding model in the account settings so that the index is ordered by relevance, and the no-memory variant needs the project's memories deleted first.
+Add `--strategy masking` or `--strategy hybrid` for the context strategies and `--context-window 40000` to make compaction trigger within the session; the block size is the backend property `pointer.context.mask-block` (for example `./gradlew bootRun --args='--pointer.context.mask-block=1'`). Add `--memories 120` for the variant with the memory index over budget; it needs an embedding model in the account settings so that the index is ordered by relevance, and the no-memory variant needs the project's memories deleted first (`--clear-memories`; `--embedding-model <key>` sets the embedding model).
