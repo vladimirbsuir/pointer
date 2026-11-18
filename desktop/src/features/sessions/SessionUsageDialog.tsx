@@ -155,6 +155,32 @@ function UsageBody({
       {usage && usage.entries.length > 0 && (
         <p className="text-xs text-muted-foreground">{t("usage.cacheHint")}</p>
       )}
+      {usage && usage.turns.some((turn) => turn.models.length > 1 || turn.escalated) && (
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium">{t("usage.turnSteps")}</p>
+          <ul className="flex flex-col gap-0.5 text-xs tabular-nums">
+            {usage.turns.map((turn) => (
+              <li key={turn.turnId} className="flex gap-2">
+                <span className="w-16 shrink-0 text-muted-foreground">
+                  {t("usage.turnNumber", { number: turn.number })}
+                </span>
+                <span className="min-w-0 truncate">
+                  {turn.models
+                    .map((model) =>
+                      t("usage.modelSteps", { model: model.modelLabel, count: model.steps }),
+                    )
+                    .join(" → ")}
+                </span>
+                {turn.escalated && (
+                  <span className="shrink-0 text-amber-600 dark:text-amber-400">
+                    {t("usage.escalated")}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <Field>
         <FieldLabel htmlFor="session-budget">{t("usage.budget")}</FieldLabel>
         <div className="flex gap-2">

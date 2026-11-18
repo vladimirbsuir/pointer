@@ -35,6 +35,7 @@ export function AutomationSettings({ project, automation }: AutomationSettingsPr
   const [budget, setBudget] = useState(
     automation.budgetUsd === null ? "" : String(automation.budgetUsd),
   );
+  const [escalation, setEscalation] = useState(automation.escalation);
   const [saving, setSaving] = useState(false);
 
   const attempts = Number(maxAttempts);
@@ -67,6 +68,7 @@ export function AutomationSettings({ project, automation }: AutomationSettingsPr
             checkCommand: checkCommand.trim(),
             maxAttempts: attempts,
             budgetUsd: budgetValue,
+            escalation,
           },
         }),
       )) as Automation;
@@ -169,6 +171,13 @@ export function AutomationSettings({ project, automation }: AutomationSettingsPr
           <FieldDescription>{t("automation.budgetHint")}</FieldDescription>
         </Field>
       </div>
+      <Field>
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <Switch size="sm" checked={escalation} onCheckedChange={setEscalation} />
+          {t("automation.escalation")}
+        </label>
+        <FieldDescription>{t("automation.escalationHint")}</FieldDescription>
+      </Field>
       <div className="flex items-center justify-between gap-4">
         <p
           className={cn(

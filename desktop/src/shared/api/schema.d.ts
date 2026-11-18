@@ -1197,6 +1197,7 @@ export interface components {
             /** Format: int32 */
             maxAttempts?: number;
             budgetUsd?: number;
+            escalation?: boolean;
         };
         AutomationResponse: {
             configured?: boolean;
@@ -1209,6 +1210,7 @@ export interface components {
             /** Format: int32 */
             maxAttempts?: number;
             budgetUsd?: number;
+            escalation?: boolean;
             webhook?: string;
             webhookError?: string;
             /** Format: date-time */
@@ -1757,6 +1759,19 @@ export interface components {
             /** Format: date-time */
             linkedAt?: string;
         };
+        ModelSteps: {
+            modelLabel?: string;
+            /** Format: int64 */
+            steps?: number;
+        };
+        TurnSteps: {
+            /** Format: uuid */
+            turnId?: string;
+            /** Format: int32 */
+            number?: number;
+            escalated?: boolean;
+            models?: components["schemas"]["ModelSteps"][];
+        };
         UsageEntry: {
             /** Format: uuid */
             modelId?: string;
@@ -1783,6 +1798,7 @@ export interface components {
             estimatedCost?: number;
             budgetUsd?: number;
             entries?: components["schemas"]["UsageEntry"][];
+            turns?: components["schemas"]["TurnSteps"][];
         };
         StepSignals: {
             /** Format: int32 */
@@ -1793,6 +1809,7 @@ export interface components {
             };
             score?: number;
             escalated?: boolean;
+            nudged?: boolean;
             /** Format: date-time */
             createdAt?: string;
         };

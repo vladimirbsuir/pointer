@@ -247,8 +247,10 @@
       "edit_thrash": "editing the same file",
       "malformed_call": "invalid tool calls",
       "denied": "denied actions",
-      "read_only_streak": "reading without changes"
-    }
+      "read_only_streak": "reading without changes",
+      "check_failed": "the check failed"
+    },
+    "modelNudged": "Asked {{model}} to change its approach ({{signals}})"
   },
   "modes": {
     "ask": "Ask",
@@ -620,7 +622,11 @@
       "memory": "Memory curation",
       "explore": "Exploration"
     },
-    "role": "Role"
+    "role": "Role",
+    "turnSteps": "Steps per turn",
+    "turnNumber": "Turn {{number}}",
+    "modelSteps": "{{model}} × {{count}}",
+    "escalated": "escalated"
   },
   "automation": {
     "menu": "Issue automation…",
@@ -697,6 +703,8 @@
     "openDraft": "Open draft pull request",
     "cancel": "Cancel run",
     "checks": "{{done}} of {{max}}",
-    "sessionBadge": "#{{number}} · check {{done}}/{{max}}"
+    "sessionBadge": "#{{number}} · check {{done}}/{{max}}",
+    "escalation": "Start on the fast model and escalate",
+    "escalationHint": "The run's session uses smart routing with escalation: the agent works on the fast model and moves to the selected model when it struggles. A failed check makes the next struggle escalate at once."
   }
 }

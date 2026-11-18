@@ -66,6 +66,7 @@ export type Automation = {
   checkCommand: string | null;
   maxAttempts: number;
   budgetUsd: number | null;
+  escalation: boolean;
   webhook: AutomationWebhook;
   webhookError: string | null;
   updatedAt: string | null;
@@ -239,7 +240,8 @@ export type ItemType =
   | "plan"
   | "compaction_summary"
   | "model_switched"
-  | "model_escalated";
+  | "model_escalated"
+  | "model_nudged";
 
 export type Item = {
   id: string;
@@ -291,8 +293,16 @@ export type SessionUsageEntry = {
   costUsd: number | null;
 };
 
+export type SessionTurnSteps = {
+  turnId: string;
+  number: number;
+  escalated: boolean;
+  models: { modelLabel: string; steps: number }[];
+};
+
 export type SessionUsage = {
   estimatedCost: number | null;
   budgetUsd: number | null;
   entries: SessionUsageEntry[];
+  turns: SessionTurnSteps[];
 };

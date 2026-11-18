@@ -8,6 +8,7 @@ import {
   ClockIcon,
   FileTextIcon,
   FoldVerticalIcon,
+  LightbulbIcon,
   ShuffleIcon,
   TrendingUpIcon,
 } from "lucide-react";
@@ -46,6 +47,7 @@ export function MessageList({ sessionId, items, running, turnError, onRewound }:
         "compaction_summary",
         "model_switched",
         "model_escalated",
+        "model_nudged",
       ].includes(item.type),
   );
   const lastText = visible.at(-1)?.text?.length ?? 0;
@@ -182,6 +184,24 @@ function MessageItem({ item, nested, sessionId, running, onRewound }: MessageIte
         <ShuffleIcon className="size-3.5 shrink-0" />
         <span className="min-w-0 truncate">
           {t("chat.modelSwitched", { from: String(item.from ?? ""), to: String(item.to ?? "") })}
+        </span>
+      </div>
+    );
+  }
+
+  if (item.type === "model_nudged") {
+    const signals = Array.isArray(item.signals) ? (item.signals as string[]) : [];
+    return (
+      <div
+        className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground"
+        title={String(item.text ?? "")}
+      >
+        <LightbulbIcon className="size-3.5 shrink-0" />
+        <span className="min-w-0 truncate">
+          {t("chat.modelNudged", {
+            model: String(item.model ?? ""),
+            signals: signals.map((signal) => t(`chat.signals.${signal}`, signal)).join(", "),
+          })}
         </span>
       </div>
     );
