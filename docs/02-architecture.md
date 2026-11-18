@@ -177,7 +177,7 @@ Between compactions every request extends the previous one, so providers can ser
 
 Token counts use the provider's reported usage when available and an estimate otherwise.
 Compaction replaces older items with a model-generated summary item. With the `masking` and `hybrid` context strategies, tool results older than the newest ten are replaced by a one-line placeholder, in blocks of ten so that the request stays append-only between moves; `masking` summarizes only at 95 % of the window, `hybrid` at the usual 80 %. Original items stay in the database and in the client history.
-The thresholds and what stays verbatim are described in [ADR 0009](adr/0009-context-compaction-and-plan-approval.md).
+When compaction runs on the step model, its request is the step request with a summary instruction appended, so the provider serves the conversation from the cache; at the start of a turn on a model with a cached price, the agent also compacts early when the shorter context is expected to save more over the turn than the compaction costs. The thresholds and what stays verbatim are described in [ADR 0009](adr/0009-context-compaction-and-plan-approval.md), the cache-aware request, model choice and soft trigger in [ADR 0025](adr/0025-cache-aware-compaction.md).
 
 ### 4.4 Execution
 

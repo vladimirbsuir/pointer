@@ -102,6 +102,17 @@ Phase 3 added `masking` and `hybrid` next to `summary` (CACHE-4). Same twelve-tu
 - **No sign of lost information.** No variant repeated a tool call it had already made, coverage stayed at 0.98 to 1.00, and every session recalled both the first-turn constraint and the file of the fifth answer, including after two compactions.
 - **Session lengths still differ** (39 to 60 calls), so per-call and per-token figures are the comparable ones. The per-step `hybrid` run could not be completed: the provider's free allowance ran out after five turns, and its turns are left out.
 
+## Compaction on the cached prefix
+
+Phase 4 sends a compaction on the session model as the step request with the summary instruction appended ([ADR 0025](../adr/0025-cache-aware-compaction.md)). First live check, before the full benchmark: Experiential Labs `deepseek-v4.1-flash`, six turns of the same script (one failed on the provider's limit of 10 requests per minute), context window 40,000, then a manual compaction at 32,949 tokens of context.
+
+| | Prompt tokens | Cached, reported | Prefix reuse, estimated |
+|---|---|---|---|
+| Steps (19 calls) | 278,285 | 247,424 (0.89) | 0.89 |
+| Compaction (1 call) | 32,996 | **32,640 (0.99)** | 0.99 |
+
+Before phase 4 the compaction request had its own system prompt and no tools, so it shared no prefix with the steps and its whole prompt was billed at the input price. Now the provider served 99 % of it from the cache; at a cached price ratio of 0.1 the call's input costs about a tenth of what it did. The session's prices were set for the soft trigger (input 0.5, cached 0.05, output 0.5 USD per million tokens), and it correctly did not fire: with two to three model calls per turn and about 8,000 to 12,000 tokens to replace, the summary would have cost more than the turn saved. The soft trigger is checked by integration tests and is part of the full benchmark.
+
 ## Threats to validity
 
 - One run per variant and phase; model behaviour and provider cache state vary between runs.
@@ -118,4 +129,4 @@ eval "$(python infra/bench/account.py env)"
 python infra/bench/cache/run.py --model deepseek-v4.1-flash:free --clear-memories --label nomem
 ```
 
-Add `--strategy masking` or `--strategy hybrid` for the context strategies and `--context-window 40000` to make compaction trigger within the session; the block size is the backend property `pointer.context.mask-block` (for example `./gradlew bootRun --args='--pointer.context.mask-block=1'`). Add `--memories 120` for the variant with the memory index over budget; it needs an embedding model in the account settings so that the index is ordered by relevance, and the no-memory variant needs the project's memories deleted first (`--clear-memories`; `--embedding-model <key>` sets the embedding model).
+Add `--strategy masking` or `--strategy hybrid` for the context strategies and `--context-window 40000` to make compaction trigger within the session; the block size is the backend property `pointer.context.mask-block` (for example `./gradlew bootRun --args='--pointer.context.mask-block=1'`). Add `--memories 120` for the variant with the memory index over budget; it needs an embedding model in the account settings so that the index is ordered by relevance, and the no-memory variant needs the project's memories deleted first (`--clear-memories`; `--embedding-model <key>` sets the embedding model). Add `--model-prices` to give the model the `--price` input and output prices and the first `--ratios` value as its cached price during the run, which enables the soft compaction trigger; the prices are restored afterwards. The baseline without the soft trigger runs against a backend started with `--pointer.context.soft-compaction=false`.

@@ -1,6 +1,6 @@
 # 0009. Context compaction and plan approval
 
-Status: Accepted.
+Status: Accepted. The compaction part is superseded by [ADR 0025](0025-cache-aware-compaction.md).
 
 ## Context
 
