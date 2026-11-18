@@ -20,7 +20,8 @@ CONSTRAINT = (
 )
 PROBE = (
     "Without using any tools, answer from our conversation only: (1) What release codename did I give you in my "
-    "first message? (2) Which file did you name as the answer to my fifth question? Reply with two short lines."
+    "first message? (2) Which file did you name as the answer to my question \"{topic}\"? Reply with two short "
+    "lines."
 )
 DEFAULT_SCRIPT = "q01,q02,q03,q05,q08,t02,q10,q12,t03,q18,q21"
 RECALLED_TURN = 5
@@ -46,6 +47,8 @@ def parse_args():
     parser.add_argument("--script", default=DEFAULT_SCRIPT, help="task ids of turns 1 to 11 in order")
     parser.add_argument("--turns", type=int, default=12, help="turns to run; the last full run ends with the probes")
     parser.add_argument("--memories", type=int, default=0, help="seed project memories up to this count")
+    parser.add_argument("--strategy", choices=["summary", "masking", "hybrid"], default="summary")
+    parser.add_argument("--context-window", type=int, help="set the model's context window before the run")
     parser.add_argument("--questions", default=str(HERE.parent / "rag" / "questions.json"))
     parser.add_argument("--tasks", default=str(HERE.parent / "routing" / "tasks.json"))
     parser.add_argument("--price", default="0.5/2", help="input/output USD per million tokens")
@@ -63,12 +66,17 @@ def load_script(args):
     questions = {
         question["id"]: {
             "prompt": LOOKUP.format(query=question["query"]),
+            "topic": question["query"],
             "expected": [candidate["path"] for candidate in question["expected"]],
         }
         for question in json.loads(Path(args.questions).read_text(encoding="utf-8"))["questions"]
     }
     traces = {
-        task["id"]: {"prompt": TRACE.format(prompt=task["prompt"]), "expected": task["expected"]}
+        task["id"]: {
+            "prompt": TRACE.format(prompt=task["prompt"]),
+            "topic": task["prompt"].split(".")[0],
+            "expected": task["expected"],
+        }
         for task in json.loads(Path(args.tasks).read_text(encoding="utf-8"))["tasks"]
     }
     turns = []
@@ -78,7 +86,8 @@ def load_script(args):
             raise SystemExit(f"Unknown task {identifier}")
         turns.append({"id": identifier, **task})
     turns[0] = {**turns[0], "prompt": CONSTRAINT + turns[0]["prompt"]}
-    turns.append({"id": "probe", "prompt": PROBE, "expected": []})
+    recalled = turns[RECALLED_TURN - 1] if len(turns) >= RECALLED_TURN else turns[-1]
+    turns.append({"id": "probe", "prompt": PROBE.format(topic=recalled["topic"]), "expected": []})
     return turns[: args.turns]
 
 
@@ -156,7 +165,13 @@ def run_session(api, args, project, model, turns):
     session = api.call(
         "POST",
         f"/projects/{project['id']}/sessions",
-        {"title": "Cache benchmark", "mode": "ask", "modelId": model["id"], "routing": "off"},
+        {
+            "title": "Cache benchmark",
+            "mode": "ask",
+            "modelId": model["id"],
+            "routing": "off",
+            "contextStrategy": args.strategy,
+        },
     )
     rows = []
     seen = set()
@@ -236,6 +251,12 @@ def summarize(rows, peak_context, repeated, tool_calls, price, ratios):
             "billedPromptTokensPerfectCache": round(totals["prompt"] - reusable * (1 - ratio)),
         }
     uncached = (totals["prompt"] * input_price + totals["completion"] * output_price) / 1_000_000
+    by_purpose = {}
+    for row in rows:
+        for key, values in row["usage"].items():
+            purpose = by_purpose.setdefault(key.split("/")[-1], {"calls": 0, "prompt": 0, "completion": 0, "cached": 0})
+            for name in purpose:
+                purpose[name] += values[name]
     probe = next((row for row in rows if row["task"] == "probe"), None)
     covered = [row["coverage"] for row in rows if row["coverage"] is not None]
     return {
@@ -258,6 +279,7 @@ def summarize(rows, peak_context, repeated, tool_calls, price, ratios):
         "recallConstraint": probe["recallConstraint"] if probe else None,
         "recallFile": probe["recallFile"] if probe else None,
         "seconds": round(sum(row["seconds"] for row in rows), 1),
+        "byPurpose": by_purpose,
         "costUncached": round(uncached, 4),
         "costByCachedPriceRatio": costs,
     }
@@ -268,6 +290,12 @@ def main():
     api = Api(args.api, args.email, args.password, args.device_id)
     project = find_project(api, args.project)
     model = find_model(api, args.model)
+    if args.context_window:
+        api.call(
+            "PATCH",
+            f"/providers/{model['providerId']}/models/{model['id']}",
+            {"contextWindow": args.context_window},
+        )
     if args.memories:
         seed_memories(api, project["id"], args.memories)
     turns = load_script(args)
@@ -285,6 +313,8 @@ def main():
         "model": args.model,
         "sessionId": session_id,
         "memories": args.memories,
+        "strategy": args.strategy,
+        "contextWindow": args.context_window,
         "script": args.script,
         "summary": summary,
         "rows": rows,
