@@ -4,7 +4,7 @@ Status: Accepted. Amends where [ADR 0019](0019-agent-memory.md) places the memor
 
 ## Context
 
-Providers serve the repeated beginning of a request from a prompt cache at a fraction of the input price, but only as long as the beginning is byte-for-byte identical to an earlier request. The agent rebuilt the system prompt on every call with the date, the git branch and the memory index in it. The [prompt cache baseline](../benchmarks/cache.md) showed what that costs: when the memory index exceeds its budget it is ordered by relevance to each new message, so the system prompt changed every turn and the reusable share of a twelve-turn session fell from 0.94 to 0.75. Feature spec: [F5](../features/f5-cache-aware-context.md) (CACHE-3, CACHE-6).
+Providers serve the repeated beginning of a request from a prompt cache at a fraction of the input price, but only as long as the beginning is byte-for-byte identical to an earlier request. The agent rebuilt the system prompt on every call with the date, the git branch and the memory index in it. The [prompt cache baseline](../benchmarks/cache.md) showed what that costs: when the memory index exceeds its budget it is ordered by relevance to each new message, so the system prompt changed every turn and the reusable share of the main loop in a twelve-turn session fell from 0.95 to 0.74. Feature spec: [F5](../features/f5-cache-aware-context.md) (CACHE-3, CACHE-6).
 
 ## Decision
 
@@ -19,6 +19,7 @@ Providers serve the repeated beginning of a request from a prompt cache at a fra
 
 - A turn whose snapshot is unchanged adds nothing to the context, and a changed one adds a cold block at the end instead of invalidating the whole history.
 - Every change of the memory index stays in the conversation until the next compaction, so a session whose index changes every turn grows by one index per turn. The index is limited to about 6,000 characters, and the benchmark measures whether the growth outweighs the cache it saves.
+- Measured on the same twelve-turn session: with the memory index reordered every turn the cached share rose from 0.73 to 0.96, and all twelve snapshots together added about 18,000 tokens to the context.
 - A change of mode still changes the system prompt and the tool list and resets the cache.
 - The memory index is no longer in the system prompt; MEM-2 is restated as "every turn's context".
 

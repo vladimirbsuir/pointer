@@ -1,6 +1,6 @@
 # F5. Cache-aware context management
 
-Status: In progress (phase 1 implemented) · Requirement ids: CACHE-1 to CACHE-7 · Depends on: context assembly and compaction ([ADR 0009](../adr/0009-context-compaction-and-plan-approval.md)), usage ledger and model prices ([F3](f3-model-routing.md), CTX-5, CTX-6), memory section ([F4](f4-agent-memory.md)).
+Status: In progress (phases 1 and 2 implemented) · Requirement ids: CACHE-1 to CACHE-7 · Depends on: context assembly and compaction ([ADR 0009](../adr/0009-context-compaction-and-plan-approval.md)), usage ledger and model prices ([F3](f3-model-routing.md), CTX-5, CTX-6), memory section ([F4](f4-agent-memory.md)).
 
 ## Goal
 
@@ -36,7 +36,7 @@ Suspected sources of lost cache, to be confirmed by the phase 1 measurements:
 
 ### Data model
 
-Phase 1 adds the measurement columns in `V28__cache_usage.sql` (`models.cached_input_price_per_mtok`, `model_usage.cached_prompt_tokens`, `prefix_tokens`, `prefix_reuse_tokens`); the later phases add the rest in their own migrations.
+Phase 1 adds the measurement columns in `V28__cache_usage.sql` (`models.cached_input_price_per_mtok`, `model_usage.cached_prompt_tokens`, `prefix_tokens`, `prefix_reuse_tokens`), phase 2 adds `turns.context_snapshot` and `providers.sends_cache_key` in `V29__stable_prefix.sql`; the strategy columns come with phase 3.
 
 ```sql
 ALTER TABLE models
@@ -80,12 +80,13 @@ ALTER TABLE turns
 - The system prompt keeps what changes only when the user edits it: base instructions, mode instructions, OS and shell, project name, global instructions, project rules.
 - Date, git branch and the memory section move to the turn context snapshot. `AgentRunner` builds it at the start of the turn as today and stores it in `turns.context_snapshot` only when it differs from the snapshot of the previous turn of the session; otherwise the column stays null.
 - The turn's first user message is rendered with the snapshot in front, as a block that says it supersedes earlier context blocks. A turn without a snapshot renders as before. Because the snapshot is stored, the same items always render to the same messages.
-- After a compaction, if no user message in the active items carries a snapshot, the latest earlier snapshot is rendered in front of the summary message.
-- Tools are sorted by name; `ProposeTool.definition` sorts interpreters.
+- After a compaction, the latest snapshot of the turns the summary replaced (turns without a user message in the active items) is rendered in front of the summary message, unless the first active turn has its own snapshot. The first draft carried a snapshot only while no active turn had one; the property test showed that the summary message then changes as soon as a later turn gains a snapshot, which breaks the prefix. Both inputs of the final rule are fixed between compactions.
+- Tool order was already deterministic: registry tools come sorted by name from the database and the server-side tools follow in a fixed order. Sorting all of them by name was tried and reverted, because it moved `explore` to the top of the Ask-mode list and changed how often the model delegated ([benchmark](../benchmarks/cache.md#stable-prefix)). What was not deterministic is the schema serialization: `ChatRequest.ToolDefinition` now copies its JSON schema with `StableMaps`, which keeps maps built in order and sorts unordered ones (`Map.of`, whose iteration order changes with every JVM start) by key. `ProposeTool.definition` already lists interpreters in a fixed order.
+- The title request uses the raw text of the first user message, without the context block.
 - A change of mode between turns still changes the system prompt and the tool list and is accepted as a cache reset.
 - With `providers.sends_cache_key`, `OpenAiCompatibleClient.requestBody` adds `prompt_cache_key` with the session id. It is off by default because not every OpenAI-compatible server accepts unknown fields.
 
-Invariant, checked by a property test: for the items of a session between two compactions, the messages built from the first `n` items are a prefix of the messages built from the first `n + 1` items, except for the last message.
+Invariant, checked by a property test (`ContextAssemblerTests`, 300 generated sessions with tool steps, queued follow-ups, snapshots and compactions): between two compactions, the messages built at every model call are a strict prefix of the messages built at the next one. The property holds at call boundaries, where every tool call of the last step has its result; between them a step's assistant message still grows. The decision is recorded in [ADR 0024](../adr/0024-append-only-context.md).
 
 ### Strategies (CACHE-4)
 
@@ -123,7 +124,7 @@ Invariant, checked by a property test: for the items of a session between two co
 ## Phases
 
 1. Measurement (CACHE-1, CACHE-2): migration, usage parsing, cached price in cost, `PrefixFingerprint`, usage view, desktop columns, and the baseline benchmark run on the current context assembly. Shippable alone: the numbers answer which test providers report cached tokens and how much of each session is reusable today. **Implemented**; baseline in [benchmarks/cache.md](../benchmarks/cache.md), script [`infra/bench/cache/run.py`](../../infra/bench/cache/run.py).
-2. Stable prefix (CACHE-3, CACHE-6): snapshot column and rendering, tool ordering, cache key, the append-only property test; repeat the baseline run.
+2. Stable prefix (CACHE-3, CACHE-6): snapshot column and rendering, tool ordering, cache key, the append-only property test; repeat the baseline run. **Implemented**; ADR 0024, results in [benchmarks/cache.md](../benchmarks/cache.md#stable-prefix).
 3. Strategies (CACHE-4): masking and hybrid with block alignment, setting, desktop selector.
 4. Cache-reusing compaction and the soft trigger (CACHE-5), the full benchmark (CACHE-7) and an ADR that supersedes the compaction part of [ADR 0009](../adr/0009-context-compaction-and-plan-approval.md).
 
@@ -147,6 +148,8 @@ Task set: scripted sessions of twelve turns over this repository, built from the
 - Soft trigger: cost with and without it on the same sessions.
 
 ## Open questions
+
+- Phase 2 measured that a memory index reordered by relevance stores a new snapshot in every turn, about 1,500 tokens each (18,000 over twelve turns). If the growth turns out to matter with masking and compaction, the options are a snapshot that carries only the changed lines, or an index order that stays fixed within a session unless the set of memories changes.
 
 - Answered in phase 1: Experiential Labs (`deepseek-v4.1-flash`, `gpt-6-luna`) and TokenHarbor (`deepseek-v4.1-flash:free`) report `prompt_tokens_details.cached_tokens`; VyceAI sends the field as well.
 - Provider caches differ in minimum prefix length, block size and lifetime; the property for the lifetime is a single default, and measuring it per provider is not planned.
