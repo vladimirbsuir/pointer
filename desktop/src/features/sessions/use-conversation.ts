@@ -108,6 +108,7 @@ function applyEvent(state: ConversationState, { seq, event }: SessionEvent): Con
               contextStrategy:
                 (event.contextStrategy as Session["contextStrategy"]) ??
                 next.session.contextStrategy,
+              escalation: (event.escalation as Session["escalation"]) ?? next.session.escalation,
               budgetUsd:
                 "budgetUsd" in event
                   ? ((event.budgetUsd as number | null) ?? null)

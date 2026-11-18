@@ -9,6 +9,7 @@ import {
   FileTextIcon,
   FoldVerticalIcon,
   ShuffleIcon,
+  TrendingUpIcon,
 } from "lucide-react";
 import type { Item } from "@/shared/api/types";
 import { AttachmentImage } from "./AttachmentImage";
@@ -44,6 +45,7 @@ export function MessageList({ sessionId, items, running, turnError, onRewound }:
         "plan",
         "compaction_summary",
         "model_switched",
+        "model_escalated",
       ].includes(item.type),
   );
   const lastText = visible.at(-1)?.text?.length ?? 0;
@@ -180,6 +182,27 @@ function MessageItem({ item, nested, sessionId, running, onRewound }: MessageIte
         <ShuffleIcon className="size-3.5 shrink-0" />
         <span className="min-w-0 truncate">
           {t("chat.modelSwitched", { from: String(item.from ?? ""), to: String(item.to ?? "") })}
+        </span>
+      </div>
+    );
+  }
+
+  if (item.type === "model_escalated") {
+    const signals = Array.isArray(item.signals) ? (item.signals as string[]) : [];
+    const values = { from: String(item.from ?? ""), to: String(item.to ?? "") };
+    return (
+      <div
+        className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground"
+        title={signals.map((signal) => t(`chat.signals.${signal}`, signal)).join(", ")}
+      >
+        <TrendingUpIcon className="size-3.5 shrink-0" />
+        <span className="min-w-0 truncate">
+          {item.reason === "context"
+            ? t("chat.modelEscalatedContext", values)
+            : t("chat.modelEscalated", {
+                ...values,
+                signals: signals.map((signal) => t(`chat.signals.${signal}`, signal)).join(", "),
+              })}
         </span>
       </div>
     );

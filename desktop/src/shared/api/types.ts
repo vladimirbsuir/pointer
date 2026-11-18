@@ -215,12 +215,14 @@ export type Session = Required<
     | "budgetUsd"
     | "routing"
     | "contextStrategy"
+    | "escalation"
   >
 > & {
   estimatedCost: number | null;
   budgetUsd: number | null;
   routing: "off" | "smart";
   contextStrategy: ContextStrategy;
+  escalation: "off" | "on";
   worktree: SessionWorktree | null;
   modelId: string | null;
   executorDeviceId: string | null;
@@ -236,7 +238,8 @@ export type ItemType =
   | "tool_call"
   | "plan"
   | "compaction_summary"
-  | "model_switched";
+  | "model_switched"
+  | "model_escalated";
 
 export type Item = {
   id: string;

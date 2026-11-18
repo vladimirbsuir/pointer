@@ -916,6 +916,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/turns/{turnId}/signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["signals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/remote": {
         parameters: {
             query?: never;
@@ -1223,6 +1239,7 @@ export interface components {
             exploreModelId?: string;
             clearExploreModel?: boolean;
             contextStrategyDefault?: string;
+            escalationDefault?: string;
         };
         SettingsResponse: {
             globalInstructions?: string;
@@ -1238,6 +1255,7 @@ export interface components {
             /** Format: uuid */
             exploreModelId?: string;
             contextStrategyDefault?: string;
+            escalationDefault?: string;
         };
         CommandRequest: {
             name: string;
@@ -1285,6 +1303,7 @@ export interface components {
             budgetUsd?: number;
             routing?: string;
             contextStrategy?: string;
+            escalation?: string;
             /** Format: uuid */
             executorDeviceId?: string;
             worktree?: components["schemas"]["SessionWorktree"];
@@ -1457,6 +1476,7 @@ export interface components {
             budgetUsd?: number;
             routing?: string;
             contextStrategy?: string;
+            escalation?: string;
         };
         CreateRemoteSessionRequest: {
             title?: string;
@@ -1676,6 +1696,7 @@ export interface components {
             budgetUsd?: number;
             routing?: string;
             contextStrategy?: string;
+            escalation?: string;
         };
         UpdateProviderRequest: {
             name?: string;
@@ -1762,6 +1783,18 @@ export interface components {
             estimatedCost?: number;
             budgetUsd?: number;
             entries?: components["schemas"]["UsageEntry"][];
+        };
+        StepSignals: {
+            /** Format: int32 */
+            step?: number;
+            modelLabel?: string;
+            signals?: {
+                [key: string]: number;
+            };
+            score?: number;
+            escalated?: boolean;
+            /** Format: date-time */
+            createdAt?: string;
         };
         RemoteFileSuggestions: {
             paths?: string[];
@@ -3748,6 +3781,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageResponse"];
+                };
+            };
+        };
+    };
+    signals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+                turnId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepSignals"][];
                 };
             };
         };

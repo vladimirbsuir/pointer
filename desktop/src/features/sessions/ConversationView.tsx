@@ -8,7 +8,7 @@ import { FileDiffIcon, FoldVerticalIcon, SquareTerminalIcon } from "lucide-react
 import { AutomationBadge } from "@/features/automation/AutomationBadge";
 import { useWorkspace } from "@/features/workspace/workspace-store";
 import { api, unwrap } from "@/shared/api/client";
-import { enabledModels, useProviders, useRemoteSessions } from "@/shared/api/queries";
+import { enabledModels, useProviders, useRemoteSessions, useSettings } from "@/shared/api/queries";
 import {
   toAppError,
   type ContextStrategy,
@@ -34,6 +34,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation();
   const { state, patchSession } = useConversation(sessionId);
   const { data: providers } = useProviders();
+  const { data: settings } = useSettings();
   const [changesOpen, setChangesOpen] = useState(false);
   const terminalOpen = useWorkspace((state) => state.terminalOpen);
   const [draft, setDraft] = useState({ key: 0, text: "" });
@@ -86,6 +87,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
         ? t("chat.chooseModelFirst")
         : null;
   const activeChanges = (changedFiles ?? []).filter((file) => !file.reverted).length;
+  const canEscalate = session.routing === "smart" && Boolean(settings?.fastModelId);
   const canCompact =
     !running && session.modelId !== null && state.items.some((item) => item.turnId !== null);
 
@@ -95,6 +97,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
     autoApprove?: boolean;
     routing?: "off" | "smart";
     contextStrategy?: ContextStrategy;
+    escalation?: "off" | "on";
   }) => {
     try {
       const updated = (await unwrap(
@@ -224,6 +227,21 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
                 }
               />
               <span className={cn(changesOpen && "sr-only")}>{t("chat.smartRouting")}</span>
+            </label>
+            <label
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground",
+                !canEscalate && "opacity-50",
+              )}
+              title={canEscalate ? t("chat.escalationHint") : t("chat.escalationUnavailable")}
+            >
+              <Switch
+                size="sm"
+                checked={session.escalation === "on"}
+                disabled={!canEscalate && session.escalation !== "on"}
+                onCheckedChange={(on) => void updateSession({ escalation: on ? "on" : "off" })}
+              />
+              <span className={cn(changesOpen && "sr-only")}>{t("chat.escalation")}</span>
             </label>
             <ContextStrategyPicker
               value={session.contextStrategy}

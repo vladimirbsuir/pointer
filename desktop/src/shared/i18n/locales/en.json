@@ -235,7 +235,20 @@
     "remembered": "Saved to memory: {{name}}",
     "budgetExceeded": "The session budget is used up",
     "smartRouting": "Smart",
-    "smartRoutingHint": "Smart routing: titles, compaction and memory curation use the fast model, Plan mode uses the planning model (Settings → Providers)."
+    "smartRoutingHint": "Smart routing: titles, compaction and memory curation use the fast model, Plan mode uses the planning model (Settings → Providers).",
+    "escalation": "Escalation",
+    "escalationHint": "Escalation: steps start on the fast model and a turn moves to the session model when it repeats calls, keeps failing or edits the same file over and over.",
+    "escalationUnavailable": "Escalation needs smart routing and a fast model (Settings → Providers).",
+    "modelEscalated": "{{from}} was struggling ({{signals}}), continuing on {{to}}",
+    "modelEscalatedContext": "The context outgrew {{from}}, continuing on {{to}}",
+    "signals": {
+      "repeat_call": "repeated calls",
+      "error_streak": "failing tool calls",
+      "edit_thrash": "editing the same file",
+      "malformed_call": "invalid tool calls",
+      "denied": "denied actions",
+      "read_only_streak": "reading without changes"
+    }
   },
   "modes": {
     "ask": "Ask",
@@ -290,7 +303,9 @@
     "routingDescription": "With smart routing, titles, context compaction and memory curation use the fast model, and Plan mode uses the planning model. Each session can turn it on or off in its header. The agent can always delegate reading and searching to the exploration sub-agent; it runs on the model marked with the telescope. Mark models with the rabbit, checklist and telescope buttons below.",
     "fastModel": "Fast model",
     "planModel": "Planning model",
-    "roleNotSet": "not set, the session model is used"
+    "roleNotSet": "not set, the session model is used",
+    "escalationDefault": "Escalation for new sessions",
+    "escalationDescription": "With escalation and smart routing, the agent works on the fast model and switches to the session model for the rest of a turn when that turn shows signs of trouble. Plan mode always uses the planning or session model."
   },
   "approval": {
     "title": "Allow this action?",

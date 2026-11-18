@@ -130,6 +130,7 @@ export function useSettings() {
         embeddingModelId: data.embeddingModelId ?? null,
         routingDefault: (data.routingDefault ?? "off") as "off" | "smart",
         contextStrategyDefault: (data.contextStrategyDefault ?? "summary") as ContextStrategy,
+        escalationDefault: (data.escalationDefault ?? "off") as "off" | "on",
         fastModelId: data.fastModelId ?? null,
         planModelId: data.planModelId ?? null,
         exploreModelId: data.exploreModelId ?? null,

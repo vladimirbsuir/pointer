@@ -469,6 +469,17 @@ function RoutingCard({ providers }: { providers: Provider[] }) {
     }
   };
 
+  const setEscalationDefault = async (on: boolean) => {
+    try {
+      await unwrap(
+        api().PUT("/api/v1/me/settings", { body: { escalationDefault: on ? "on" : "off" } }),
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+    } catch (error) {
+      toast.error(errorMessage(t, toAppError(error)));
+    }
+  };
+
   const setStrategyDefault = async (strategy: ContextStrategy) => {
     try {
       await unwrap(
@@ -491,6 +502,15 @@ function RoutingCard({ providers }: { providers: Provider[] }) {
         {t("providers.routingDefault")}
       </label>
       <p className="text-xs text-muted-foreground">{t("providers.routingDescription")}</p>
+      <label className="flex items-center gap-2 border-t pt-2 font-medium">
+        <Switch
+          size="sm"
+          checked={settings?.escalationDefault === "on"}
+          onCheckedChange={(on) => void setEscalationDefault(on)}
+        />
+        {t("providers.escalationDefault")}
+      </label>
+      <p className="text-xs text-muted-foreground">{t("providers.escalationDescription")}</p>
       <div className="flex items-center gap-2 border-t pt-2">
         <span className="font-medium">{t("contextStrategy.default")}</span>
         <ContextStrategyPicker
