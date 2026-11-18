@@ -1,6 +1,7 @@
 package dev.pointer.agent;
 
 import dev.pointer.provider.llm.ChatMessage;
+import dev.pointer.provider.llm.TokenEstimate;
 import dev.pointer.session.AttachmentService;
 import dev.pointer.session.Item;
 import java.time.Clock;
@@ -69,9 +70,6 @@ class ContextAssembler {
             - the current state and the remaining work.
             Keep file paths, identifiers and error messages exact. Use concise Markdown. Reply with the summary only.""";
 
-    private static final int CHARS_PER_TOKEN = 4;
-    private static final int TOKENS_PER_MESSAGE = 4;
-    private static final int TOKENS_PER_IMAGE = 1_000;
     private static final String IMAGE_UNSUPPORTED =
             "[An image was attached here, but the current model does not accept images.]";
 
@@ -138,16 +136,7 @@ class ContextAssembler {
     }
 
     static int estimateTokens(List<ChatMessage> messages) {
-        var chars = 0L;
-        var images = 0;
-        for (var message : messages) {
-            chars += message.content() == null ? 0 : message.content().length();
-            for (var call : message.toolCalls()) {
-                chars += call.name().length() + call.arguments().length();
-            }
-            images += message.imageUrls().size();
-        }
-        return (int) (chars / CHARS_PER_TOKEN) + messages.size() * TOKENS_PER_MESSAGE + images * TOKENS_PER_IMAGE;
+        return TokenEstimate.messages(messages);
     }
 
     private String systemPrompt(String mode, String globalInstructions, ProjectContext project) {

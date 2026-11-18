@@ -127,8 +127,18 @@ public class OpenAiCompatibleClient {
         if (usage.isObject()) {
             listener.onUsage(new StreamListener.Usage(
                     usage.path("prompt_tokens").asLong(0),
-                    usage.path("completion_tokens").asLong(0)));
+                    usage.path("completion_tokens").asLong(0),
+                    cachedPromptTokens(usage)));
         }
+    }
+
+    private static Long cachedPromptTokens(JsonNode usage) {
+        var details = usage.path("prompt_tokens_details").path("cached_tokens");
+        if (details.isNumber()) {
+            return details.asLong();
+        }
+        var hits = usage.path("prompt_cache_hit_tokens");
+        return hits.isNumber() ? hits.asLong() : null;
     }
 
     private Map<String, Object> requestBody(ChatRequest request) {

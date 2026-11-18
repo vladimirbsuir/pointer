@@ -1,8 +1,10 @@
 package dev.pointer.provider;
 
 import dev.pointer.provider.llm.Endpoint;
+import dev.pointer.provider.llm.StreamListener;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Objects;
 import java.util.UUID;
 
 public record ResolvedModel(
@@ -13,19 +15,30 @@ public record ResolvedModel(
         boolean supportsTools,
         boolean supportsVision,
         BigDecimal inputPricePerMtok,
+        BigDecimal cachedInputPricePerMtok,
         BigDecimal outputPricePerMtok,
         EmbeddingPrefixes embeddingPrefixes,
         Endpoint endpoint) {
 
     private static final BigDecimal MILLION = BigDecimal.valueOf(1_000_000);
 
-    public BigDecimal cost(long promptTokens, long completionTokens) {
-        if (inputPricePerMtok == null && outputPricePerMtok == null) {
+    public BigDecimal cost(StreamListener.Usage usage) {
+        return cost(usage.promptTokens(), usage.cachedPromptTokens(), usage.completionTokens());
+    }
+
+    public BigDecimal cost(long promptTokens, Long cachedPromptTokens, long completionTokens) {
+        if (inputPricePerMtok == null && cachedInputPricePerMtok == null && outputPricePerMtok == null) {
             return null;
         }
-        return price(inputPricePerMtok, promptTokens)
+        var cached = cachedPromptTokens == null ? 0 : Math.clamp(cachedPromptTokens, 0, promptTokens);
+        return price(inputPricePerMtok, promptTokens - cached)
+                .add(price(effectiveCachedInputPrice(), cached))
                 .add(price(outputPricePerMtok, completionTokens))
                 .divide(MILLION, 6, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal effectiveCachedInputPrice() {
+        return Objects.requireNonNullElse(cachedInputPricePerMtok, inputPricePerMtok);
     }
 
     private static BigDecimal price(BigDecimal perMillion, long tokens) {

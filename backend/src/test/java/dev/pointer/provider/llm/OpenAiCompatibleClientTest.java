@@ -44,6 +44,36 @@ class OpenAiCompatibleClientTest {
     }
 
     @Test
+    void readsCachedPromptTokensInBothFieldStyles() {
+        server.enqueueStream(
+                Duration.ZERO,
+                "{\"choices\":[],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":5,"
+                        + "\"prompt_tokens_details\":{\"cached_tokens\":64}}}",
+                "[DONE]");
+        server.enqueueStream(
+                Duration.ZERO,
+                "{\"choices\":[],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":5,"
+                        + "\"prompt_cache_hit_tokens\":80,\"prompt_cache_miss_tokens\":20}}",
+                "[DONE]");
+        server.enqueueStream(
+                Duration.ZERO,
+                "{\"choices\":[],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":5,"
+                        + "\"prompt_tokens_details\":{\"cached_tokens\":null}}}",
+                "[DONE]");
+        var openAi = new RecordingListener();
+        var deepSeek = new RecordingListener();
+        var absent = new RecordingListener();
+
+        client.stream(endpoint(null), request(), openAi, new Cancellation());
+        client.stream(endpoint(null), request(), deepSeek, new Cancellation());
+        client.stream(endpoint(null), request(), absent, new Cancellation());
+
+        assertThat(openAi.usage).isEqualTo(new StreamListener.Usage(100, 5, 64L));
+        assertThat(deepSeek.usage).isEqualTo(new StreamListener.Usage(100, 5, 80L));
+        assertThat(absent.usage).isEqualTo(new StreamListener.Usage(100, 5, null));
+    }
+
+    @Test
     void streamsReasoningAndToolCallDeltas() {
         server.enqueueStream(
                 Duration.ZERO,

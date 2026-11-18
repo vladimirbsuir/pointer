@@ -63,6 +63,10 @@ public final class SessionDtos {
             long calls,
             long promptTokens,
             long completionTokens,
+            Long cachedPromptTokens,
+            Long cacheReportedPromptTokens,
+            Long prefixTokens,
+            Long prefixReuseTokens,
             BigDecimal costUsd) {}
 
     public record UpdateSessionRequest(

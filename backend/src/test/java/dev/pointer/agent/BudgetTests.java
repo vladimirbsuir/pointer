@@ -7,6 +7,7 @@ import dev.pointer.provider.ProviderDtos;
 import dev.pointer.session.SessionDtos;
 import dev.pointer.testing.GatewayTestClient;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -66,7 +67,56 @@ class BudgetTests extends AgentIntegrationTest {
         }
     }
 
+    @Test
+    void cachedTokensArePricedAndPrefixReuseIsRecorded() throws Exception {
+        var setup = setUp(false);
+        priceModel(
+                setup, Map.of("inputPricePerMtok", 1000, "cachedInputPricePerMtok", 100, "outputPricePerMtok", 1000));
+        llm.enqueueText("First answer.");
+        llm.enqueueText("Title");
+
+        try (var ws = viewer(setup)) {
+            send(setup, "Hello", null);
+            ws.awaitEvent("turn.completed", TIMEOUT);
+            awaitTitle(ws);
+            llm.enqueueStream(
+                    Duration.ZERO,
+                    "{\"choices\":[{\"delta\":{\"content\":\"Second answer.\"}}]}",
+                    "{\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":5,"
+                            + "\"prompt_tokens_details\":{\"cached_tokens\":10}}}",
+                    "[DONE]");
+            send(setup, "Second question", null);
+            ws.await(message -> countEvents(ws, "turn.completed") == 2, TIMEOUT);
+
+            var usage = usage(setup);
+            assertThat(usage.estimatedCost()).isEqualByComparingTo("0.025");
+            var step = usage.entries().stream()
+                    .filter(entry -> entry.purpose().equals("step"))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(step.calls()).isEqualTo(2);
+            assertThat(step.promptTokens()).isEqualTo(24);
+            assertThat(step.cachedPromptTokens()).isEqualTo(10);
+            assertThat(step.cacheReportedPromptTokens()).isEqualTo(12);
+            assertThat(step.costUsd()).isEqualByComparingTo("0.025");
+            assertThat(step.prefixTokens()).isPositive();
+            assertThat(step.prefixReuseTokens()).isPositive().isLessThan(step.prefixTokens());
+            var title = usage.entries().stream()
+                    .filter(entry -> entry.purpose().equals("title"))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(title.cachedPromptTokens()).isNull();
+            assertThat(title.cacheReportedPromptTokens()).isNull();
+            assertThat(title.prefixTokens()).isNull();
+            assertThat(title.prefixReuseTokens()).isNull();
+        }
+    }
+
     private void priceModel(Setup setup) {
+        priceModel(setup, Map.of("inputPricePerMtok", 1000, "outputPricePerMtok", 1000));
+    }
+
+    private void priceModel(Setup setup, Map<String, Object> prices) {
         var provider = client.get()
                 .uri("/api/v1/providers")
                 .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
@@ -80,7 +130,7 @@ class BudgetTests extends AgentIntegrationTest {
                         provider.id(),
                         provider.models().getFirst().id())
                 .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
-                .body(Map.of("inputPricePerMtok", 1000, "outputPricePerMtok", 1000))
+                .body(prices)
                 .exchange()
                 .expectStatus()
                 .isOk();

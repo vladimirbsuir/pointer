@@ -170,12 +170,10 @@ class ExploreAgent {
                 messages.add(ChatMessage.user(REPORT_REQUEST));
             }
             var reply = new Reply();
-            var used = failover.stream(
-                    explorer,
-                    new ChatRequest(explorer.model().modelKey(), messages, wrapUp ? List.of() : tools, null),
-                    reply,
-                    scope.cancellation());
-            recordUsage(scope, used, reply.usage);
+            var exploreRequest =
+                    new ChatRequest(explorer.model().modelKey(), messages, wrapUp ? List.of() : tools, null);
+            var used = failover.stream(explorer, exploreRequest, reply, scope.cancellation());
+            recordUsage(scope, used, exploreRequest, reply.usage);
             if (scope.cancellation().isCancelled() || wrapUp || reply.calls.isEmpty()) {
                 var text = reply.text.toString().strip();
                 return new Report(
@@ -191,18 +189,22 @@ class ExploreAgent {
     }
 
     private void recordUsage(
-            ToolCallHandler.TurnScope scope, ModelRouter.RoutedModel used, StreamListener.Usage usage) {
+            ToolCallHandler.TurnScope scope,
+            ModelRouter.RoutedModel used,
+            ChatRequest request,
+            StreamListener.Usage usage) {
+        ledger.record(
+                scope.sessionId(), scope.turnId(), used.model(), used.role(), UsageLedger.EXPLORE, request, usage);
         if (usage == null) {
             return;
         }
-        ledger.record(scope.sessionId(), scope.turnId(), used.model(), used.role(), UsageLedger.EXPLORE, usage);
         writer.recordSideUsage(
                 scope.userId(),
                 scope.sessionId(),
                 scope.turnId(),
                 usage.promptTokens(),
                 usage.completionTokens(),
-                used.model().cost(usage.promptTokens(), usage.completionTokens()));
+                used.model().cost(usage));
     }
 
     private void fail(ToolCallHandler.TurnScope scope, UUID itemId, String code, String message) {

@@ -10,5 +10,10 @@ public interface StreamListener {
 
     default void onUsage(Usage usage) {}
 
-    record Usage(long promptTokens, long completionTokens) {}
+    record Usage(long promptTokens, long completionTokens, Long cachedPromptTokens) {
+
+        public Usage(long promptTokens, long completionTokens) {
+            this(promptTokens, completionTokens, null);
+        }
+    }
 }

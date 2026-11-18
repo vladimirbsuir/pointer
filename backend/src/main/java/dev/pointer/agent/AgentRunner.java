@@ -215,13 +215,10 @@ public class AgentRunner implements LiveItemSnapshots {
                                 userId, context.projectId(), context.executorDeviceId(), context.mode(), routes)
                         : List.<ChatRequest.ToolDefinition>of();
                 var listener = new TurnListener(userId, sessionId, turnId, step, turn, Item.ASSISTANT_MESSAGE);
-                var used = failover.stream(
-                        routes.step(),
-                        new ChatRequest(model.modelKey(), messages, tools, null),
-                        listener,
-                        turn.cancellation);
+                var request = new ChatRequest(model.modelKey(), messages, tools, null);
+                var used = failover.stream(routes.step(), request, listener, turn.cancellation);
                 listener.completeAll(turn.cancellation.isCancelled() ? Item.CANCELLED : Item.COMPLETED, Map.of());
-                contextTokens = recordUsage(scope, used, model.contextWindow(), listener.usage, messages);
+                contextTokens = recordUsage(scope, used, model.contextWindow(), listener.usage, request);
                 if (turn.cancellation.isCancelled()) {
                     reason = Turn.CANCELLED;
                 } else if (listener.toolCalls.isEmpty()) {
@@ -306,21 +303,21 @@ public class AgentRunner implements LiveItemSnapshots {
             ModelRouter.RoutedModel used,
             Integer contextWindow,
             StreamListener.Usage usage,
-            List<ChatMessage> sent) {
+            ChatRequest sent) {
         var model = used.model();
+        ledger.record(scope.sessionId(), scope.turnId(), model, used.role(), UsageLedger.STEP, sent, usage);
         if (usage != null) {
-            ledger.record(scope.sessionId(), scope.turnId(), model, used.role(), UsageLedger.STEP, usage);
             writer.recordUsage(
                     scope.userId(),
                     scope.sessionId(),
                     scope.turnId(),
                     usage.promptTokens(),
                     usage.completionTokens(),
-                    model.cost(usage.promptTokens(), usage.completionTokens()),
+                    model.cost(usage),
                     contextWindow);
             return (int) (usage.promptTokens() + usage.completionTokens());
         }
-        var estimate = ContextAssembler.estimateTokens(sent);
+        var estimate = ContextAssembler.estimateTokens(sent.messages());
         writer.resetContextTokens(scope.userId(), scope.sessionId(), estimate, contextWindow);
         return estimate;
     }
@@ -440,13 +437,14 @@ public class AgentRunner implements LiveItemSnapshots {
                     .orElse("");
             var title = new StringBuilder();
             var reported = new AtomicReference<StreamListener.Usage>();
+            var request = new ChatRequest(
+                    routed.model().modelKey(),
+                    List.of(ChatMessage.system(TITLE_PROMPT), ChatMessage.user(firstUserMessage)),
+                    List.of(),
+                    null);
             var used = failover.stream(
                     routed,
-                    new ChatRequest(
-                            routed.model().modelKey(),
-                            List.of(ChatMessage.system(TITLE_PROMPT), ChatMessage.user(firstUserMessage)),
-                            List.of(),
-                            null),
+                    request,
                     new StreamListener() {
                         @Override
                         public void onText(String delta) {
@@ -459,7 +457,7 @@ public class AgentRunner implements LiveItemSnapshots {
                         }
                     },
                     new Cancellation());
-            ledger.record(sessionId, turnId, used.model(), used.role(), UsageLedger.TITLE, reported.get());
+            ledger.record(sessionId, turnId, used.model(), used.role(), UsageLedger.TITLE, request, reported.get());
             var cleaned = cleanTitle(title.toString());
             if (!cleaned.isEmpty()) {
                 writer.applyGeneratedTitle(userId, sessionId, cleaned);
@@ -509,11 +507,11 @@ public class AgentRunner implements LiveItemSnapshots {
 
         private ModelRouter.RoutedModel stream(
                 ModelRouter.RoutedModel target, List<ChatMessage> request, TurnListener listener) {
-            return failover.stream(
-                    target,
-                    new ChatRequest(target.model().modelKey(), request, List.of(), null),
-                    listener,
-                    turn.cancellation);
+            return failover.stream(target, compactionRequest(target, request), listener, turn.cancellation);
+        }
+
+        private static ChatRequest compactionRequest(ModelRouter.RoutedModel target, List<ChatMessage> request) {
+            return new ChatRequest(target.model().modelKey(), request, List.of(), null);
         }
 
         OptionalInt summarize() {
@@ -558,6 +556,7 @@ public class AgentRunner implements LiveItemSnapshots {
                     routed.model(),
                     routed.role(),
                     UsageLedger.COMPACTION,
+                    compactionRequest(routed, request),
                     listener.usage);
             if (listener.usage != null) {
                 writer.recordUsage(
@@ -566,7 +565,7 @@ public class AgentRunner implements LiveItemSnapshots {
                         scope.turnId(),
                         listener.usage.promptTokens(),
                         listener.usage.completionTokens(),
-                        routed.model().cost(listener.usage.promptTokens(), listener.usage.completionTokens()),
+                        routed.model().cost(listener.usage),
                         model.contextWindow());
             }
             var remaining = contextAssembler.build(

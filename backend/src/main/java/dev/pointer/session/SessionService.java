@@ -246,6 +246,10 @@ public class SessionService {
                                 row.calls(),
                                 row.promptTokens(),
                                 row.completionTokens(),
+                                row.cachedPromptTokens(),
+                                row.cacheReportedPromptTokens(),
+                                row.prefixTokens(),
+                                row.prefixReuseTokens(),
                                 row.costUsd()))
                         .toList());
     }

@@ -2,7 +2,9 @@ package dev.pointer.session;
 
 import dev.pointer.common.Ids;
 import dev.pointer.provider.ResolvedModel;
+import dev.pointer.provider.llm.ChatRequest;
 import dev.pointer.provider.llm.StreamListener;
+import dev.pointer.routing.PrefixFingerprint;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -25,17 +27,26 @@ public class UsageLedger {
 
     private final JdbcClient jdbc;
     private final Clock clock;
+    private final PrefixFingerprint fingerprint;
 
     public void record(
-            UUID sessionId, UUID turnId, ResolvedModel model, String role, String purpose, StreamListener.Usage usage) {
+            UUID sessionId,
+            UUID turnId,
+            ResolvedModel model,
+            String role,
+            String purpose,
+            ChatRequest request,
+            StreamListener.Usage usage) {
+        var reuse = fingerprint.measure(sessionId, purpose, model.modelId(), request);
         if (usage == null) {
             return;
         }
         jdbc.sql("""
                         insert into model_usage (id, session_id, turn_id, model_id, model_label, role, purpose,
-                                                 prompt_tokens, completion_tokens, cost_usd, created_at)
+                                                 prompt_tokens, completion_tokens, cached_prompt_tokens,
+                                                 prefix_tokens, prefix_reuse_tokens, cost_usd, created_at)
                         values (:id, :sessionId, :turnId, :modelId, :label, :role, :purpose, :prompt, :completion,
-                                :cost, :now)
+                                :cached, :prefix, :reuse, :cost, :now)
                         """)
                 .param("id", Ids.newId())
                 .param("sessionId", sessionId)
@@ -46,7 +57,10 @@ public class UsageLedger {
                 .param("purpose", purpose)
                 .param("prompt", usage.promptTokens())
                 .param("completion", usage.completionTokens())
-                .param("cost", model.cost(usage.promptTokens(), usage.completionTokens()))
+                .param("cached", usage.cachedPromptTokens())
+                .param("prefix", reuse.prefixTokens())
+                .param("reuse", reuse.prefixReuseTokens())
+                .param("cost", model.cost(usage))
                 .param("now", Timestamp.from(clock.instant()))
                 .update();
     }
@@ -55,6 +69,12 @@ public class UsageLedger {
         return jdbc.sql("""
                         select model_id, model_label, role, purpose, count(*) as calls,
                                sum(prompt_tokens) as prompt_tokens, sum(completion_tokens) as completion_tokens,
+                               sum(cached_prompt_tokens)::bigint as cached_prompt_tokens,
+                               (sum(prompt_tokens) filter (where cached_prompt_tokens is not null))::bigint
+                                   as cache_reported_prompt_tokens,
+                               (sum(prefix_tokens) filter (where prefix_reuse_tokens is not null))::bigint
+                                   as prefix_tokens,
+                               sum(prefix_reuse_tokens)::bigint as prefix_reuse_tokens,
                                sum(cost_usd) as cost_usd
                         from model_usage
                         where session_id = :sessionId
@@ -70,6 +90,10 @@ public class UsageLedger {
                         rs.getLong("calls"),
                         rs.getLong("prompt_tokens"),
                         rs.getLong("completion_tokens"),
+                        rs.getObject("cached_prompt_tokens", Long.class),
+                        rs.getObject("cache_reported_prompt_tokens", Long.class),
+                        rs.getObject("prefix_tokens", Long.class),
+                        rs.getObject("prefix_reuse_tokens", Long.class),
                         rs.getBigDecimal("cost_usd")))
                 .list();
     }
@@ -82,5 +106,9 @@ public class UsageLedger {
             long calls,
             long promptTokens,
             long completionTokens,
+            Long cachedPromptTokens,
+            Long cacheReportedPromptTokens,
+            Long prefixTokens,
+            Long prefixReuseTokens,
             BigDecimal costUsd) {}
 }

@@ -25,6 +25,7 @@ public class ProviderModel extends BaseEntity {
     private boolean supportsTools;
     private boolean supportsVision;
     private BigDecimal inputPricePerMtok;
+    private BigDecimal cachedInputPricePerMtok;
     private BigDecimal outputPricePerMtok;
     private String embeddingQueryPrefix;
     private String embeddingDocumentPrefix;
@@ -83,10 +84,14 @@ public class ProviderModel extends BaseEntity {
         }
         if (Boolean.TRUE.equals(request.clearPrices())) {
             inputPricePerMtok = null;
+            cachedInputPricePerMtok = null;
             outputPricePerMtok = null;
         }
         if (request.inputPricePerMtok() != null) {
             inputPricePerMtok = request.inputPricePerMtok();
+        }
+        if (request.cachedInputPricePerMtok() != null) {
+            cachedInputPricePerMtok = request.cachedInputPricePerMtok();
         }
         if (request.outputPricePerMtok() != null) {
             outputPricePerMtok = request.outputPricePerMtok();

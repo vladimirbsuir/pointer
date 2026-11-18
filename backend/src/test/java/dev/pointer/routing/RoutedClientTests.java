@@ -219,6 +219,7 @@ class RoutedClientTests {
                 false,
                 null,
                 null,
+                null,
                 EmbeddingPrefixes.NONE,
                 new Endpoint("http://" + name + ".test/v1", null, null));
     }

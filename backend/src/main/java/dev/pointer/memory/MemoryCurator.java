@@ -166,13 +166,14 @@ public class MemoryCurator {
                 session.deviceId());
         var reply = new StringBuilder();
         var reported = new AtomicReference<StreamListener.Usage>();
+        var request = ChatRequest.of(
+                routed.model().modelKey(),
+                List.of(
+                        ChatMessage.system(SYSTEM),
+                        ChatMessage.user(known(session) + "\n\nSession transcript:\n" + transcript)));
         var used = client.failover(session.userId(), session.deviceId(), session.smartRouting()).stream(
                 routed,
-                ChatRequest.of(
-                        routed.model().modelKey(),
-                        List.of(
-                                ChatMessage.system(SYSTEM),
-                                ChatMessage.user(known(session) + "\n\nSession transcript:\n" + transcript))),
+                request,
                 new StreamListener() {
                     @Override
                     public void onText(String delta) {
@@ -185,7 +186,8 @@ public class MemoryCurator {
                     }
                 },
                 new Cancellation());
-        ledger.record(session.sessionId(), null, used.model(), used.role(), UsageLedger.MEMORY, reported.get());
+        ledger.record(
+                session.sessionId(), null, used.model(), used.role(), UsageLedger.MEMORY, request, reported.get());
         return reply.toString();
     }
 

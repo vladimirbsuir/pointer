@@ -163,6 +163,7 @@ Unique: (`user_id`, `name`).
 | `supports_tools` | boolean | Default true |
 | `supports_vision` | boolean | Default false |
 | `input_price_per_mtok` | numeric(12,6) | Nullable (CTX-6) |
+| `cached_input_price_per_mtok` | numeric(12,6) | Nullable; price of prompt tokens the provider serves from its cache; the input price applies when null (CACHE-1) |
 | `output_price_per_mtok` | numeric(12,6) | Nullable |
 | `embedding_query_prefix`, `embedding_document_prefix` | text | Nullable; prepended to search queries and to indexed chunks when the model computes embeddings (CTX-9). Filled for known families when the model is created: `nomic-embed`, `e5`, `bge-small/base/large`, `mxbai-embed`, `snowflake-arctic-embed` |
 | `source` | text | `discovered`, `manual` |
@@ -588,7 +589,10 @@ Agent memory ([F4](features/f4-agent-memory.md)), accessed with plain SQL becaus
 | `role` | text | `main`, `explore`; `plan`, `fast` and `fallback` with smart routing |
 | `purpose` | text | `step`, `title`, `compaction`, `memory`, `explore` |
 | `prompt_tokens`, `completion_tokens` | bigint | As reported by the provider |
-| `cost_usd` | numeric(12,6) | Nullable; from model prices at the time of the call |
+| `cached_prompt_tokens` | bigint | Nullable; part of `prompt_tokens` the provider served from its cache (`prompt_tokens_details.cached_tokens` or `prompt_cache_hit_tokens`); null when it does not report it, which differs from zero (CACHE-1) |
+| `prefix_tokens` | bigint | Estimated size of the request: tool definitions and messages at four characters per token (CACHE-2) |
+| `prefix_reuse_tokens` | bigint | Nullable; estimated leading part of the request identical to the previous call of the same session and purpose, 0 when that call used another model; null for the first call and after a backend restart (CACHE-2) |
+| `cost_usd` | numeric(12,6) | Nullable; from model prices at the time of the call, cached tokens at the cached input price |
 | `created_at` | timestamptz | |
 
 Index: (`session_id`, `created_at`).

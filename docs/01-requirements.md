@@ -195,6 +195,18 @@ Specified in [F4](features/f4-agent-memory.md).
 | AUTO-5 | On success a pull request that closes the issue is opened; on final failure a draft pull request with the failing output is opened. Status is commented on the issue. | F1 |
 | AUTO-6 | Runs are listed per project with status, checks, cost, duration and links; Telegram notifies on start, failed checks, success and failure. | F1 |
 
+### 2.15 Cache-aware context (CACHE)
+
+| ID | Requirement | Priority |
+|---|---|---|
+| CACHE-1 | Usage records the cached part of the prompt when the provider reports it; a model can have a cached input price that the cost uses ([F5](features/f5-cache-aware-context.md)). | F5 |
+| CACHE-2 | Every model call records how much of its request repeats the previous call of the same session and purpose; the usage view shows cache hit and prefix reuse ratios. | F5 |
+| CACHE-3 | Between compactions the model's view of a session is append-only: volatile context is stored per turn and tool definitions have a deterministic order. | F5 |
+| CACHE-4 | A context strategy (`summary`, `masking`, `hybrid`) is a session setting with a user default; masking moves in blocks to keep the prefix stable. | F5 |
+| CACHE-5 | Compaction can reuse the agent's cached prefix, and an extra compaction at a turn boundary happens when the expected saving exceeds its cost. | F5 |
+| CACHE-6 | A provider can be marked to receive a prompt cache key (the session id) with every request. | F5 |
+| CACHE-7 | A benchmark compares the strategies on cost, tokens, cache use, compactions, task success and recall. | F5 |
+
 ## 3. Non-functional requirements
 
 | ID | Requirement |
