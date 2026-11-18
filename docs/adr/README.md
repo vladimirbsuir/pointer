@@ -32,3 +32,4 @@ File name: `NNNN-short-title.md`. Status: `Proposed`, `Accepted`, `Superseded by
 | [0023](0023-issue-to-pull-request-automation.md) | Issue to pull request automation | Accepted |
 | [0024](0024-append-only-context.md) | Append-only context with per-turn snapshots | Accepted |
 | [0025](0025-cache-aware-compaction.md) | Cache-aware compaction | Accepted |
+| [0026](0026-trajectory-aware-escalation.md) | Trajectory-aware model escalation | Accepted |

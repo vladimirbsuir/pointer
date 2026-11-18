@@ -1,6 +1,6 @@
 # F6. Trajectory-aware model escalation
 
-Status: In progress (phase 1 implemented) · Requirement ids: ESC-1 to ESC-6 · Depends on: routing, usage ledger and failover ([F3](f3-model-routing.md), [ADR 0020](../adr/0020-model-roles-and-usage-ledger.md), [ADR 0021](../adr/0021-model-failover.md)). Optional: cached-token accounting from [F5](f5-cache-aware-context.md) phase 1, the check loop of [F1](f1-issue-to-pr.md).
+Status: In progress (phases 1 and 2 implemented) · Requirement ids: ESC-1 to ESC-6 · Depends on: routing, usage ledger and failover ([F3](f3-model-routing.md), [ADR 0020](../adr/0020-model-roles-and-usage-ledger.md), [ADR 0021](../adr/0021-model-failover.md)). Optional: cached-token accounting from [F5](f5-cache-aware-context.md) phase 1, the check loop of [F1](f1-issue-to-pr.md).
 
 ## Goal
 
@@ -115,7 +115,13 @@ At the start of a turn the controller runs on the session model, without escalat
    - Denials became distinguishable, which `denied` and `malformed_call` need: a denied tool call carries `error.code` `denied` (the user), `blocked` (permission settings) or `tool_unavailable` (not offered in the mode or to the explore sub-agent, counted as malformed). Before, all three used `denied`.
    - `GET /sessions/{id}/turns/{turnId}/signals` returns a turn's rows. The usage view part of ESC-5 (steps per model) comes with phase 2, when steps can run on two models.
    - `check_failed` is left for phase 4 with F1.
-2. Escalation (ESC-1, ESC-2, ESC-4): setting, controller, per-step model, notice item, pre-checks, desktop switch and notice.
+2. Escalation (ESC-1, ESC-2, ESC-4): setting, controller, per-step model, notice item, pre-checks, desktop switch and notice. **Implemented** ([ADR 0026](../adr/0026-trajectory-aware-escalation.md)):
+   - Migration `V32__escalation.sql`: `user_settings.escalation_default`, `sessions.escalation`, item type `model_escalated`.
+   - `EscalationController.begin` runs the pre-checks and returns the turn's `Trajectory`; `AgentRunner` asks it for the tier before every step, so the request model, vision and failover follow the tier, while compaction and the context meter keep the step model. The 80 % check also runs before every later step and escalates with reason `context`.
+   - The score now sums every firing of a signal with its decay (phase 1 counted only the latest firing, which would never let a single persistent signal reach a threshold above its weight). Threshold `pointer.escalation.threshold`, default 1.5, provisional until phase 3.
+   - `model_escalated` carries `reason` (`struggle` or `context`) in addition to the spec's fields. The desktop shows the session switch next to smart routing (enabled with smart routing and a fast model), the default in Settings → Providers and the notice with the signals; Telegram adds the notice to the turn's progress message.
+   - Live check on Experiential Labs (`gpt-6-luna` fast, `deepseek-v4.1-flash` session model): a lookup turn stayed on the fast model, and a turn that re-read a missing file escalated after its third step and was then answered by the session model.
+   - Still open from ESC-5: the usage dialog shows steps per model and role for the whole session (role `fast` rows), not per turn; the per-turn view comes with the phase 3 tooling, which reads `step_signals`.
 3. Calibration and policies (ESC-6): label the recorded steps by whether the fast model's turn ended in failure, fit weights and thresholds offline, compare `escalate` and `nudge`, set the defaults.
 4. F1 integration: `check_failed` signal and the escalation flag in the automation settings.
 
