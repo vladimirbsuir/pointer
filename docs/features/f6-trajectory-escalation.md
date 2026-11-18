@@ -1,6 +1,6 @@
 # F6. Trajectory-aware model escalation
 
-Status: In progress (phases 1 and 2 implemented) · Requirement ids: ESC-1 to ESC-6 · Depends on: routing, usage ledger and failover ([F3](f3-model-routing.md), [ADR 0020](../adr/0020-model-roles-and-usage-ledger.md), [ADR 0021](../adr/0021-model-failover.md)). Optional: cached-token accounting from [F5](f5-cache-aware-context.md) phase 1, the check loop of [F1](f1-issue-to-pr.md).
+Status: In progress (phases 1, 2 and 4 implemented, phase 3 tooling implemented) · Requirement ids: ESC-1 to ESC-6 · Depends on: routing, usage ledger and failover ([F3](f3-model-routing.md), [ADR 0020](../adr/0020-model-roles-and-usage-ledger.md), [ADR 0021](../adr/0021-model-failover.md)). Optional: cached-token accounting from [F5](f5-cache-aware-context.md) phase 1, the check loop of [F1](f1-issue-to-pr.md).
 
 ## Goal
 
@@ -122,8 +122,14 @@ At the start of a turn the controller runs on the session model, without escalat
    - `model_escalated` carries `reason` (`struggle` or `context`) in addition to the spec's fields. The desktop shows the session switch next to smart routing (enabled with smart routing and a fast model), the default in Settings → Providers and the notice with the signals; Telegram adds the notice to the turn's progress message.
    - Live check on Experiential Labs (`gpt-6-luna` fast, `deepseek-v4.1-flash` session model): a lookup turn stayed on the fast model, and a turn that re-read a missing file escalated after its third step and was then answered by the session model.
    - Still open from ESC-5: the usage dialog shows steps per model and role for the whole session (role `fast` rows), not per turn; the per-turn view comes with the phase 3 tooling, which reads `step_signals`.
-3. Calibration and policies (ESC-6): label the recorded steps by whether the fast model's turn ended in failure, fit weights and thresholds offline, compare `escalate` and `nudge`, set the defaults.
-4. F1 integration: `check_failed` signal and the escalation flag in the automation settings.
+3. Calibration and policies (ESC-6): label the recorded steps by whether the fast model's turn ended in failure, fit weights and thresholds offline, compare `escalate` and `nudge`, set the defaults. **Tooling implemented**, calibration runs open ([benchmark](../benchmarks/escalation.md)):
+   - Policy `nudge` (`pointer.escalation.policy`, `pointer.escalation.nudge-threshold`), item `model_nudged`, column `step_signals.nudged` (migration `V33__escalation_nudge.sql`).
+   - Counters fire when they grow and states while they hold (see ADR 0026); decisions only after a step that continues the turn.
+   - Usage view per turn (the rest of ESC-5): `GET /sessions/{id}/usage` returns `turns` built from `step_signals`, so steps without reported usage count too; the usage dialog lists the models of every turn when a session escalated.
+   - Harness `infra/bench/escalation/run.py`: a Python fixture project with six coding tasks (two each easy, medium, hard, checked by `unittest` modules that fail before and pass after) and two lookup tasks; reference solutions prove every task solvable (`--verify-fixture`); it runs each task in a fresh copy with its own bench device under the policies `fast`, `main` and `escalation`, restores the tests before checking, reruns runs that ended in a provider error and stores outcome, cost inputs, steps per model and every step's signals.
+   - `infra/bench/escalation/evaluate.py`: policy table, success by difficulty, and from fast-only runs the offline replay of thresholds (failures caught, successes escalated) and the AUC of every signal and of the full score for predicting a failed turn, with the scoring rules of the backend.
+   - Still open: the calibration runs themselves. The smoke run showed that `gpt-6-luna` solves the fixture without struggling, so the fast model of the calibration should be a much smaller one (for example a free 2B-class model on Kilo Gateway) against the session model.
+4. F1 integration: `check_failed` signal and the escalation flag in the automation settings. **Implemented**: `origin: check_failed` on the follow-up user message, the `check_failed` counter (weight 1.0, so the next sign of struggle escalates), `automations.escalation` (migration `V34__automation_escalation.sql`) which gives the run's session smart routing with escalation, and the switch in the automation settings dialog.
 
 ## Tests
 

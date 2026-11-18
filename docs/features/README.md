@@ -13,7 +13,7 @@ Each spec is a technical brief for implementation: what is built, where it plugs
 | F3 | [Smart model routing](f3-model-routing.md) | ROUTE-1 to ROUTE-6 | Implemented |
 | F4 | [Agent memory](f4-agent-memory.md) | MEM-1 to MEM-7 | Implemented |
 | F5 | [Cache-aware context management](f5-cache-aware-context.md) | CACHE-1 to CACHE-7 | In progress |
-| F6 | [Trajectory-aware model escalation](f6-trajectory-escalation.md) | ESC-1 to ESC-6 | In progress (phases 1 and 2) |
+| F6 | [Trajectory-aware model escalation](f6-trajectory-escalation.md) | ESC-1 to ESC-6 | In progress (calibration runs open) |
 
 Status values: `Approved` (agreed, not started), `In progress`, `Implemented`, `Dropped`.
 
