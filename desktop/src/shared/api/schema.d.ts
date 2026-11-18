@@ -1400,6 +1400,7 @@ export interface components {
             supportsTools?: boolean;
             supportsVision?: boolean;
             inputPricePerMtok?: number;
+            cachedInputPricePerMtok?: number;
             outputPricePerMtok?: number;
             embeddingQueryPrefix?: string;
             embeddingDocumentPrefix?: string;
@@ -1687,6 +1688,7 @@ export interface components {
             supportsVision?: boolean;
             enabled?: boolean;
             inputPricePerMtok?: number;
+            cachedInputPricePerMtok?: number;
             outputPricePerMtok?: number;
             clearPrices?: boolean;
             embeddingQueryPrefix?: string;
@@ -1739,6 +1741,14 @@ export interface components {
             promptTokens?: number;
             /** Format: int64 */
             completionTokens?: number;
+            /** Format: int64 */
+            cachedPromptTokens?: number;
+            /** Format: int64 */
+            cacheReportedPromptTokens?: number;
+            /** Format: int64 */
+            prefixTokens?: number;
+            /** Format: int64 */
+            prefixReuseTokens?: number;
             costUsd?: number;
         };
         UsageResponse: {

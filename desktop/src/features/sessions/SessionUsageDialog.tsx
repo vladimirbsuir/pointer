@@ -34,7 +34,7 @@ export function SessionUsageDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("usage.title")}</DialogTitle>
           <DialogDescription>{t("usage.description")}</DialogDescription>
@@ -43,6 +43,13 @@ export function SessionUsageDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function formatShare(part: number | null, whole: number | null) {
+  if (part === null || whole === null || whole <= 0) {
+    return "—";
+  }
+  return `${Math.round((part / whole) * 100)}%`;
 }
 
 function UsageBody({
@@ -116,6 +123,8 @@ function UsageBody({
               <th className="py-1 font-normal">{t("usage.role")}</th>
               <th className="py-1 text-right font-normal">{t("usage.calls")}</th>
               <th className="py-1 text-right font-normal">{t("usage.tokens")}</th>
+              <th className="py-1 text-right font-normal">{t("usage.cacheHits")}</th>
+              <th className="py-1 text-right font-normal">{t("usage.prefixReuse")}</th>
               <th className="py-1 text-right font-normal">{t("usage.cost")}</th>
             </tr>
           </thead>
@@ -130,12 +139,21 @@ function UsageBody({
                   {(entry.promptTokens + entry.completionTokens).toLocaleString()}
                 </td>
                 <td className="py-1 text-right">
+                  {formatShare(entry.cachedPromptTokens, entry.cacheReportedPromptTokens)}
+                </td>
+                <td className="py-1 text-right">
+                  {formatShare(entry.prefixReuseTokens, entry.prefixTokens)}
+                </td>
+                <td className="py-1 text-right">
                   {entry.costUsd === null ? "—" : formatCost(entry.costUsd)}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+      {usage && usage.entries.length > 0 && (
+        <p className="text-xs text-muted-foreground">{t("usage.cacheHint")}</p>
       )}
       <Field>
         <FieldLabel htmlFor="session-budget">{t("usage.budget")}</FieldLabel>

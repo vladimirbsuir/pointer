@@ -32,6 +32,7 @@ export function ModelOptionsEditor({
 }: ModelOptionsEditorProps) {
   const { t } = useTranslation();
   const [input, setInput] = useState(model.inputPricePerMtok?.toString() ?? "");
+  const [cached, setCached] = useState(model.cachedInputPricePerMtok?.toString() ?? "");
   const [output, setOutput] = useState(model.outputPricePerMtok?.toString() ?? "");
   const [supportsVision, setSupportsVision] = useState(model.supportsVision);
   const [queryPrefix, setQueryPrefix] = useState(model.embeddingQueryPrefix ?? "");
@@ -44,8 +45,9 @@ export function ModelOptionsEditor({
     Boolean(model.embeddingQueryPrefix) ||
     Boolean(model.embeddingDocumentPrefix);
   const inputPrice = parsePrice(input);
+  const cachedPrice = parsePrice(cached);
   const outputPrice = parsePrice(output);
-  const valid = inputPrice !== undefined && outputPrice !== undefined;
+  const valid = inputPrice !== undefined && cachedPrice !== undefined && outputPrice !== undefined;
   const path = { params: { path: { providerId, modelId: model.id } } };
 
   const prefixes = showPrefixes
@@ -76,13 +78,14 @@ export function ModelOptionsEditor({
       api().PATCH("/api/v1/providers/{providerId}/models/{modelId}", {
         ...path,
         body:
-          inputPrice === null && outputPrice === null
+          inputPrice === null && cachedPrice === null && outputPrice === null
             ? { clearPrices: true, supportsVision, ...prefixes }
             : {
                 clearPrices: true,
                 supportsVision,
                 inputPricePerMtok: inputPrice ?? 0,
                 outputPricePerMtok: outputPrice ?? 0,
+                ...(cachedPrice === null ? {} : { cachedInputPricePerMtok: cachedPrice }),
                 ...prefixes,
               },
       }),
@@ -99,6 +102,17 @@ export function ModelOptionsEditor({
           className="h-8 w-28"
           aria-invalid={inputPrice === undefined}
           onChange={(event) => setInput(event.target.value)}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        {t("providers.cachedInputPrice")}
+        <Input
+          value={cached}
+          inputMode="decimal"
+          placeholder={input.trim() === "" ? "0.00" : input.trim()}
+          className="h-8 w-28"
+          aria-invalid={cachedPrice === undefined}
+          onChange={(event) => setCached(event.target.value)}
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">

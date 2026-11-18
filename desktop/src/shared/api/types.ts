@@ -12,6 +12,7 @@ export type Model = Required<
     | "contextWindow"
     | "maxOutputTokens"
     | "inputPricePerMtok"
+    | "cachedInputPricePerMtok"
     | "outputPricePerMtok"
     | "embeddingQueryPrefix"
     | "embeddingDocumentPrefix"
@@ -20,6 +21,7 @@ export type Model = Required<
   contextWindow: number | null;
   maxOutputTokens: number | null;
   inputPricePerMtok: number | null;
+  cachedInputPricePerMtok: number | null;
   outputPricePerMtok: number | null;
   embeddingQueryPrefix: string | null;
   embeddingDocumentPrefix: string | null;
@@ -273,6 +275,10 @@ export type SessionUsageEntry = {
   calls: number;
   promptTokens: number;
   completionTokens: number;
+  cachedPromptTokens: number | null;
+  cacheReportedPromptTokens: number | null;
+  prefixTokens: number | null;
+  prefixReuseTokens: number | null;
   costUsd: number | null;
 };
 
