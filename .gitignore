@@ -29,3 +29,4 @@ infra/bench/rag/results/
 __pycache__/
 infra/bench/memory/results/
 infra/bench/routing/results/
+infra/bench/cache/results/
