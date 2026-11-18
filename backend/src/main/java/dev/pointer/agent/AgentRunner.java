@@ -14,6 +14,8 @@ import dev.pointer.provider.llm.ChatMessage;
 import dev.pointer.provider.llm.ChatRequest;
 import dev.pointer.provider.llm.LlmException;
 import dev.pointer.provider.llm.StreamListener;
+import dev.pointer.provider.llm.TokenEstimate;
+import dev.pointer.routing.CompactionPlanner;
 import dev.pointer.routing.ModelRouter;
 import dev.pointer.routing.RoutedClient;
 import dev.pointer.session.Item;
@@ -28,7 +30,9 @@ import dev.pointer.tool.ToolRegistry;
 import dev.pointer.user.SettingsService;
 import jakarta.annotation.PreDestroy;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,6 +46,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +64,9 @@ public class AgentRunner implements LiveItemSnapshots {
     private static final int MAX_SWITCH_REASON_LENGTH = 300;
     private static final String AGENT = "agent";
     private static final String READ_FILE = "read_file";
+    private static final String TRIGGER_MANUAL = "manual";
+    private static final String TRIGGER_LIMIT = "limit";
+    private static final String TRIGGER_SOFT = "soft";
     private static final int DEFAULT_CONTEXT_WINDOW = 128_000;
     private static final String PROJECT_CONTEXT_OPERATION = "pointer.project_context";
     private static final Duration PROJECT_CONTEXT_TIMEOUT = Duration.ofSeconds(10);
@@ -82,6 +90,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private final ModelRouter modelRouter;
     private final ExploreAgent explore;
     private final ContextPolicy contextPolicy;
+    private final Clock clock;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<UUID, RunningTurn> running = new ConcurrentHashMap<>();
 
@@ -176,9 +185,14 @@ public class AgentRunner implements LiveItemSnapshots {
                 writer.recordContextSnapshot(sessionId, turnId, contextAssembler.snapshot(project));
             }
             var globalInstructions = settingsService.get(userId).globalInstructions();
-            var summarizer = new Summarizer(scope, routes, failover, turn, project, globalInstructions, mask);
+            Supplier<List<ChatRequest.ToolDefinition>> stepTools = () -> model.supportsTools()
+                    ? toolDefinitions(userId, context.projectId(), context.executorDeviceId(), context.mode(), routes)
+                    : List.of();
+            var summarizer =
+                    new Summarizer(scope, routes, failover, turn, project, globalInstructions, mask, stepTools);
+            var softCompaction = contextPolicy.softCompaction(session.getContextStrategy());
             if (Turn.COMPACTION.equals(context.kind())) {
-                summarizer.summarize();
+                summarizer.summarize(TRIGGER_MANUAL);
                 var reason = turn.cancellation.isCancelled() ? Turn.CANCELLED : Turn.COMPLETED;
                 return writer.finishTurn(userId, sessionId, turnId, reason, null);
             }
@@ -196,15 +210,18 @@ public class AgentRunner implements LiveItemSnapshots {
                     error = budget;
                     break;
                 }
+                var compacted = OptionalInt.empty();
                 if (contextTokens >= contextWindow * compactionRatio) {
-                    var compacted = summarizer.summarize();
-                    if (compacted.isPresent()) {
-                        contextTokens = compacted.getAsInt();
-                    }
-                    if (turn.cancellation.isCancelled()) {
-                        reason = Turn.CANCELLED;
-                        break;
-                    }
+                    compacted = summarizer.summarize(TRIGGER_LIMIT);
+                } else if (step == 0 && softCompaction) {
+                    compacted = summarizer.summarizeIfWorthIt(contextTokens, contextWindow);
+                }
+                if (compacted.isPresent()) {
+                    contextTokens = compacted.getAsInt();
+                }
+                if (turn.cancellation.isCancelled()) {
+                    reason = Turn.CANCELLED;
+                    break;
                 }
                 var messages = contextAssembler.build(
                         context.mode(),
@@ -214,10 +231,7 @@ public class AgentRunner implements LiveItemSnapshots {
                         writer.contextSnapshots(sessionId),
                         mask,
                         model.supportsVision());
-                var tools = model.supportsTools()
-                        ? toolDefinitions(
-                                userId, context.projectId(), context.executorDeviceId(), context.mode(), routes)
-                        : List.<ChatRequest.ToolDefinition>of();
+                var tools = stepTools.get();
                 var listener = new TurnListener(userId, sessionId, turnId, step, turn, Item.ASSISTANT_MESSAGE);
                 var request = new ChatRequest(model.modelKey(), messages, tools, null).withCacheKey(sessionId);
                 var used = failover.stream(routes.step(), request, listener, turn.cancellation);
@@ -489,6 +503,7 @@ public class AgentRunner implements LiveItemSnapshots {
         private final ContextAssembler.ProjectContext project;
         private final String globalInstructions;
         private final MaskPolicy mask;
+        private final Supplier<List<ChatRequest.ToolDefinition>> tools;
 
         Summarizer(
                 ToolCallHandler.TurnScope scope,
@@ -497,7 +512,8 @@ public class AgentRunner implements LiveItemSnapshots {
                 RunningTurn turn,
                 ContextAssembler.ProjectContext project,
                 String globalInstructions,
-                MaskPolicy mask) {
+                MaskPolicy mask,
+                Supplier<List<ChatRequest.ToolDefinition>> tools) {
             this.scope = scope;
             this.routes = routes;
             this.failover = failover;
@@ -506,43 +522,106 @@ public class AgentRunner implements LiveItemSnapshots {
             this.project = project;
             this.globalInstructions = globalInstructions;
             this.mask = mask;
+            this.tools = tools;
         }
 
-        private ModelRouter.RoutedModel stream(
-                ModelRouter.RoutedModel target, List<ChatMessage> request, TurnListener listener) {
-            return failover.stream(target, compactionRequest(target, request), listener, turn.cancellation);
+        OptionalInt summarize(String trigger) {
+            var prepared = prepare();
+            return prepared == null ? OptionalInt.empty() : compact(prepared, trigger);
         }
 
-        private ChatRequest compactionRequest(ModelRouter.RoutedModel target, List<ChatMessage> request) {
-            return new ChatRequest(target.model().modelKey(), request, List.of(), null).withCacheKey(scope.sessionId());
-        }
-
-        OptionalInt summarize() {
-            var covered = ContextAssembler.compactable(writer.conversation(scope.sessionId()), scope.turnId());
-            if (covered.isEmpty()) {
+        OptionalInt summarizeIfWorthIt(long contextTokens, int contextWindow) {
+            if (!CompactionPlanner.softTriggerApplies(model, contextTokens, contextWindow)) {
                 return OptionalInt.empty();
             }
+            var prepared = prepare();
+            if (prepared == null
+                    || !CompactionPlanner.worthCompacting(routes, prepared.estimate(), contextTokens, contextWindow)) {
+                return OptionalInt.empty();
+            }
+            return compact(prepared, TRIGGER_SOFT);
+        }
+
+        private Prepared prepare() {
+            var conversation = writer.conversation(scope.sessionId());
+            var covered = ContextAssembler.compactable(conversation, scope.turnId());
+            if (covered.isEmpty()) {
+                return null;
+            }
+            var legacy = contextAssembler.buildCompaction(covered, mask);
+            var cacheSafe = contextAssembler.buildCacheSafeCompaction(
+                    scope.mode(),
+                    globalInstructions,
+                    project,
+                    conversation,
+                    writer.contextSnapshots(scope.sessionId()),
+                    mask,
+                    model.supportsVision(),
+                    scope.turnId());
+            var definitions = tools.get();
+            var cacheSafeTokens = ContextAssembler.estimateTokens(cacheSafe) + TokenEstimate.tools(definitions);
+            var history = ledger.compactionHistory(scope.sessionId());
+            var estimate = new CompactionPlanner.Estimate(
+                    ContextAssembler.estimateTokens(legacy),
+                    cacheSafeTokens,
+                    cacheSafeTokens - TokenEstimate.message(cacheSafe.getLast()),
+                    ContextAssembler.estimateTokens(cacheSafe.subList(1, cacheSafe.size() - 1)),
+                    history.averageSummaryTokens() == null
+                            ? CompactionPlanner.DEFAULT_SUMMARY_TOKENS
+                            : (int) Math.round(history.averageSummaryTokens()),
+                    Objects.requireNonNullElse(history.averageCallsPerTurn(), CompactionPlanner.DEFAULT_CALLS_PER_TURN),
+                    isCacheWarm(history.lastCallAt()));
             var replaced = covered.stream()
                     .filter(item -> !Item.COMPACTION_SUMMARY.equals(item.get("type")))
                     .count();
-            var request = contextAssembler.buildCompaction(covered, mask);
-            var planned = routes.compaction(ContextAssembler.estimateTokens(request));
-            var routed = planned;
-            var listener = new TurnListener(
+            return new Prepared(legacy, cacheSafe, definitions, estimate, replaced);
+        }
+
+        private boolean isCacheWarm(Instant lastCallAt) {
+            return lastCallAt != null
+                    && Duration.between(lastCallAt, clock.instant()).compareTo(contextPolicy.cacheLifetime()) <= 0;
+        }
+
+        private ChatRequest request(ModelRouter.RoutedModel target, boolean cacheSafe, Prepared prepared) {
+            var request = cacheSafe
+                    ? new ChatRequest(target.model().modelKey(), prepared.cacheSafe(), prepared.tools(), null)
+                    : new ChatRequest(target.model().modelKey(), prepared.legacy(), List.of(), null);
+            return request.withCacheKey(scope.sessionId());
+        }
+
+        private TurnListener listener() {
+            return new TurnListener(
                     scope.userId(), scope.sessionId(), scope.turnId(), 0, turn, Item.COMPACTION_SUMMARY);
+        }
+
+        private OptionalInt compact(Prepared prepared, String trigger) {
+            var choice = CompactionPlanner.choose(routes, prepared.estimate());
+            var target = choice.target();
+            var cacheSafe = choice.cacheSafe();
+            var listener = listener();
+            ModelRouter.RoutedModel routed;
             try {
-                routed = stream(routed, request, listener);
+                routed = failover.stream(target, request(target, cacheSafe, prepared), listener, turn.cancellation);
             } catch (LlmException exception) {
-                if (planned == routes.step() || !listener.text().isEmpty() || turn.cancellation.isCancelled()) {
+                if (target == routes.step() || !listener.text().isEmpty() || turn.cancellation.isCancelled()) {
                     throw exception;
                 }
                 log.warn(
                         "Compaction with {} failed, retrying with the step model: {}",
-                        planned.model().modelKey(),
+                        target.model().modelKey(),
                         exception.getMessage());
-                listener = new TurnListener(
-                        scope.userId(), scope.sessionId(), scope.turnId(), 0, turn, Item.COMPACTION_SUMMARY);
-                routed = stream(routes.step(), request, listener);
+                target = routes.step();
+                cacheSafe = true;
+                listener = listener();
+                routed = failover.stream(target, request(target, true, prepared), listener, turn.cancellation);
+            }
+            if (cacheSafe && !listener.toolCalls.isEmpty() && !turn.cancellation.isCancelled()) {
+                log.info(
+                        "Cache-safe compaction in session {} called a tool, retrying without tools", scope.sessionId());
+                listener.completeAll(Item.FAILED, Map.of());
+                cacheSafe = false;
+                listener = listener();
+                routed = failover.stream(target, request(target, false, prepared), listener, turn.cancellation);
             }
             if (turn.cancellation.isCancelled()) {
                 listener.completeAll(Item.CANCELLED, Map.of());
@@ -552,14 +631,16 @@ public class AgentRunner implements LiveItemSnapshots {
                 listener.completeAll(Item.FAILED, Map.of());
                 throw new LlmException("compaction_failed", "The model returned an empty summary", 0);
             }
-            listener.completeAll(Item.COMPLETED, Map.of("replacedItemCount", replaced));
+            listener.completeAll(
+                    Item.COMPLETED, Map.of("replacedItemCount", prepared.replacedItems(), "trigger", trigger));
             ledger.record(
                     scope.sessionId(),
                     scope.turnId(),
                     routed.model(),
                     routed.role(),
                     UsageLedger.COMPACTION,
-                    compactionRequest(routed, request),
+                    cacheSafe ? UsageLedger.STEP : UsageLedger.COMPACTION,
+                    request(routed, cacheSafe, prepared),
                     listener.usage);
             if (listener.usage != null) {
                 writer.recordUsage(
@@ -584,6 +665,13 @@ public class AgentRunner implements LiveItemSnapshots {
             return OptionalInt.of(tokens);
         }
     }
+
+    private record Prepared(
+            List<ChatMessage> legacy,
+            List<ChatMessage> cacheSafe,
+            List<ChatRequest.ToolDefinition> tools,
+            CompactionPlanner.Estimate estimate,
+            long replacedItems) {}
 
     private final class TurnListener implements StreamListener {
 

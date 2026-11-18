@@ -8,6 +8,7 @@ import dev.pointer.routing.PrefixFingerprint;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +38,19 @@ public class UsageLedger {
             String purpose,
             ChatRequest request,
             StreamListener.Usage usage) {
-        var reuse = fingerprint.measure(sessionId, purpose, model.modelId(), request);
+        record(sessionId, turnId, model, role, purpose, purpose, request, usage);
+    }
+
+    public void record(
+            UUID sessionId,
+            UUID turnId,
+            ResolvedModel model,
+            String role,
+            String purpose,
+            String prefixPurpose,
+            ChatRequest request,
+            StreamListener.Usage usage) {
+        var reuse = fingerprint.measure(sessionId, prefixPurpose, model.modelId(), request);
         if (usage == null) {
             return;
         }
@@ -63,6 +76,28 @@ public class UsageLedger {
                 .param("cost", model.cost(usage))
                 .param("now", Timestamp.from(clock.instant()))
                 .update();
+    }
+
+    public CompactionHistory compactionHistory(UUID sessionId) {
+        return jdbc.sql("""
+                        select avg(completion_tokens) filter (where purpose = 'compaction') as summary_tokens,
+                               count(*) filter (where purpose = 'step') as step_calls,
+                               count(distinct turn_id) filter (where purpose = 'step') as step_turns,
+                               max(created_at) filter (where purpose in ('step', 'compaction')) as last_call_at
+                        from model_usage
+                        where session_id = :sessionId
+                        """)
+                .param("sessionId", sessionId)
+                .query((rs, row) -> {
+                    var summaryTokens = rs.getObject("summary_tokens", BigDecimal.class);
+                    var stepTurns = rs.getLong("step_turns");
+                    var lastCallAt = rs.getTimestamp("last_call_at");
+                    return new CompactionHistory(
+                            summaryTokens == null ? null : summaryTokens.doubleValue(),
+                            stepTurns == 0 ? null : (double) rs.getLong("step_calls") / stepTurns,
+                            lastCallAt == null ? null : lastCallAt.toInstant());
+                })
+                .single();
     }
 
     List<UsageRow> summary(UUID sessionId) {
@@ -97,6 +132,8 @@ public class UsageLedger {
                         rs.getBigDecimal("cost_usd")))
                 .list();
     }
+
+    public record CompactionHistory(Double averageSummaryTokens, Double averageCallsPerTurn, Instant lastCallAt) {}
 
     record UsageRow(
             UUID modelId,

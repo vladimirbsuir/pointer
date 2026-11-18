@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.pointer.provider.llm.ChatMessage;
 import dev.pointer.session.Item;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -140,6 +141,40 @@ class ContextAssemblerTests {
         }
     }
 
+    @ParameterizedTest
+    @MethodSource("policies")
+    void theCacheSafeCompactionRequestExtendsAPrefixOfTheStepRequest(MaskPolicy policy) {
+        var random = new Random(20261119);
+        var checked = 0;
+        for (var run = 0; run < 300; run++) {
+            for (var boundary : GeneratedSession.generate(random).boundaries) {
+                var currentTurn = (UUID) boundary.items().getLast().get("turnId");
+                if (ContextAssembler.compactable(boundary.items(), currentTurn).isEmpty()) {
+                    continue;
+                }
+                var step = build(boundary.items(), boundary.snapshots(), policy);
+                var compaction = assembler.buildCacheSafeCompaction(
+                        "agent",
+                        "Be brief.",
+                        PROJECT,
+                        boundary.items(),
+                        boundary.snapshots(),
+                        policy,
+                        false,
+                        currentTurn);
+                var prefix = compaction.subList(0, compaction.size() - 1);
+
+                assertThat(step.subList(0, prefix.size())).as("run %d", run).isEqualTo(prefix);
+                assertThat(step.size()).isGreaterThan(prefix.size());
+                assertThat(compaction.getLast().content())
+                        .contains("do not call any tools")
+                        .contains("Summarize the conversation so far");
+                checked++;
+            }
+        }
+        assertThat(checked).isPositive();
+    }
+
     @Test
     void theMaskBoundaryMovesInWholeBlocksAfterTheNewestResults() {
         var aligned = new MaskPolicy(10, 10);
@@ -202,7 +237,7 @@ class ContextAssemblerTests {
 
     @Test
     void theStrategiesMapToMaskingAndCompactionThresholds() {
-        var policy = new ContextPolicy(10, 10);
+        var policy = new ContextPolicy(10, 10, true, Duration.ofMinutes(5));
 
         assertThat(policy.mask("summary")).isEqualTo(MaskPolicy.NONE);
         assertThat(policy.mask("masking")).isEqualTo(new MaskPolicy(10, 10));
@@ -210,6 +245,11 @@ class ContextAssemblerTests {
         assertThat(policy.compactionRatio("summary")).isEqualTo(0.8);
         assertThat(policy.compactionRatio("hybrid")).isEqualTo(0.8);
         assertThat(policy.compactionRatio("masking")).isEqualTo(0.95);
+        assertThat(policy.softCompaction("summary")).isTrue();
+        assertThat(policy.softCompaction("hybrid")).isTrue();
+        assertThat(policy.softCompaction("masking")).isFalse();
+        assertThat(new ContextPolicy(10, 10, false, Duration.ofMinutes(5)).softCompaction("summary"))
+                .isFalse();
     }
 
     static List<MaskPolicy> policies() {

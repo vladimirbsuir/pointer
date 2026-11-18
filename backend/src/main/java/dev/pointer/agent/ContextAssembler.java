@@ -72,6 +72,11 @@ class ContextAssembler {
             - the current state and the remaining work.
             Keep file paths, identifiers and error messages exact. Use concise Markdown. Reply with the summary only.""";
 
+    private static final String CACHE_SAFE_COMPACTION_REQUEST = """
+            Pause the task and do not call any tools in this reply: the conversation is about to be replaced \
+            by your summary.
+            """ + COMPACTION_REQUEST;
+
     private static final String CONTEXT_OPEN =
             "<context>\nCurrent environment and memory. This block replaces any earlier context block.\n";
     private static final String CONTEXT_CLOSE = "\n</context>\n\n";
@@ -91,13 +96,52 @@ class ContextAssembler {
             SequencedMap<UUID, String> snapshots,
             MaskPolicy mask,
             boolean supportsVision) {
-        var messages = new ArrayList<ChatMessage>();
-        messages.add(ChatMessage.system(systemPrompt(mode, globalInstructions, project)));
         var active = activeItems(conversation);
+        return render(
+                systemPrompt(mode, globalInstructions, project),
+                active,
+                carriedSnapshot(active, snapshots),
+                snapshots,
+                mask.boundary(countResults(active)),
+                supportsVision);
+    }
+
+    List<ChatMessage> buildCacheSafeCompaction(
+            String mode,
+            String globalInstructions,
+            ProjectContext project,
+            List<Map<String, Object>> conversation,
+            SequencedMap<UUID, String> snapshots,
+            MaskPolicy mask,
+            boolean supportsVision,
+            UUID currentTurnId) {
+        var active = activeItems(conversation);
+        var covered = active.stream()
+                .filter(item -> !Objects.equals(item.get("turnId"), currentTurnId))
+                .toList();
+        var messages = render(
+                systemPrompt(mode, globalInstructions, project),
+                covered,
+                carriedSnapshot(active, snapshots),
+                snapshots,
+                mask.boundary(countResults(active)),
+                supportsVision);
+        messages.add(ChatMessage.user(CACHE_SAFE_COMPACTION_REQUEST));
+        return messages;
+    }
+
+    private List<ChatMessage> render(
+            String systemPrompt,
+            List<Map<String, Object>> items,
+            String carried,
+            SequencedMap<UUID, String> snapshots,
+            int maskBoundary,
+            boolean supportsVision) {
+        var messages = new ArrayList<ChatMessage>();
+        messages.add(ChatMessage.system(systemPrompt));
         var pending = new LinkedHashMap<>(snapshots);
-        var carried = carriedSnapshot(active, snapshots);
-        var group = new StepGroup(new ResultMask(mask.boundary(countResults(active))));
-        for (var item : active) {
+        var group = new StepGroup(new ResultMask(maskBoundary));
+        for (var item : items) {
             var type = String.valueOf(item.get("type"));
             switch (type) {
                 case Item.USER_MESSAGE -> {

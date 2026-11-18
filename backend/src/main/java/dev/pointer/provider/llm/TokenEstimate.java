@@ -32,6 +32,16 @@ public final class TokenEstimate {
         return chars;
     }
 
+    public static int tools(List<ChatRequest.ToolDefinition> tools) {
+        var chars = 0L;
+        for (var tool : tools) {
+            chars += tool.name().length()
+                    + String.valueOf(tool.description()).length()
+                    + String.valueOf(tool.parameters()).length();
+        }
+        return (int) (chars / CHARS_PER_TOKEN);
+    }
+
     public static int text(String text) {
         return text == null ? 0 : text.length() / CHARS_PER_TOKEN;
     }

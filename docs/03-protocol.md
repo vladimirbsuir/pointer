@@ -233,7 +233,7 @@ Item status: `in_progress`, `completed`, `failed`, `cancelled`.
 | `reasoning` | `text` (when the provider streams reasoning) |
 | `tool_call` | `step`, `toolName`, `arguments`, `argumentsJson`, `providerCallId`, `toolStatus`, `result`, `error`, `output`, `fileChanges`, `resultText`, `approvalId`, `approvalPreview`, `customToolVersion` (custom tools only) |
 | `plan` | `step`, `summary`, `steps` (`[{ "title": "...", "details": "..." }]`), `approval` (`pending`, `approved`, `rejected`), `providerCallId`, `argumentsJson`, `resultText` |
-| `compaction_summary` | `text`, `replacedItemCount` |
+| `compaction_summary` | `text`, `replacedItemCount`, `trigger` |
 | `model_switched` | `from`, `to` (model display names), `reason` (the failure that caused the switch); created already `completed` |
 
 A user message sent while a turn runs is created with `turnId: null` (queued). At the next step boundary it is attached to the running turn if it was sent in the same mode, otherwise it starts the next turn.
@@ -246,7 +246,7 @@ A `plan` item is created when the model calls the server-side `propose_plan` too
 
 A call of the server-side `propose_tool` tool (Agent mode, offered when the executor device reports at least one interpreter) is a `tool_call` item that waits for an approval with preview kind `tool_proposal`. It is never auto-approved and never covered by session grants. When approved, its `result` holds `toolId`, `name`, `version` and `scope`, and the tool is offered from the next model call on. An invalid proposal fails with `invalid_proposal` without asking the user. See [ADR 0014](adr/0014-agent-proposed-custom-tools.md).
 
-A `compaction_summary` item is produced by a turn of kind `compaction` (manual) or inside a message turn before a model call (automatic). The model's context starts from the latest completed summary.
+A `compaction_summary` item is produced by a turn of kind `compaction` (manual) or inside a message turn before a model call (automatic). The model's context starts from the latest completed summary. A completed summary carries `trigger`: `manual`, `limit` (the context reached the compaction threshold) or `soft` (an early compaction at the start of a turn because it was expected to cost less than keeping the long context). A failed summary item can precede the completed one when a compaction attempt was retried; clients may hide it. See [ADR 0025](adr/0025-cache-aware-compaction.md).
 
 Rewinding (`POST /sessions/{id}/rewind` with `turnId`, `restoreFiles`, `force`) marks the turn and every later turn as rewound. With `restoreFiles`, agent file changes from those turns are first checked with a dry-run `pointer.restore_file` per file and then restored; a file changed since fails the whole request with `file_modified` unless `force` is set. Only changes made by write tools are restored, not side effects of `run_command`. The response returns the restored paths and the text of the rewound user message.
 
