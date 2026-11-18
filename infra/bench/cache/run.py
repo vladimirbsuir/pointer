@@ -43,10 +43,13 @@ def parse_args():
     parser.add_argument("--device-id", default=os.environ.get("POINTER_DEVICE_ID"))
     parser.add_argument("--project", default=os.environ.get("POINTER_PROJECT"), help="project id or name")
     parser.add_argument("--model", required=True, help="session model key")
+    parser.add_argument("--provider", help="provider name, required when several providers offer the model key")
     parser.add_argument("--label", default="", help="name of the run in the results")
     parser.add_argument("--script", default=DEFAULT_SCRIPT, help="task ids of turns 1 to 11 in order")
     parser.add_argument("--turns", type=int, default=12, help="turns to run; the last full run ends with the probes")
     parser.add_argument("--memories", type=int, default=0, help="seed project memories up to this count")
+    parser.add_argument("--clear-memories", action="store_true", help="delete the project's memories first")
+    parser.add_argument("--embedding-model", help="model key to set as the account's embedding model first")
     parser.add_argument("--strategy", choices=["summary", "masking", "hybrid"], default="summary")
     parser.add_argument("--context-window", type=int, help="set the model's context window before the run")
     parser.add_argument("--questions", default=str(HERE.parent / "rag" / "questions.json"))
@@ -89,6 +92,23 @@ def load_script(args):
     recalled = turns[RECALLED_TURN - 1] if len(turns) >= RECALLED_TURN else turns[-1]
     turns.append({"id": "probe", "prompt": PROBE.format(topic=recalled["topic"]), "expected": []})
     return turns[: args.turns]
+
+
+def find_session_model(api, model_key, provider_name):
+    matches = [
+        (provider, model)
+        for provider in api.call("GET", "/providers")
+        for model in provider["models"]
+        if model["modelKey"] == model_key and model["enabled"]
+    ]
+    if provider_name:
+        matches = [(provider, model) for provider, model in matches if provider["name"] == provider_name]
+    if not matches:
+        raise SystemExit(f"Model {model_key} not found")
+    if len(matches) > 1:
+        names = ", ".join(provider["name"] for provider, _ in matches)
+        raise SystemExit(f"Model {model_key} is offered by {names}; choose one with --provider")
+    return matches[0][1]
 
 
 def seed_memories(api, project_id, count):
@@ -289,13 +309,19 @@ def main():
     args = parse_args()
     api = Api(args.api, args.email, args.password, args.device_id)
     project = find_project(api, args.project)
-    model = find_model(api, args.model)
+    model = find_session_model(api, args.model, args.provider)
     if args.context_window:
         api.call(
             "PATCH",
             f"/providers/{model['providerId']}/models/{model['id']}",
             {"contextWindow": args.context_window},
         )
+    if args.embedding_model:
+        embedding = find_model(api, args.embedding_model)
+        api.call("PUT", "/me/settings", {"embeddingModelId": embedding["id"]})
+    if args.clear_memories:
+        for memory in api.call("GET", f"/memories?projectId={project['id']}"):
+            api.call("DELETE", f"/memories/{memory['id']}")
     if args.memories:
         seed_memories(api, project["id"], args.memories)
     turns = load_script(args)
