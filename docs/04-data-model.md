@@ -600,3 +600,21 @@ Agent memory ([F4](features/f4-agent-memory.md)), accessed with plain SQL becaus
 | `created_at` | timestamptz | |
 
 Index: (`session_id`, `created_at`).
+
+### Step signals
+
+`step_signals`: one row per model call of a message turn with the struggle signals computed from the turn's tool calls after that call's tools ran ([F6](features/f6-trajectory-escalation.md), ESC-3, ESC-5). Recorded for every session; escalation does not exist yet, so `escalated` is always false.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `session_id` | uuid | FK `sessions`, cascade |
+| `turn_id` | uuid | Turn of the step |
+| `step` | integer | Step number within the turn, as on the items |
+| `model_label` | text | Model that made the call |
+| `signals` | jsonb | Raw value of every signal (`repeat_call`, `error_streak`, `edit_thrash`, `malformed_call`, `denied`, `read_only_streak`), so that any score can be recomputed offline |
+| `score` | numeric(6,3) | Score of the provisional policy: each firing signal adds its weight, halved for every step since it last fired |
+| `escalated` | boolean | Whether this step moved the turn to the session model |
+| `created_at` | timestamptz | |
+
+Index: (`session_id`, `turn_id`, `step`).

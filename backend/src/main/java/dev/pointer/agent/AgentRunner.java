@@ -1,5 +1,6 @@
 package dev.pointer.agent;
 
+import dev.pointer.agent.escalation.EscalationController;
 import dev.pointer.common.error.ApiException;
 import dev.pointer.customtool.ProposeTool;
 import dev.pointer.execution.ExecutionListener;
@@ -92,6 +93,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private final ExploreAgent explore;
     private final ContextPolicy contextPolicy;
     private final Clock clock;
+    private final EscalationController escalation;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<UUID, RunningTurn> running = new ConcurrentHashMap<>();
 
@@ -199,6 +201,7 @@ public class AgentRunner implements LiveItemSnapshots {
             }
             var contextWindow = model.contextWindow() == null ? DEFAULT_CONTEXT_WINDOW : model.contextWindow();
             long contextTokens = context.contextTokens();
+            var trajectory = escalation.begin(sessionId, turnId, context.mode());
             String reason = null;
             Map<String, Object> error = null;
             for (var step = 0; reason == null; step++) {
@@ -273,6 +276,9 @@ public class AgentRunner implements LiveItemSnapshots {
                     } else if (step + 1 >= MAX_STEPS) {
                         reason = Turn.STEP_LIMIT;
                     }
+                }
+                if (!Turn.CANCELLED.equals(reason)) {
+                    trajectory.recordStep(step, used.model().displayName());
                 }
             }
             if (context.needsTitle() && !Turn.CANCELLED.equals(reason)) {

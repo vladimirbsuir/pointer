@@ -16,6 +16,7 @@ import dev.pointer.session.SessionStatus;
 import dev.pointer.session.SessionWriter;
 import dev.pointer.tool.PermissionService;
 import dev.pointer.tool.ToolDefinition;
+import dev.pointer.tool.ToolErrorCodes;
 import dev.pointer.tool.ToolRegistry;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -87,21 +88,29 @@ class ToolCallHandler {
         var itemId = (UUID) item.get("id");
 
         if (arguments == null) {
-            fail(scope, itemId, "invalid_arguments", "Tool arguments are not valid JSON");
+            fail(scope, itemId, ToolErrorCodes.INVALID_ARGUMENTS, "Tool arguments are not valid JSON");
             return;
         }
         var tool = registry.find(scope.userId(), scope.projectId(), scope.deviceId(), toolName)
                 .orElse(null);
         if (tool == null) {
-            fail(scope, itemId, "unknown_tool", "There is no tool named " + toolName);
+            fail(scope, itemId, ToolErrorCodes.UNKNOWN_TOOL, "There is no tool named " + toolName);
             return;
         }
         if (parentItemId != null && !ExploreAgent.allows(tool)) {
-            deny(scope, itemId, "Tool " + toolName + " is not available to the explore sub-agent.");
+            deny(
+                    scope,
+                    itemId,
+                    ToolErrorCodes.TOOL_UNAVAILABLE,
+                    "Tool " + toolName + " is not available to the explore sub-agent.");
             return;
         }
         if (!tool.availableIn(scope.mode())) {
-            deny(scope, itemId, "Tool " + toolName + " is not available in " + scope.mode() + " mode.");
+            deny(
+                    scope,
+                    itemId,
+                    ToolErrorCodes.TOOL_UNAVAILABLE,
+                    "Tool " + toolName + " is not available in " + scope.mode() + " mode.");
             return;
         }
         var autoApprove =
@@ -109,7 +118,7 @@ class ToolCallHandler {
         var policy = permissions.evaluate(
                 scope.userId(), scope.projectId(), scope.sessionId(), tool, arguments, autoApprove);
         if (PermissionService.DENY.equals(policy)) {
-            deny(scope, itemId, "This tool call is blocked by the user's permission settings.");
+            deny(scope, itemId, ToolErrorCodes.BLOCKED, "This tool call is blocked by the user's permission settings.");
             return;
         }
         if (PermissionService.ASK.equals(policy) && !askForApproval(scope, itemId, tool, arguments)) {
@@ -134,7 +143,7 @@ class ToolCallHandler {
         var item = writer.createItem(scope.userId(), scope.sessionId(), scope.turnId(), Item.TOOL_CALL, payload);
         var itemId = (UUID) item.get("id");
         if (arguments == null) {
-            fail(scope, itemId, "invalid_arguments", "Tool arguments are not valid JSON");
+            fail(scope, itemId, ToolErrorCodes.INVALID_ARGUMENTS, "Tool arguments are not valid JSON");
             return;
         }
         CustomToolService.PreparedProposal prepared;
@@ -162,7 +171,7 @@ class ToolCallHandler {
             var reason = decision.message() == null || decision.message().isBlank()
                     ? "The user rejected the proposed tool."
                     : "The user rejected the proposed tool with the message: " + decision.message();
-            deny(scope, itemId, reason);
+            deny(scope, itemId, ToolErrorCodes.DENIED, reason);
             return;
         }
         var approved = customTools.approve(
@@ -194,7 +203,11 @@ class ToolCallHandler {
             payload.put("arguments", arguments == null ? Map.of() : arguments);
             payload.put("toolStatus", "pending");
             var item = writer.createItem(scope.userId(), scope.sessionId(), scope.turnId(), Item.TOOL_CALL, payload);
-            fail(scope, (UUID) item.get("id"), "invalid_arguments", "A plan needs a summary and at least one step");
+            fail(
+                    scope,
+                    (UUID) item.get("id"),
+                    ToolErrorCodes.INVALID_ARGUMENTS,
+                    "A plan needs a summary and at least one step");
             return false;
         }
         payload.put("summary", PlanTool.summary(arguments));
@@ -258,7 +271,7 @@ class ToolCallHandler {
             var reason = decision.message() == null || decision.message().isBlank()
                     ? "The user denied this tool call."
                     : "The user denied this tool call with the message: " + decision.message();
-            deny(scope, itemId, reason);
+            deny(scope, itemId, ToolErrorCodes.DENIED, reason);
             return false;
         }
         if (decision.forSession()) {
@@ -334,19 +347,13 @@ class ToolCallHandler {
         complete(scope, itemId, ExecutionResult.failure(ExecutionResult.REJECTED, code, message), null);
     }
 
-    private void deny(TurnScope scope, UUID itemId, String reason) {
+    private void deny(TurnScope scope, UUID itemId, String code, String reason) {
         writer.completeItem(
                 scope.userId(),
                 scope.sessionId(),
                 itemId,
                 Item.COMPLETED,
-                Map.of(
-                        "toolStatus",
-                        "denied",
-                        "resultText",
-                        reason,
-                        "error",
-                        Map.of("code", "denied", "message", reason)));
+                Map.of("toolStatus", "denied", "resultText", reason, "error", Map.of("code", code, "message", reason)));
     }
 
     private String resultText(ExecutionResult result) {
