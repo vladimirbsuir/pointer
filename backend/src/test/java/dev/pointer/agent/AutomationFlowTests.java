@@ -617,7 +617,7 @@ class AutomationFlowTests extends AgentIntegrationTest {
 
     private GatewayTestClient startRunner(Setup setup) throws Exception {
         var runtime = (FakeContainerRuntime) containers;
-        var spec = runtime.awaitCreated(TIMEOUT);
+        var spec = runtime.awaitCreatedForProject(setup.projectId(), TIMEOUT);
         awaitTrue(() -> runtime.isRunning(spec.name()));
         var deviceId = UUID.fromString(spec.environment().get("POINTER_DEVICE_ID"));
         var runner =

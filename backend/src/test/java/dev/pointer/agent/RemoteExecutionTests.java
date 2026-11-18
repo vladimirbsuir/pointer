@@ -177,7 +177,7 @@ class RemoteExecutionTests extends AgentIntegrationTest {
         var setup = remoteSetUp();
         var created = createRemoteSession(setup);
         var sessionId = UUID.fromString(created.path("session").path("id").asString());
-        var spec = fakeRuntime().awaitCreated(TIMEOUT);
+        var spec = fakeRuntime().awaitCreatedNamed("pointer-session-" + sessionId, TIMEOUT);
         var deviceId = UUID.fromString(spec.environment().get("POINTER_DEVICE_ID"));
 
         client.post()
@@ -247,8 +247,7 @@ class RemoteExecutionTests extends AgentIntegrationTest {
             assertThat(fakeRuntime().isRunning("pointer-session-" + first)).isTrue();
 
             writer.changeStatus(userId, first, SessionStatus.IDLE);
-            var secondContainer = fakeRuntime().awaitCreated(TIMEOUT);
-            assertThat(secondContainer.name()).isEqualTo("pointer-session-" + second);
+            var secondContainer = fakeRuntime().awaitCreatedNamed("pointer-session-" + second, TIMEOUT);
             awaitWorkspace(
                     setup,
                     first,
@@ -334,7 +333,7 @@ class RemoteExecutionTests extends AgentIntegrationTest {
     }
 
     private GatewayTestClient startRunner(Setup setup, List<JsonNode> requests) throws Exception {
-        var spec = fakeRuntime().awaitCreated(TIMEOUT);
+        var spec = fakeRuntime().awaitCreatedForProject(setup.projectId(), TIMEOUT);
         awaitTrue(() -> fakeRuntime().isRunning(spec.name()));
         var deviceId = UUID.fromString(spec.environment().get("POINTER_DEVICE_ID"));
         assertThat(spec.environment())

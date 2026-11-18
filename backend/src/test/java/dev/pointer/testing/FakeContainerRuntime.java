@@ -8,14 +8,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 
 public class FakeContainerRuntime implements ContainerRuntime {
 
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(20);
+
     private final Map<String, ContainerSpec> containers = new ConcurrentHashMap<>();
     private final Set<String> running = ConcurrentHashMap.newKeySet();
-    private final LinkedBlockingQueue<ContainerSpec> created = new LinkedBlockingQueue<>();
+    private final List<ContainerSpec> created = new CopyOnWriteArrayList<>();
+    private final Set<ContainerSpec> claimed = ConcurrentHashMap.newKeySet();
     private final List<String> starts = new CopyOnWriteArrayList<>();
     private final List<String> removed = new CopyOnWriteArrayList<>();
 
@@ -53,12 +55,27 @@ public class FakeContainerRuntime implements ContainerRuntime {
         removed.add(name);
     }
 
-    public ContainerSpec awaitCreated(Duration timeout) throws InterruptedException {
-        var spec = created.poll(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        if (spec == null) {
-            throw new AssertionError("No container was created within " + timeout);
+    public ContainerSpec awaitCreatedForProject(Object projectId, Duration timeout) throws InterruptedException {
+        return awaitCreated(
+                spec -> String.valueOf(projectId).equals(spec.environment().get("POINTER_PROJECT_ID")), timeout);
+    }
+
+    public ContainerSpec awaitCreatedNamed(String name, Duration timeout) throws InterruptedException {
+        return awaitCreated(spec -> spec.name().equals(name), timeout);
+    }
+
+    private ContainerSpec awaitCreated(Predicate<ContainerSpec> matching, Duration timeout)
+            throws InterruptedException {
+        var deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            for (var spec : created) {
+                if (matching.test(spec) && claimed.add(spec)) {
+                    return spec;
+                }
+            }
+            Thread.sleep(POLL_INTERVAL);
         }
-        return spec;
+        throw new AssertionError("No matching container was created within " + timeout);
     }
 
     public boolean isRunning(String name) {
