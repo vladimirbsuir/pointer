@@ -269,6 +269,8 @@
     "fallbackHint": "Used only in sessions with smart routing: after one retry the request goes to the next model in the list.",
     "pricing": "Model options",
     "priceSummary": "${{input}} / ${{output}}",
+    "sendsCacheKey": "Send prompt cache key",
+    "sendsCacheKeyHint": "Adds prompt_cache_key with the session id to every request, which helps OpenAI-style caches route a session to the same cache. Turn off if the server rejects unknown fields.",
     "supportsVision": "Accepts images",
     "makeEmbedding": "Use for semantic search",
     "isEmbedding": "Embedding model for semantic search",

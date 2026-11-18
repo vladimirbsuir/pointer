@@ -294,6 +294,29 @@ function ProviderCard({ provider }: { provider: Provider }) {
           </Button>
         </div>
       </div>
+      {expanded && (
+        <label className="flex items-center gap-2 border-b px-4 py-2 text-xs text-muted-foreground">
+          <Switch
+            size="sm"
+            checked={provider.sendsCacheKey}
+            disabled={busy}
+            onCheckedChange={(checked) =>
+              void run(() =>
+                unwrap(
+                  api().PATCH("/api/v1/providers/{providerId}", {
+                    ...path,
+                    body: { sendsCacheKey: checked },
+                  }),
+                ),
+              )
+            }
+          />
+          <span>
+            {t("providers.sendsCacheKey")}
+            <span className="block">{t("providers.sendsCacheKeyHint")}</span>
+          </span>
+        </label>
+      )}
       {expanded && provider.models.length > 8 && (
         <div className="border-b px-4 py-2">
           <Input

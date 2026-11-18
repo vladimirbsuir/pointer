@@ -1414,6 +1414,7 @@ export interface components {
             name?: string;
             baseUrl?: string;
             isLocal?: boolean;
+            sendsCacheKey?: boolean;
             hasApiKey?: boolean;
             apiKeyHint?: string;
             models?: components["schemas"]["ModelResponse"][];
@@ -1677,6 +1678,7 @@ export interface components {
             apiKey?: string;
             clearApiKey?: boolean;
             isLocal?: boolean;
+            sendsCacheKey?: boolean;
         };
         UpdateModelRequest: {
             displayName?: string;
