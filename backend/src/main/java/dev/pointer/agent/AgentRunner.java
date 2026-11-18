@@ -68,6 +68,7 @@ public class AgentRunner implements LiveItemSnapshots {
     private static final String TRIGGER_LIMIT = "limit";
     private static final String TRIGGER_SOFT = "soft";
     private static final int DEFAULT_CONTEXT_WINDOW = 128_000;
+    private static final double MAX_CARRIED_SUMMARY_RATIO = 0.2;
     private static final String PROJECT_CONTEXT_OPERATION = "pointer.project_context";
     private static final Duration PROJECT_CONTEXT_TIMEOUT = Duration.ofSeconds(10);
     private static final String TITLE_PROMPT = """
@@ -548,7 +549,9 @@ public class AgentRunner implements LiveItemSnapshots {
             if (covered.isEmpty()) {
                 return null;
             }
-            var legacy = contextAssembler.buildCompaction(covered, mask);
+            var window = model.contextWindow() == null ? DEFAULT_CONTEXT_WINDOW : model.contextWindow();
+            var carried = ContextAssembler.carriedSummary(covered, (int) (window * MAX_CARRIED_SUMMARY_RATIO));
+            var legacy = contextAssembler.buildCompaction(covered, mask, carried != null);
             var cacheSafe = contextAssembler.buildCacheSafeCompaction(
                     scope.mode(),
                     globalInstructions,
@@ -557,7 +560,8 @@ public class AgentRunner implements LiveItemSnapshots {
                     writer.contextSnapshots(scope.sessionId()),
                     mask,
                     model.supportsVision(),
-                    scope.turnId());
+                    scope.turnId(),
+                    carried != null);
             var definitions = tools.get();
             var cacheSafeTokens = ContextAssembler.estimateTokens(cacheSafe) + TokenEstimate.tools(definitions);
             var history = ledger.compactionHistory(scope.sessionId());
@@ -569,12 +573,13 @@ public class AgentRunner implements LiveItemSnapshots {
                     history.averageSummaryTokens() == null
                             ? CompactionPlanner.DEFAULT_SUMMARY_TOKENS
                             : (int) Math.round(history.averageSummaryTokens()),
+                    carried == null ? 0 : TokenEstimate.text(carried),
                     Objects.requireNonNullElse(history.averageCallsPerTurn(), CompactionPlanner.DEFAULT_CALLS_PER_TURN),
                     isCacheWarm(history.lastCallAt()));
             var replaced = covered.stream()
                     .filter(item -> !Item.COMPACTION_SUMMARY.equals(item.get("type")))
                     .count();
-            return new Prepared(legacy, cacheSafe, definitions, estimate, replaced);
+            return new Prepared(legacy, cacheSafe, definitions, estimate, replaced, carried);
         }
 
         private boolean isCacheWarm(Instant lastCallAt) {
@@ -631,6 +636,9 @@ public class AgentRunner implements LiveItemSnapshots {
                 listener.completeAll(Item.FAILED, Map.of());
                 throw new LlmException("compaction_failed", "The model returned an empty summary", 0);
             }
+            if (prepared.carriedSummary() != null) {
+                listener.prependText(prepared.carriedSummary().strip() + "\n\n");
+            }
             listener.completeAll(
                     Item.COMPLETED, Map.of("replacedItemCount", prepared.replacedItems(), "trigger", trigger));
             ledger.record(
@@ -671,7 +679,8 @@ public class AgentRunner implements LiveItemSnapshots {
             List<ChatMessage> cacheSafe,
             List<ChatRequest.ToolDefinition> tools,
             CompactionPlanner.Estimate estimate,
-            long replacedItems) {}
+            long replacedItems,
+            String carriedSummary) {}
 
     private final class TurnListener implements StreamListener {
 
@@ -734,6 +743,13 @@ public class AgentRunner implements LiveItemSnapshots {
         String text() {
             var item = assistantItemId == null ? null : turn.items.get(assistantItemId);
             return item == null ? "" : item.text.toString();
+        }
+
+        void prependText(String prefix) {
+            var item = assistantItemId == null ? null : turn.items.get(assistantItemId);
+            if (item != null) {
+                item.text.insert(0, prefix);
+            }
         }
 
         void completeAll(String status, Map<String, Object> extra) {

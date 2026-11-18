@@ -42,7 +42,7 @@ public final class CompactionPlanner {
         var uncached = perToken(model.inputPricePerMtok());
         var cached = perToken(model.cachedInputPricePerMtok());
         var replaced = (double) estimate.replacedTokens();
-        var summary = (double) estimate.summaryTokens();
+        var summary = (double) estimate.carriedSummaryTokens() + estimate.summaryTokens();
         var laterCalls = Math.max(estimate.callsPerTurn() - 1, 0);
         var firstRead = estimate.warm() ? cached : uncached;
         var withoutCompaction = replaced * firstRead + laterCalls * replaced * cached;
@@ -87,6 +87,7 @@ public final class CompactionPlanner {
             int reusablePrefixTokens,
             int replacedTokens,
             int summaryTokens,
+            int carriedSummaryTokens,
             double callsPerTurn,
             boolean warm) {}
 }

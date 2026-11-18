@@ -95,6 +95,17 @@ class CompactionPlannerTests {
     }
 
     @Test
+    void aCarriedSummaryStaysInTheContextAndCountsAgainstTheSoftTrigger() {
+        var routes = plan(CACHING_STEP, CACHING_STEP);
+        var carried = new CompactionPlanner.Estimate(20_500, 23_000, 22_500, 20_000, 2_000, 8_000, 8, true);
+
+        assertThat(CompactionPlanner.worthCompacting(routes, estimate(20_000, true, 8), 33_000, 100_000))
+                .isTrue();
+        assertThat(CompactionPlanner.worthCompacting(routes, carried, 33_000, 100_000))
+                .isFalse();
+    }
+
+    @Test
     void afterAnIdleGapBothPathsReadTheOldContextCold() {
         var routes = plan(CACHING_STEP, CACHING_STEP);
 
@@ -109,7 +120,7 @@ class CompactionPlannerTests {
     private static CompactionPlanner.Estimate estimate(int replaced, boolean warm, double callsPerTurn) {
         var cacheSafe = replaced + 3_000;
         return new CompactionPlanner.Estimate(
-                replaced + 500, cacheSafe, cacheSafe - 500, replaced, 2_000, callsPerTurn, warm);
+                replaced + 500, cacheSafe, cacheSafe - 500, replaced, 2_000, 0, callsPerTurn, warm);
     }
 
     private static ModelRouter.ModelPlan plan(ResolvedModel step, ResolvedModel fast) {

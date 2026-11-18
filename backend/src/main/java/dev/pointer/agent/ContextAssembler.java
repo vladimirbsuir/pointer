@@ -63,8 +63,8 @@ class ContextAssembler {
             You summarize a conversation between a user and Pointer, an AI software engineering agent.
             The agent continues the work with only your summary, so it must keep everything needed to proceed.""";
 
-    private static final String COMPACTION_REQUEST = """
-            Summarize the conversation so far for the agent that will continue it. Include:
+    private static final String SUMMARY_CONTENTS = """
+            Include:
             - the user's goals and requests, including exact wording of requirements;
             - decisions, constraints and preferences;
             - files inspected or changed, with the important details;
@@ -72,10 +72,18 @@ class ContextAssembler {
             - the current state and the remaining work.
             Keep file paths, identifiers and error messages exact. Use concise Markdown. Reply with the summary only.""";
 
-    private static final String CACHE_SAFE_COMPACTION_REQUEST = """
+    private static final String COMPACTION_REQUEST =
+            "Summarize the conversation so far for the agent that will continue it. " + SUMMARY_CONTENTS;
+
+    private static final String CONTINUATION_REQUEST = """
+            The message that starts with "Summary of the earlier conversation" will be kept word for word in \
+            front of your summary. Summarize only the conversation after that message for the agent that will \
+            continue it, without repeating what the earlier summary already says. """ + SUMMARY_CONTENTS;
+
+    private static final String CACHE_SAFE_PREAMBLE = """
             Pause the task and do not call any tools in this reply: the conversation is about to be replaced \
             by your summary.
-            """ + COMPACTION_REQUEST;
+            """;
 
     private static final String CONTEXT_OPEN =
             "<context>\nCurrent environment and memory. This block replaces any earlier context block.\n";
@@ -114,7 +122,8 @@ class ContextAssembler {
             SequencedMap<UUID, String> snapshots,
             MaskPolicy mask,
             boolean supportsVision,
-            UUID currentTurnId) {
+            UUID currentTurnId,
+            boolean continuesSummary) {
         var active = activeItems(conversation);
         var covered = active.stream()
                 .filter(item -> !Objects.equals(item.get("turnId"), currentTurnId))
@@ -126,7 +135,7 @@ class ContextAssembler {
                 snapshots,
                 mask.boundary(countResults(active)),
                 supportsVision);
-        messages.add(ChatMessage.user(CACHE_SAFE_COMPACTION_REQUEST));
+        messages.add(ChatMessage.user(CACHE_SAFE_PREAMBLE + compactionRequest(continuesSummary)));
         return messages;
     }
 
@@ -177,11 +186,24 @@ class ContextAssembler {
         return messages;
     }
 
-    List<ChatMessage> buildCompaction(List<Map<String, Object>> covered, MaskPolicy mask) {
+    List<ChatMessage> buildCompaction(List<Map<String, Object>> covered, MaskPolicy mask, boolean continuesSummary) {
         var messages = build("agent", null, null, covered, new LinkedHashMap<>(), mask, false);
         messages.set(0, ChatMessage.system(COMPACTION_SYSTEM));
-        messages.add(ChatMessage.user(COMPACTION_REQUEST));
+        messages.add(ChatMessage.user(compactionRequest(continuesSummary)));
         return messages;
+    }
+
+    static String carriedSummary(List<Map<String, Object>> covered, int maxTokens) {
+        if (covered.isEmpty()
+                || !Item.COMPACTION_SUMMARY.equals(covered.getFirst().get("type"))) {
+            return null;
+        }
+        var summary = text(covered.getFirst());
+        return summary.isBlank() || TokenEstimate.text(summary) > maxTokens ? null : summary;
+    }
+
+    private static String compactionRequest(boolean continuesSummary) {
+        return continuesSummary ? CONTINUATION_REQUEST : COMPACTION_REQUEST;
     }
 
     static List<Map<String, Object>> compactable(List<Map<String, Object>> conversation, UUID currentTurnId) {

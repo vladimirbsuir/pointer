@@ -153,6 +153,9 @@ class ContextAssemblerTests {
                     continue;
                 }
                 var step = build(boundary.items(), boundary.snapshots(), policy);
+                var continues = ContextAssembler.carriedSummary(
+                                ContextAssembler.compactable(boundary.items(), currentTurn), 10_000)
+                        != null;
                 var compaction = assembler.buildCacheSafeCompaction(
                         "agent",
                         "Be brief.",
@@ -161,18 +164,44 @@ class ContextAssemblerTests {
                         boundary.snapshots(),
                         policy,
                         false,
-                        currentTurn);
+                        currentTurn,
+                        continues);
                 var prefix = compaction.subList(0, compaction.size() - 1);
 
                 assertThat(step.subList(0, prefix.size())).as("run %d", run).isEqualTo(prefix);
                 assertThat(step.size()).isGreaterThan(prefix.size());
                 assertThat(compaction.getLast().content())
                         .contains("do not call any tools")
-                        .contains("Summarize the conversation so far");
+                        .contains(
+                                continues
+                                        ? "Summarize only the conversation after"
+                                        : "Summarize the conversation so far");
                 checked++;
             }
         }
         assertThat(checked).isPositive();
+    }
+
+    @Test
+    void anEarlierSummaryIsCarriedOnlyWhenItLeadsTheCoveredItemsAndFitsTheLimit() {
+        var conversation = new Conversation();
+        var first = conversation.turn("first question");
+        conversation.answer(first, 0, "first answer");
+        assertThat(ContextAssembler.carriedSummary(conversation.items, 1_000)).isNull();
+
+        var second = conversation.turn("second question");
+        conversation.summary(second, "The codename is HERON-7.");
+        conversation.answer(second, 0, "second answer");
+        var covered = ContextAssembler.compactable(conversation.items, UUID.randomUUID());
+
+        assertThat(ContextAssembler.carriedSummary(covered, 1_000)).isEqualTo("The codename is HERON-7.");
+        assertThat(ContextAssembler.carriedSummary(covered, 2)).isNull();
+        assertThat(assembler
+                        .buildCompaction(covered, MaskPolicy.NONE, true)
+                        .getLast()
+                        .content())
+                .contains("kept word for word")
+                .contains("Summarize only the conversation after that message");
     }
 
     @Test
@@ -219,7 +248,7 @@ class ContextAssemblerTests {
         assertThat(build(conversation.items, new LinkedHashMap<>(), MaskPolicy.NONE))
                 .extracting(ChatMessage::content)
                 .noneMatch(content -> content.startsWith(PLACEHOLDER));
-        assertThat(assembler.buildCompaction(conversation.items, new MaskPolicy(1, 1)))
+        assertThat(assembler.buildCompaction(conversation.items, new MaskPolicy(1, 1), false))
                 .extracting(ChatMessage::content)
                 .filteredOn(content -> content.startsWith(PLACEHOLDER))
                 .hasSize(2);

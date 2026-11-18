@@ -55,6 +55,32 @@ class CompactionTests extends AgentIntegrationTest {
     }
 
     @Test
+    void aLaterCompactionKeepsTheEarlierSummaryWordForWord() throws Exception {
+        var setup = setUp(false);
+        llm.enqueueText("Answer one");
+
+        try (var ws = viewer(setup)) {
+            send(setup, "The codename is HERON-7", null);
+            ws.awaitEvent("turn.completed", TIMEOUT);
+            awaitTitle(ws);
+            llm.enqueueText("FIRST-SUMMARY: codename HERON-7.");
+            compact(setup);
+            ws.await(message -> countEvents(ws, "turn.completed") == 2, TIMEOUT);
+
+            llm.enqueueText("Answer two");
+            send(setup, "Second question", null);
+            ws.await(message -> countEvents(ws, "turn.completed") == 3, TIMEOUT);
+            llm.enqueueText("SECOND-SUMMARY: answered the second question.");
+            compact(setup);
+            ws.await(message -> countEvents(ws, "turn.completed") == 4, TIMEOUT);
+
+            assertThat(lastItem(ws, "compaction_summary").path("text").asString())
+                    .isEqualTo("FIRST-SUMMARY: codename HERON-7.\n\nSECOND-SUMMARY: answered the second question.");
+        }
+        assertThat(llm.requests().getLast()).contains("kept word for word", "FIRST-SUMMARY", "Second question");
+    }
+
+    @Test
     void aToolCallInTheCacheSafeAnswerIsRetriedWithTheOldRequest() throws Exception {
         var setup = setUp(false);
         llm.enqueueText("Answer one");
