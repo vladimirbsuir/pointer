@@ -2,6 +2,7 @@ import { QueryClient, useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "./client";
 import { core } from "./core";
 import type {
+  ContextStrategy,
   Automation,
   AutomationRun,
   CustomTool,
@@ -128,6 +129,7 @@ export function useSettings() {
         defaultModelId: data.defaultModelId ?? null,
         embeddingModelId: data.embeddingModelId ?? null,
         routingDefault: (data.routingDefault ?? "off") as "off" | "smart",
+        contextStrategyDefault: (data.contextStrategyDefault ?? "summary") as ContextStrategy,
         fastModelId: data.fastModelId ?? null,
         planModelId: data.planModelId ?? null,
         exploreModelId: data.exploreModelId ?? null,

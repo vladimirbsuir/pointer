@@ -1222,6 +1222,7 @@ export interface components {
             /** Format: uuid */
             exploreModelId?: string;
             clearExploreModel?: boolean;
+            contextStrategyDefault?: string;
         };
         SettingsResponse: {
             globalInstructions?: string;
@@ -1236,6 +1237,7 @@ export interface components {
             planModelId?: string;
             /** Format: uuid */
             exploreModelId?: string;
+            contextStrategyDefault?: string;
         };
         CommandRequest: {
             name: string;
@@ -1282,6 +1284,7 @@ export interface components {
             estimatedCost?: number;
             budgetUsd?: number;
             routing?: string;
+            contextStrategy?: string;
             /** Format: uuid */
             executorDeviceId?: string;
             worktree?: components["schemas"]["SessionWorktree"];
@@ -1453,6 +1456,7 @@ export interface components {
             modelId?: string;
             budgetUsd?: number;
             routing?: string;
+            contextStrategy?: string;
         };
         CreateRemoteSessionRequest: {
             title?: string;
@@ -1671,6 +1675,7 @@ export interface components {
             archived?: boolean;
             budgetUsd?: number;
             routing?: string;
+            contextStrategy?: string;
         };
         UpdateProviderRequest: {
             name?: string;

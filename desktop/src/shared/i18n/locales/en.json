@@ -563,6 +563,22 @@
       "reference": "Reference"
     }
   },
+  "contextStrategy": {
+    "title": "Context strategy",
+    "hint": "How older parts of the conversation are shortened for the model",
+    "default": "Context strategy for new sessions",
+    "defaultHint": "Summary condenses the conversation when the context is 80% full. Masking replaces old tool results with a short note and keeps the rest, so the prompt cache stays valid longer. Hybrid masks and also summarizes at 80%. Each session can change it in its header.",
+    "options": {
+      "summary": "Summary",
+      "masking": "Masking",
+      "hybrid": "Hybrid"
+    },
+    "descriptions": {
+      "summary": "Summarize earlier turns when the context is 80% full",
+      "masking": "Hide old tool results; summarize only at 95%",
+      "hybrid": "Hide old tool results and summarize at 80%"
+    }
+  },
   "usage": {
     "title": "Session usage",
     "description": "Tokens and estimated cost of every model call in this session, and an optional budget.",

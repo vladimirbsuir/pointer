@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 import { api, unwrap } from "@/shared/api/client";
 import { queryKeys, useProviders, useSettings } from "@/shared/api/queries";
-import { toAppError, type Provider } from "@/shared/api/types";
+import { toAppError, type ContextStrategy, type Provider } from "@/shared/api/types";
+import { ContextStrategyPicker } from "@/features/sessions/ContextStrategyPicker";
 import { errorMessage } from "@/shared/i18n/errors";
 import { cn } from "@/shared/lib/utils";
 import { Badge } from "@/shared/ui/badge";
@@ -468,6 +469,17 @@ function RoutingCard({ providers }: { providers: Provider[] }) {
     }
   };
 
+  const setStrategyDefault = async (strategy: ContextStrategy) => {
+    try {
+      await unwrap(
+        api().PUT("/api/v1/me/settings", { body: { contextStrategyDefault: strategy } }),
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+    } catch (error) {
+      toast.error(errorMessage(t, toAppError(error)));
+    }
+  };
+
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
       <label className="flex items-center gap-2 font-medium">
@@ -479,6 +491,14 @@ function RoutingCard({ providers }: { providers: Provider[] }) {
         {t("providers.routingDefault")}
       </label>
       <p className="text-xs text-muted-foreground">{t("providers.routingDescription")}</p>
+      <div className="flex items-center gap-2 border-t pt-2">
+        <span className="font-medium">{t("contextStrategy.default")}</span>
+        <ContextStrategyPicker
+          value={settings?.contextStrategyDefault ?? "summary"}
+          onChange={(strategy) => void setStrategyDefault(strategy)}
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">{t("contextStrategy.defaultHint")}</p>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
         <span className="flex items-center gap-1">
           <RabbitIcon className="size-3.5 text-emerald-500" />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatCost } from "./format-cost";
+import { ContextStrategyPicker } from "./ContextStrategyPicker";
 import { SessionUsageDialog } from "./SessionUsageDialog";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -8,7 +9,12 @@ import { AutomationBadge } from "@/features/automation/AutomationBadge";
 import { useWorkspace } from "@/features/workspace/workspace-store";
 import { api, unwrap } from "@/shared/api/client";
 import { enabledModels, useProviders, useRemoteSessions } from "@/shared/api/queries";
-import { toAppError, type Session, type SessionMode } from "@/shared/api/types";
+import {
+  toAppError,
+  type ContextStrategy,
+  type Session,
+  type SessionMode,
+} from "@/shared/api/types";
 import { errorMessage } from "@/shared/i18n/errors";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
@@ -88,6 +94,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
     mode?: SessionMode;
     autoApprove?: boolean;
     routing?: "off" | "smart";
+    contextStrategy?: ContextStrategy;
   }) => {
     try {
       const updated = (await unwrap(
@@ -218,6 +225,11 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
               />
               <span className={cn(changesOpen && "sr-only")}>{t("chat.smartRouting")}</span>
             </label>
+            <ContextStrategyPicker
+              value={session.contextStrategy}
+              compact={changesOpen}
+              onChange={(contextStrategy) => void updateSession({ contextStrategy })}
+            />
             <ModelPicker
               value={session.modelId}
               onChange={(modelId) => void updateSession({ modelId })}

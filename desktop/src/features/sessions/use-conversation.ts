@@ -105,6 +105,9 @@ function applyEvent(state: ConversationState, { seq, event }: SessionEvent): Con
                   ? event.autoApprove
                   : next.session.autoApprove,
               routing: (event.routing as Session["routing"]) ?? next.session.routing,
+              contextStrategy:
+                (event.contextStrategy as Session["contextStrategy"]) ??
+                next.session.contextStrategy,
               budgetUsd:
                 "budgetUsd" in event
                   ? ((event.budgetUsd as number | null) ?? null)

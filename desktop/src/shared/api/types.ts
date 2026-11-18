@@ -198,6 +198,10 @@ export type WorktreeStatus = {
   baseCheckedOut: boolean;
 };
 
+export const CONTEXT_STRATEGIES = ["summary", "masking", "hybrid"] as const;
+
+export type ContextStrategy = (typeof CONTEXT_STRATEGIES)[number];
+
 export type Session = Required<
   Omit<
     Schemas["SessionResponse"],
@@ -210,11 +214,13 @@ export type Session = Required<
     | "estimatedCost"
     | "budgetUsd"
     | "routing"
+    | "contextStrategy"
   >
 > & {
   estimatedCost: number | null;
   budgetUsd: number | null;
   routing: "off" | "smart";
+  contextStrategy: ContextStrategy;
   worktree: SessionWorktree | null;
   modelId: string | null;
   executorDeviceId: string | null;
