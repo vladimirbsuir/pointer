@@ -30,5 +30,7 @@ __pycache__/
 infra/bench/memory/results/
 infra/bench/routing/results/
 infra/bench/cache/results/
+infra/bench/escalation/results/
+infra/bench/escalation/workspace/
 infra/bench/device/target/
 infra/bench/*.local.json

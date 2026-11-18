@@ -1,0 +1,78 @@
+{
+  "tasks": [
+    {
+      "id": "slugify",
+      "kind": "code",
+      "difficulty": "easy",
+      "check": [
+        "tests.test_slugify"
+      ],
+      "prompt": "In this project, `slugify` in shop/textutil.py should turn \"Hello,  World!\" into \"hello-world\": every run of characters that are not letters or digits becomes a single dash, and there are no dashes at the start or end. Fix it and check with `python -m unittest tests.test_slugify tests.test_baseline`."
+    },
+    {
+      "id": "discount",
+      "kind": "code",
+      "difficulty": "easy",
+      "check": [
+        "tests.test_discount"
+      ],
+      "prompt": "`apply_discount` in shop/pricing.py must return a Decimal rounded half up to cents (5.35 with 50 % off is 2.68, not 2.67). Fix it and check with `python -m unittest tests.test_discount tests.test_baseline`."
+    },
+    {
+      "id": "business_days",
+      "kind": "code",
+      "difficulty": "medium",
+      "check": [
+        "tests.test_business_days"
+      ],
+      "prompt": "Implement `business_days_between(start, end)` in shop/dates.py: the number of weekdays (Monday to Friday) from start included to end excluded; equal dates give 0 and an end before the start raises ValueError. Check with `python -m unittest tests.test_business_days tests.test_baseline`."
+    },
+    {
+      "id": "cart_tiers",
+      "kind": "code",
+      "difficulty": "medium",
+      "check": [
+        "tests.test_cart_tiers"
+      ],
+      "prompt": "A cart of 120 pens at 1.00 should cost 122.40 with tax, because 100 or more items get the 15 % bulk discount, but it costs more. Find out why the cart total picks the wrong bulk discount and fix it. Check with `python -m unittest tests.test_cart_tiers tests.test_baseline`."
+    },
+    {
+      "id": "reserve_atomic",
+      "kind": "code",
+      "difficulty": "hard",
+      "check": [
+        "tests.test_reserve_atomic"
+      ],
+      "prompt": "Reserving stock must be all or nothing: when one item of a reservation is out of stock, no stock may change, and a quantity of zero or less is a ValueError. Fix the inventory so this holds, and check with `python -m unittest tests.test_reserve_atomic tests.test_baseline`."
+    },
+    {
+      "id": "monthly_summary",
+      "kind": "code",
+      "difficulty": "hard",
+      "check": [
+        "tests.test_monthly_summary"
+      ],
+      "prompt": "The monthly report merges January 2025 with January 2026. `monthly_summary` should return a list of (\"YYYY-MM\", total) pairs in chronological order, with months of different years kept apart. Fix it and check with `python -m unittest tests.test_monthly_summary tests.test_baseline`."
+    },
+    {
+      "id": "tax_lookup",
+      "kind": "lookup",
+      "difficulty": "easy",
+      "expected": [
+        "pricing.py",
+        "TAX_RATE"
+      ],
+      "prompt": "Without changing any file: which file and constant define the sales tax rate, and what is its value? Answer in one sentence."
+    },
+    {
+      "id": "stock_lookup",
+      "kind": "lookup",
+      "difficulty": "easy",
+      "expected": [
+        "inventory.py",
+        "reserve"
+      ],
+      "prompt": "Without changing any file: which method decrements the stock when items are reserved? Name the file and the method in one sentence."
+    }
+  ]
+}
