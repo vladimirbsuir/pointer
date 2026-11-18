@@ -167,11 +167,13 @@ Built before every model call, in this order:
 
 1. base system instructions;
 2. mode instructions (Ask, Plan, Agent);
-3. environment: OS, shell, date, project name, git branch (from the executor);
+3. environment: OS, shell, project name (from the executor);
 4. global user instructions;
 5. project rules (`AGENTS.md` or `CLAUDE.md`, read through the executor at turn start);
-6. tool definitions allowed in the current mode;
-7. conversation items, starting from the latest compaction summary.
+6. tool definitions allowed in the current mode: registry tools by name, then the server-side tools in a fixed order;
+7. conversation items, starting from the latest compaction summary. The date, the git branch and the memory index form a per-turn context snapshot that is stored with the turn when it changed and rendered in front of the turn's first user message.
+
+Between compactions every request extends the previous one, so providers can serve the earlier part from their prompt cache ([ADR 0024](adr/0024-append-only-context.md)).
 
 Token counts use the provider's reported usage when available and an estimate otherwise.
 Compaction replaces older items with a model-generated summary item. Original items stay in the database and in the client history.

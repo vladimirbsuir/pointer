@@ -43,6 +43,7 @@ public class Turn extends BaseEntity {
     private Instant startedAt;
     private Instant completedAt;
     private Instant rewoundAt;
+    private String contextSnapshot;
 
     protected Turn() {}
 
@@ -56,6 +57,10 @@ public class Turn extends BaseEntity {
         this.status = RUNNING;
         this.idempotencyKey = idempotencyKey;
         this.startedAt = now;
+    }
+
+    void recordContextSnapshot(String snapshot) {
+        this.contextSnapshot = snapshot;
     }
 
     void markRewound(Instant now) {

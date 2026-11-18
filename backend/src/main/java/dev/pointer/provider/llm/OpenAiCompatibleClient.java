@@ -69,7 +69,7 @@ public class OpenAiCompatibleClient {
     }
 
     public void stream(Endpoint endpoint, ChatRequest chatRequest, StreamListener listener, Cancellation cancellation) {
-        var body = json.writeValueAsBytes(requestBody(chatRequest));
+        var body = json.writeValueAsBytes(requestBody(chatRequest, endpoint.sendsCacheKey()));
         var request =
                 new HttpTransport.Request("POST", endpoint.url("/chat/completions"), headers(endpoint, true), body);
         try (var response = endpoint.transport().send(request, cancellation)) {
@@ -141,7 +141,7 @@ public class OpenAiCompatibleClient {
         return hits.isNumber() ? hits.asLong() : null;
     }
 
-    private Map<String, Object> requestBody(ChatRequest request) {
+    private Map<String, Object> requestBody(ChatRequest request, boolean sendsCacheKey) {
         var body = new LinkedHashMap<String, Object>();
         body.put("model", request.model());
         body.put("messages", request.messages().stream().map(this::message).toList());
@@ -163,6 +163,9 @@ public class OpenAiCompatibleClient {
         }
         if (request.maxTokens() != null) {
             body.put("max_tokens", request.maxTokens());
+        }
+        if (sendsCacheKey && request.cacheKey() != null) {
+            body.put("prompt_cache_key", request.cacheKey());
         }
         return body;
     }

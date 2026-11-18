@@ -28,6 +28,8 @@ interface TurnRepository extends JpaRepository<Turn, UUID> {
     List<Turn> findByStatus(String status);
 
     List<Turn> findBySessionIdAndNumberGreaterThanEqualAndRewoundAtIsNullOrderByNumber(UUID sessionId, int number);
+
+    List<Turn> findBySessionIdAndRewoundAtIsNullAndContextSnapshotIsNotNullOrderByNumber(UUID sessionId);
 }
 
 interface ItemRepository extends JpaRepository<Item, UUID> {

@@ -8,10 +8,12 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.SequencedMap;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -70,6 +72,9 @@ class ContextAssembler {
             - the current state and the remaining work.
             Keep file paths, identifiers and error messages exact. Use concise Markdown. Reply with the summary only.""";
 
+    private static final String CONTEXT_OPEN =
+            "<context>\nCurrent environment and memory. This block replaces any earlier context block.\n";
+    private static final String CONTEXT_CLOSE = "\n</context>\n\n";
     private static final String IMAGE_UNSUPPORTED =
             "[An image was attached here, but the current model does not accept images.]";
 
@@ -81,20 +86,25 @@ class ContextAssembler {
             String globalInstructions,
             ProjectContext project,
             List<Map<String, Object>> conversation,
+            SequencedMap<UUID, String> snapshots,
             boolean supportsVision) {
         var messages = new ArrayList<ChatMessage>();
         messages.add(ChatMessage.system(systemPrompt(mode, globalInstructions, project)));
+        var active = activeItems(conversation);
+        var pending = new LinkedHashMap<>(snapshots);
+        var carried = carriedSnapshot(active, snapshots);
         var group = new StepGroup();
-        for (var item : activeItems(conversation)) {
+        for (var item : active) {
             var type = String.valueOf(item.get("type"));
             switch (type) {
                 case Item.USER_MESSAGE -> {
                     group.flushInto(messages);
-                    messages.add(userMessage(item, supportsVision));
+                    messages.add(userMessage(item, pending.remove(item.get("turnId")), supportsVision));
                 }
                 case Item.COMPACTION_SUMMARY -> {
                     group.flushInto(messages);
-                    messages.add(ChatMessage.user("Summary of the earlier conversation:\n" + text(item)));
+                    messages.add(ChatMessage.user(
+                            withSnapshot(carried, "Summary of the earlier conversation:\n" + text(item))));
                 }
                 case Item.ASSISTANT_MESSAGE, Item.TOOL_CALL, Item.PLAN -> group.add(item, messages);
                 default -> {}
@@ -121,7 +131,7 @@ class ContextAssembler {
     }
 
     List<ChatMessage> buildCompaction(List<Map<String, Object>> covered) {
-        var messages = build("agent", null, null, covered, false);
+        var messages = build("agent", null, null, covered, new LinkedHashMap<>(), false);
         messages.set(0, ChatMessage.system(COMPACTION_SYSTEM));
         messages.add(ChatMessage.user(COMPACTION_REQUEST));
         return messages;
@@ -139,21 +149,46 @@ class ContextAssembler {
         return TokenEstimate.messages(messages);
     }
 
+    String snapshot(ProjectContext project) {
+        var text = new StringBuilder("- Date: ").append(LocalDate.now(clock.withZone(ZoneOffset.UTC)));
+        if (project != null && project.gitBranch() != null) {
+            text.append("\n- Git branch: ").append(project.gitBranch());
+        }
+        if (project != null && project.memory() != null && !project.memory().isBlank()) {
+            text.append("\n\n").append(project.memory().strip());
+        }
+        return text.toString();
+    }
+
+    private static String carriedSnapshot(List<Map<String, Object>> active, SequencedMap<UUID, String> snapshots) {
+        var activeTurns = active.stream()
+                .filter(item -> Item.USER_MESSAGE.equals(item.get("type")))
+                .map(item -> item.get("turnId"))
+                .toList();
+        if (!activeTurns.isEmpty() && snapshots.containsKey(activeTurns.getFirst())) {
+            return null;
+        }
+        return snapshots.entrySet().stream()
+                .filter(entry -> !activeTurns.contains(entry.getKey()))
+                .map(Map.Entry::getValue)
+                .reduce((earlier, later) -> later)
+                .orElse(null);
+    }
+
+    private static String withSnapshot(String snapshot, String text) {
+        return snapshot == null ? text : CONTEXT_OPEN + snapshot + CONTEXT_CLOSE + text;
+    }
+
     private String systemPrompt(String mode, String globalInstructions, ProjectContext project) {
         var prompt = new StringBuilder(BASE_INSTRUCTIONS)
                 .append("\n\n")
                 .append(MODE_INSTRUCTIONS.getOrDefault(mode, MODE_INSTRUCTIONS.get("agent")))
-                .append("\n\nEnvironment:\n- Date: ")
-                .append(LocalDate.now(clock.withZone(ZoneOffset.UTC)))
-                .append("\n- OS: ")
+                .append("\n\nEnvironment:\n- OS: ")
                 .append(project == null || project.os() == null ? DEFAULT_OS : project.os())
                 .append("\n- Shell: ")
                 .append(project == null || project.shell() == null ? DEFAULT_SHELL : project.shell());
         if (project != null) {
             prompt.append("\n- Project: ").append(project.name());
-            if (project.gitBranch() != null) {
-                prompt.append("\n- Git branch: ").append(project.gitBranch());
-            }
         }
         if (globalInstructions != null && !globalInstructions.isBlank()) {
             prompt.append("\n\nUser instructions:\n").append(globalInstructions.strip());
@@ -165,9 +200,6 @@ class ContextAssembler {
                     .append(project.rulesFile())
                     .append(":\n")
                     .append(project.rulesContent().strip());
-        }
-        if (project != null && project.memory() != null && !project.memory().isBlank()) {
-            prompt.append("\n\n").append(project.memory().strip());
         }
         return prompt.toString();
     }
@@ -198,8 +230,8 @@ class ContextAssembler {
         return item.get("text") == null ? "" : String.valueOf(item.get("text"));
     }
 
-    private ChatMessage userMessage(Map<String, Object> item, boolean supportsVision) {
-        var text = withAttachments(text(item), item.get("attachments"));
+    private ChatMessage userMessage(Map<String, Object> item, String snapshot, boolean supportsVision) {
+        var text = withSnapshot(snapshot, withAttachments(text(item), item.get("attachments")));
         var imageIds = imageIds(item.get("attachments"));
         if (imageIds.isEmpty()) {
             return ChatMessage.user(text);

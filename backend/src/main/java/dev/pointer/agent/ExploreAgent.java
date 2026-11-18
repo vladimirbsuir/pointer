@@ -170,8 +170,9 @@ class ExploreAgent {
                 messages.add(ChatMessage.user(REPORT_REQUEST));
             }
             var reply = new Reply();
-            var exploreRequest =
-                    new ChatRequest(explorer.model().modelKey(), messages, wrapUp ? List.of() : tools, null);
+            var exploreRequest = new ChatRequest(
+                            explorer.model().modelKey(), messages, wrapUp ? List.of() : tools, null)
+                    .withCacheKey(scope.sessionId());
             var used = failover.stream(explorer, exploreRequest, reply, scope.cancellation());
             recordUsage(scope, used, exploreRequest, reply.usage);
             if (scope.cancellation().isCancelled() || wrapUp || reply.calls.isEmpty()) {

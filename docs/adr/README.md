@@ -30,3 +30,4 @@ File name: `NNNN-short-title.md`. Status: `Proposed`, `Accepted`, `Superseded by
 | [0021](0021-model-failover.md) | Model failover with retry and fallback lists | Accepted |
 | [0022](0022-explore-sub-agent.md) | Explore sub-agent | Accepted |
 | [0023](0023-issue-to-pull-request-automation.md) | Issue to pull request automation | Accepted |
+| [0024](0024-append-only-context.md) | Append-only context with per-turn snapshots | Accepted |

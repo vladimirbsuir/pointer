@@ -79,6 +79,9 @@ public class ProviderService {
         if (request.isLocal() != null) {
             provider.markLocal(request.isLocal(), now);
         }
+        if (request.sendsCacheKey() != null) {
+            provider.changeCacheKey(request.sendsCacheKey(), now);
+        }
         if (Boolean.TRUE.equals(request.clearApiKey())) {
             provider.setApiKey(null, null, now);
         } else if (request.apiKey() != null && !request.apiKey().isBlank()) {
@@ -248,13 +251,17 @@ public class ProviderService {
     private Endpoint endpoint(Provider provider, UUID preferredDeviceId) {
         var apiKey = provider.getApiKeyEncrypted().map(cipher::decrypt).orElse(null);
         if (!provider.isLocal()) {
-            return new Endpoint(provider.getBaseUrl(), apiKey, directTransport);
+            return new Endpoint(provider.getBaseUrl(), apiKey, directTransport, provider.sendsCacheKey());
         }
         var relay = relayTransports.getIfAvailable();
         if (relay == null) {
             throw ApiException.unavailable("local_provider_offline", "Local providers are not available");
         }
-        return new Endpoint(provider.getBaseUrl(), apiKey, relay.forUser(provider.getUserId(), preferredDeviceId));
+        return new Endpoint(
+                provider.getBaseUrl(),
+                apiKey,
+                relay.forUser(provider.getUserId(), preferredDeviceId),
+                provider.sendsCacheKey());
     }
 
     private <T> T callProvider(Supplier<T> call) {
@@ -314,6 +321,7 @@ public class ProviderService {
                 provider.getName(),
                 provider.getBaseUrl(),
                 provider.isLocal(),
+                provider.sendsCacheKey(),
                 provider.getApiKeyEncrypted().isPresent(),
                 provider.getApiKeyHint(),
                 providerModels.stream()

@@ -12,6 +12,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SequencedMap;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -296,6 +297,27 @@ public class SessionWriter {
         return items.findConversationBySessionId(sessionId).stream()
                 .map(Item::toView)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public SequencedMap<UUID, String> contextSnapshots(UUID sessionId) {
+        var snapshots = new LinkedHashMap<UUID, String>();
+        turns.findBySessionIdAndRewoundAtIsNullAndContextSnapshotIsNotNullOrderByNumber(sessionId)
+                .forEach(turn -> snapshots.put(turn.getId(), turn.getContextSnapshot()));
+        return snapshots;
+    }
+
+    @Transactional
+    public void recordContextSnapshot(UUID sessionId, UUID turnId, String snapshot) {
+        var turn = turns.findById(turnId).orElseThrow();
+        var previous =
+                turns.findBySessionIdAndRewoundAtIsNullAndContextSnapshotIsNotNullOrderByNumber(sessionId).stream()
+                        .filter(earlier -> earlier.getNumber() < turn.getNumber())
+                        .map(Turn::getContextSnapshot)
+                        .reduce((first, second) -> second);
+        var changed = previous.map(text -> !text.equals(snapshot)).orElse(true);
+        turn.recordContextSnapshot(changed ? snapshot : null);
+        turns.save(turn);
     }
 
     @Transactional(readOnly = true)

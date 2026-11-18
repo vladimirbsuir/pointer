@@ -177,7 +177,7 @@ Specified in [F4](features/f4-agent-memory.md).
 | ID | Requirement | Priority |
 |---|---|---|
 | MEM-1 | A memory has a scope (the user or a project), a kind (`user`, `feedback`, `project`, `reference`), a unique name per scope, a one-line description and Markdown content. | F4 |
-| MEM-2 | Every turn's system prompt contains an index of the user's and the project's memories within a token budget; pinned memories are included in full. | F4 |
+| MEM-2 | Every turn's context contains an index of the user's and the project's memories within a token budget; pinned memories are included in full. | F4 |
 | MEM-3 | The agent saves, updates, reads, searches and deletes memories with tools; every change it makes can be undone from the conversation. | F4 |
 | MEM-4 | The user manages memories in the desktop app, saves a note with a `#` message and from Telegram with `/remember`. | F4 |
 | MEM-5 | Memories are suggested from finished sessions; the user accepts or dismisses them. | F4 |

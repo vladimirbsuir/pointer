@@ -31,6 +31,7 @@ public class Provider extends BaseEntity {
     private String apiKeyHint;
 
     private boolean isLocal;
+    private boolean sendsCacheKey;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -51,6 +52,10 @@ public class Provider extends BaseEntity {
         return isLocal;
     }
 
+    public boolean sendsCacheKey() {
+        return sendsCacheKey;
+    }
+
     Optional<byte[]> getApiKeyEncrypted() {
         return Optional.ofNullable(apiKeyEncrypted);
     }
@@ -67,6 +72,11 @@ public class Provider extends BaseEntity {
 
     void markLocal(boolean local, Instant now) {
         this.isLocal = local;
+        this.updatedAt = now;
+    }
+
+    void changeCacheKey(boolean sends, Instant now) {
+        this.sendsCacheKey = sends;
         this.updatedAt = now;
     }
 

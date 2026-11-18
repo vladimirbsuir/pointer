@@ -74,6 +74,23 @@ class OpenAiCompatibleClientTest {
     }
 
     @Test
+    void sendsThePromptCacheKeyOnlyToProvidersMarkedForIt() {
+        server.enqueueText("one");
+        server.enqueueText("two");
+        server.enqueueText("three");
+        var keyed = request().withCacheKey("session-1");
+        var marked = new Endpoint(server.baseUrl(), null, new DirectHttpTransport(), true);
+
+        client.stream(marked, keyed, new RecordingListener(), new Cancellation());
+        client.stream(endpoint(null), keyed, new RecordingListener(), new Cancellation());
+        client.stream(marked, request(), new RecordingListener(), new Cancellation());
+
+        assertThat(server.requests().get(0)).contains("\"prompt_cache_key\":\"session-1\"");
+        assertThat(server.requests().get(1)).doesNotContain("prompt_cache_key");
+        assertThat(server.requests().get(2)).doesNotContain("prompt_cache_key");
+    }
+
+    @Test
     void streamsReasoningAndToolCallDeltas() {
         server.enqueueStream(
                 Duration.ZERO,

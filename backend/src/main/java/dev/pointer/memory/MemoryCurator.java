@@ -167,10 +167,11 @@ public class MemoryCurator {
         var reply = new StringBuilder();
         var reported = new AtomicReference<StreamListener.Usage>();
         var request = ChatRequest.of(
-                routed.model().modelKey(),
-                List.of(
-                        ChatMessage.system(SYSTEM),
-                        ChatMessage.user(known(session) + "\n\nSession transcript:\n" + transcript)));
+                        routed.model().modelKey(),
+                        List.of(
+                                ChatMessage.system(SYSTEM),
+                                ChatMessage.user(known(session) + "\n\nSession transcript:\n" + transcript)))
+                .withCacheKey(session.sessionId());
         var used = client.failover(session.userId(), session.deviceId(), session.smartRouting()).stream(
                 routed,
                 request,

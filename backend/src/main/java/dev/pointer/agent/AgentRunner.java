@@ -169,6 +169,9 @@ public class AgentRunner implements LiveItemSnapshots {
                     context.worktree(),
                     turn.cancellation);
             var project = projectContext(scope).withMemory(memorySection(scope));
+            if (!Turn.COMPACTION.equals(context.kind())) {
+                writer.recordContextSnapshot(sessionId, turnId, contextAssembler.snapshot(project));
+            }
             var globalInstructions = settingsService.get(userId).globalInstructions();
             var summarizer = new Summarizer(scope, routes, failover, turn, project, globalInstructions);
             if (Turn.COMPACTION.equals(context.kind())) {
@@ -180,7 +183,6 @@ public class AgentRunner implements LiveItemSnapshots {
             long contextTokens = context.contextTokens();
             String reason = null;
             Map<String, Object> error = null;
-            List<ChatMessage> firstMessages = null;
             for (var step = 0; reason == null; step++) {
                 if (step > 0) {
                     writer.attachQueued(userId, sessionId, turnId, context.mode());
@@ -206,16 +208,14 @@ public class AgentRunner implements LiveItemSnapshots {
                         globalInstructions,
                         project,
                         writer.conversation(sessionId),
+                        writer.contextSnapshots(sessionId),
                         model.supportsVision());
-                if (firstMessages == null) {
-                    firstMessages = messages;
-                }
                 var tools = model.supportsTools()
                         ? toolDefinitions(
                                 userId, context.projectId(), context.executorDeviceId(), context.mode(), routes)
                         : List.<ChatRequest.ToolDefinition>of();
                 var listener = new TurnListener(userId, sessionId, turnId, step, turn, Item.ASSISTANT_MESSAGE);
-                var request = new ChatRequest(model.modelKey(), messages, tools, null);
+                var request = new ChatRequest(model.modelKey(), messages, tools, null).withCacheKey(sessionId);
                 var used = failover.stream(routes.step(), request, listener, turn.cancellation);
                 listener.completeAll(turn.cancellation.isCancelled() ? Item.CANCELLED : Item.COMPLETED, Map.of());
                 contextTokens = recordUsage(scope, used, model.contextWindow(), listener.usage, request);
@@ -257,10 +257,10 @@ public class AgentRunner implements LiveItemSnapshots {
                 }
             }
             if (context.needsTitle() && !Turn.CANCELLED.equals(reason)) {
-                var titleMessages = firstMessages;
+                var firstMessage = sessionService.turnMessage(sessionId, turnId).orElse("");
                 var titleFailover = routedClient.failover(userId, context.executorDeviceId(), smart);
                 executor.submit(
-                        () -> generateTitle(userId, sessionId, turnId, routes.fast(), titleFailover, titleMessages));
+                        () -> generateTitle(userId, sessionId, turnId, routes.fast(), titleFailover, firstMessage));
             }
             return writer.finishTurn(userId, sessionId, turnId, reason, error);
         } catch (LlmException exception) {
@@ -428,20 +428,16 @@ public class AgentRunner implements LiveItemSnapshots {
             UUID turnId,
             ModelRouter.RoutedModel routed,
             RoutedClient.Failover failover,
-            List<ChatMessage> messages) {
+            String firstUserMessage) {
         try {
-            var firstUserMessage = messages.stream()
-                    .filter(message -> message.role() == ChatMessage.Role.USER)
-                    .map(ChatMessage::content)
-                    .findFirst()
-                    .orElse("");
             var title = new StringBuilder();
             var reported = new AtomicReference<StreamListener.Usage>();
             var request = new ChatRequest(
-                    routed.model().modelKey(),
-                    List.of(ChatMessage.system(TITLE_PROMPT), ChatMessage.user(firstUserMessage)),
-                    List.of(),
-                    null);
+                            routed.model().modelKey(),
+                            List.of(ChatMessage.system(TITLE_PROMPT), ChatMessage.user(firstUserMessage)),
+                            List.of(),
+                            null)
+                    .withCacheKey(sessionId);
             var used = failover.stream(
                     routed,
                     request,
@@ -510,8 +506,8 @@ public class AgentRunner implements LiveItemSnapshots {
             return failover.stream(target, compactionRequest(target, request), listener, turn.cancellation);
         }
 
-        private static ChatRequest compactionRequest(ModelRouter.RoutedModel target, List<ChatMessage> request) {
-            return new ChatRequest(target.model().modelKey(), request, List.of(), null);
+        private ChatRequest compactionRequest(ModelRouter.RoutedModel target, List<ChatMessage> request) {
+            return new ChatRequest(target.model().modelKey(), request, List.of(), null).withCacheKey(scope.sessionId());
         }
 
         OptionalInt summarize() {
@@ -573,6 +569,7 @@ public class AgentRunner implements LiveItemSnapshots {
                     globalInstructions,
                     project,
                     writer.conversation(scope.sessionId()),
+                    writer.contextSnapshots(scope.sessionId()),
                     model.supportsVision());
             var tokens = ContextAssembler.estimateTokens(remaining);
             writer.resetContextTokens(scope.userId(), scope.sessionId(), tokens, model.contextWindow());

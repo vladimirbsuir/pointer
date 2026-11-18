@@ -148,6 +148,7 @@ Unique: (`user_id`, `name`).
 | `api_key_encrypted` | bytea | Nullable; AES-GCM, nonce prefixed |
 | `api_key_hint` | text | Last 4 characters, for display |
 | `is_local` | boolean | Requests go through the relay (PROV-2) |
+| `sends_cache_key` | boolean | Default false; chat requests carry `prompt_cache_key` with the session id (CACHE-6) |
 | `created_at`, `updated_at` | timestamptz | |
 
 ### `models`
@@ -308,6 +309,7 @@ Index: (`project_id`, `updated_at` desc).
 | `idempotency_key` | text | From `POST /messages`, nullable |
 | `started_at`, `completed_at` | timestamptz | |
 | `rewound_at` | timestamptz | Set when the user rewinds the session to this turn or an earlier one; the turn's items are then hidden from history and context |
+| `context_snapshot` | text | Nullable; date, git branch and memory section rendered at the start of a message turn, stored only when it differs from the latest snapshot of an earlier turn that is not rewound (CACHE-3) |
 
 Unique: (`session_id`, `number`), (`session_id`, `idempotency_key`).
 

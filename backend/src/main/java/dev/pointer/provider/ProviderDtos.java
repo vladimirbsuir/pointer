@@ -24,6 +24,7 @@ public final class ProviderDtos {
             String name,
             String baseUrl,
             boolean isLocal,
+            boolean sendsCacheKey,
             boolean hasApiKey,
             String apiKeyHint,
             List<ModelResponse> models) {}
@@ -59,7 +60,8 @@ public final class ProviderDtos {
             @Size(max = 500) @Pattern(regexp = URL_PATTERN) String baseUrl,
             @Size(max = 500) String apiKey,
             Boolean clearApiKey,
-            Boolean isLocal) {}
+            Boolean isLocal,
+            Boolean sendsCacheKey) {}
 
     public record CreateModelRequest(
             @NotBlank @Size(max = 200) String modelKey,
