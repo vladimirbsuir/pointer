@@ -265,7 +265,8 @@ public class SessionService {
                                 row.prefixTokens(),
                                 row.prefixReuseTokens(),
                                 row.costUsd()))
-                        .toList());
+                        .toList(),
+                ledger.turnSteps(sessionId));
     }
 
     private static BigDecimal positiveOrNull(BigDecimal value) {

@@ -87,6 +87,12 @@ class EscalationTests extends AgentIntegrationTest {
         assertThat(usage(setup).entries())
                 .extracting(entry -> entry.modelLabel() + "/" + entry.role() + "/" + entry.purpose())
                 .contains("fast-model/fast/step", "fake-model/main/step");
+        var firstTurn = usage(setup).turns().getFirst();
+        assertThat(firstTurn.number()).isEqualTo(1);
+        assertThat(firstTurn.escalated()).isTrue();
+        assertThat(firstTurn.models())
+                .extracting(steps -> steps.modelLabel() + "/" + steps.steps())
+                .containsExactly("fast-model/2", "fake-model/1");
     }
 
     @Test
@@ -130,7 +136,7 @@ class EscalationTests extends AgentIntegrationTest {
         return requestedModel(requests.get(requests.size() - 2));
     }
 
-    private Setup escalatingSession(String mode) {
+    Setup escalatingSession(String mode) {
         var setup = setUp(false, mode);
         var provider = provider(setup);
         var fast = client.post()
@@ -172,7 +178,7 @@ class EscalationTests extends AgentIntegrationTest {
                 .getResponseBody()[0];
     }
 
-    private UUID firstTurnId(Setup setup) {
+    UUID firstTurnId(Setup setup) {
         var items = client.get()
                 .uri("/api/v1/sessions/{id}/items", setup.sessionId())
                 .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
@@ -183,7 +189,7 @@ class EscalationTests extends AgentIntegrationTest {
         return UUID.fromString(items.get(0).path("turnId").asString());
     }
 
-    private List<JsonNode> signals(Setup setup, UUID turnId) {
+    List<JsonNode> signals(Setup setup, UUID turnId) {
         var rows = client.get()
                 .uri("/api/v1/sessions/{id}/turns/{turnId}/signals", setup.sessionId(), turnId)
                 .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
@@ -234,22 +240,22 @@ class EscalationTests extends AgentIntegrationTest {
                 .getResponseBody();
     }
 
-    private static List<String> requestedModels(List<String> requests) {
+    static List<String> requestedModels(List<String> requests) {
         return requests.stream().map(EscalationTests::requestedModel).toList();
     }
 
-    private static String requestedModel(String request) {
+    static String requestedModel(String request) {
         return JSON.readTree(request).path("model").asString();
     }
 
-    private GatewayTestClient viewer(Setup setup) throws Exception {
+    GatewayTestClient viewer(Setup setup) throws Exception {
         var ws = GatewayTestClient.connect(port, setup.auth().accessToken(), setup.deviceId(), List.of("viewer"));
         ws.subscribe(setup.sessionId(), 0);
         ws.await(message -> GatewayTestClient.type(message).equals("session.subscribed"), TIMEOUT);
         return ws;
     }
 
-    private static void awaitTitle(GatewayTestClient ws) {
+    static void awaitTitle(GatewayTestClient ws) {
         ws.await(
                 message -> eventKind(message).equals("session.updated")
                         && message.path("payload")
@@ -260,13 +266,13 @@ class EscalationTests extends AgentIntegrationTest {
                 TIMEOUT);
     }
 
-    private static long countEvents(GatewayTestClient ws, String kind) {
+    static long countEvents(GatewayTestClient ws, String kind) {
         return ws.events().stream()
                 .filter(event -> eventKind(event).equals(kind))
                 .count();
     }
 
-    private static JsonNode lastItem(GatewayTestClient ws, String type) {
+    static JsonNode lastItem(GatewayTestClient ws, String type) {
         return ws.events().stream()
                 .filter(event -> List.of("item.created", "item.updated", "item.completed")
                         .contains(eventKind(event)))

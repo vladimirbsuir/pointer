@@ -31,12 +31,13 @@ class StepSignalLog {
             String modelLabel,
             Map<String, Integer> signals,
             BigDecimal score,
-            boolean escalated) {
+            boolean escalated,
+            boolean nudged) {
         jdbc.sql("""
                         insert into step_signals (id, session_id, turn_id, step, model_label, signals, score,
-                                                  escalated, created_at)
+                                                  escalated, nudged, created_at)
                         values (:id, :sessionId, :turnId, :step, :modelLabel, cast(:signals as jsonb), :score,
-                                :escalated, :now)
+                                :escalated, :nudged, :now)
                         """)
                 .param("id", Ids.newId())
                 .param("sessionId", sessionId)
@@ -46,13 +47,14 @@ class StepSignalLog {
                 .param("signals", json.writeValueAsString(signals))
                 .param("score", score)
                 .param("escalated", escalated)
+                .param("nudged", nudged)
                 .param("now", Timestamp.from(clock.instant()))
                 .update();
     }
 
     List<StepSignals> turn(UUID sessionId, UUID turnId) {
         return jdbc.sql("""
-                        select step, model_label, signals::text as signals, score, escalated, created_at
+                        select step, model_label, signals::text as signals, score, escalated, nudged, created_at
                         from step_signals
                         where session_id = :sessionId and turn_id = :turnId
                         order by step, created_at
@@ -65,6 +67,7 @@ class StepSignalLog {
                         json.readValue(rs.getString("signals"), SIGNALS_TYPE),
                         rs.getBigDecimal("score"),
                         rs.getBoolean("escalated"),
+                        rs.getBoolean("nudged"),
                         rs.getTimestamp("created_at").toInstant()))
                 .list();
     }
@@ -75,5 +78,6 @@ class StepSignalLog {
             Map<String, Integer> signals,
             BigDecimal score,
             boolean escalated,
+            boolean nudged,
             Instant createdAt) {}
 }

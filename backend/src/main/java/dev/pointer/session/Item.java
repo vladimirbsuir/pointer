@@ -26,6 +26,8 @@ public class Item extends BaseEntity {
     public static final String COMPACTION_SUMMARY = "compaction_summary";
     public static final String MODEL_SWITCHED = "model_switched";
     public static final String MODEL_ESCALATED = "model_escalated";
+    public static final String MODEL_NUDGED = "model_nudged";
+    public static final String ORIGIN_CHECK_FAILED = "check_failed";
 
     public static final String IN_PROGRESS = "in_progress";
     public static final String COMPLETED = "completed";

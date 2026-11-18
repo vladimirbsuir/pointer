@@ -13,7 +13,6 @@ import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -29,17 +28,11 @@ public class EscalationController {
     private final SessionWriter writer;
     private final EscalationPolicy policy;
     private final StepSignalLog stepSignals;
-    private final BigDecimal threshold;
 
-    EscalationController(
-            SessionWriter writer,
-            EscalationPolicy policy,
-            StepSignalLog stepSignals,
-            @Value("${pointer.escalation.threshold:1.5}") BigDecimal threshold) {
+    EscalationController(SessionWriter writer, EscalationPolicy policy, StepSignalLog stepSignals) {
         this.writer = writer;
         this.policy = policy;
         this.stepSignals = stepSignals;
-        this.threshold = threshold;
     }
 
     public Trajectory begin(TurnStart start) {
@@ -94,6 +87,7 @@ public class EscalationController {
         private final List<Map<String, Integer>> history = new ArrayList<>();
         private ModelRouter.RoutedModel current;
         private boolean onFastTier;
+        private boolean nudged;
 
         private Trajectory(TurnStart start, ModelRouter.RoutedModel current, boolean onFastTier) {
             this.start = start;
@@ -108,20 +102,41 @@ public class EscalationController {
             return current;
         }
 
-        public void recordStep(int step, String modelLabel) {
+        public void recordStep(int step, String modelLabel, boolean turnContinues) {
             try {
                 var signals = StruggleSignals.compute(
                         turnItems(start.sessionId(), start.turnId()), AGENT_MODE.equals(start.mode()));
                 history.add(signals);
                 var score = policy.score(history);
-                var escalates = onFastTier && score.compareTo(threshold) >= 0;
-                stepSignals.record(start.sessionId(), start.turnId(), step, modelLabel, signals, score, escalates);
-                if (escalates) {
-                    escalate(REASON_STRUGGLE, score, EscalationPolicy.firing(history));
+                var decision =
+                        onFastTier && turnContinues ? policy.decide(score, nudged) : EscalationPolicy.Decision.CONTINUE;
+                stepSignals.record(
+                        start.sessionId(),
+                        start.turnId(),
+                        step,
+                        modelLabel,
+                        signals,
+                        score,
+                        decision == EscalationPolicy.Decision.ESCALATE,
+                        decision == EscalationPolicy.Decision.NUDGE);
+                switch (decision) {
+                    case ESCALATE -> escalate(REASON_STRUGGLE, score, EscalationPolicy.firing(history));
+                    case NUDGE -> nudge(score, EscalationPolicy.firing(history));
+                    case CONTINUE -> {}
                 }
             } catch (RuntimeException exception) {
                 log.warn("Recording the signals of step {} in session {} failed", step, start.sessionId(), exception);
             }
+        }
+
+        private void nudge(BigDecimal score, List<String> signals) {
+            nudged = true;
+            var notice = new LinkedHashMap<String, Object>();
+            notice.put("model", current.model().displayName());
+            notice.put("score", score);
+            notice.put("signals", signals);
+            notice.put("text", NudgeText.of(signals));
+            writer.appendNotice(start.userId(), start.sessionId(), start.turnId(), Item.MODEL_NUDGED, notice);
         }
 
         private void escalate(String reason, BigDecimal score, List<String> signals) {

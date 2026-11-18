@@ -98,7 +98,8 @@ public class AutomationService {
                         request.modelId(),
                         blankToNull(request.checkCommand()),
                         request.maxAttempts() == null ? automation.getMaxAttempts() : request.maxAttempts(),
-                        positiveOrNull(request.budgetUsd())),
+                        positiveOrNull(request.budgetUsd()),
+                        request.escalation() == null ? automation.isEscalation() : request.escalation()),
                 now);
         var saved = automations.save(automation);
         var webhookError = syncWebhook(saved, repository, token);

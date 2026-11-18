@@ -60,7 +60,12 @@ public final class SessionDtos {
         }
     }
 
-    public record UsageResponse(BigDecimal estimatedCost, BigDecimal budgetUsd, List<UsageEntry> entries) {}
+    public record UsageResponse(
+            BigDecimal estimatedCost, BigDecimal budgetUsd, List<UsageEntry> entries, List<TurnSteps> turns) {}
+
+    public record TurnSteps(UUID turnId, int number, boolean escalated, List<ModelSteps> models) {}
+
+    public record ModelSteps(String modelLabel, long steps) {}
 
     public record UsageEntry(
             UUID modelId,

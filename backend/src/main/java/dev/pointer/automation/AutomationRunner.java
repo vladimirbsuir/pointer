@@ -8,6 +8,8 @@ import dev.pointer.container.RemoteSessionService;
 import dev.pointer.execution.ExecutionResult;
 import dev.pointer.project.ProjectService;
 import dev.pointer.provider.llm.Cancellation;
+import dev.pointer.session.AgentSession;
+import dev.pointer.session.Item;
 import dev.pointer.session.SessionDtos;
 import dev.pointer.session.SessionEventListener;
 import dev.pointer.session.SessionEventRecord;
@@ -206,12 +208,20 @@ class AutomationRunner implements SessionEventListener {
                         sessionTitle(issue), AGENT_MODE, automation.getModelId(), automation.getBaseBranch()),
                 branchName(run, issue.title()));
         var sessionId = created.session().id();
-        if (automation.getBudgetUsd() != null) {
+        if (automation.getBudgetUsd() != null || automation.isEscalation()) {
             sessions.update(
                     context.userId(),
                     sessionId,
                     new SessionDtos.UpdateSessionRequest(
-                            null, null, null, null, null, automation.getBudgetUsd(), null, null, null));
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            automation.getBudgetUsd(),
+                            automation.isEscalation() ? AgentSession.ROUTING_SMART : null,
+                            null,
+                            automation.isEscalation() ? AgentSession.ESCALATION_ON : null));
         }
         var attached = store.transition(run.getId(), active -> {
             active.attachSession(sessionId);
@@ -308,7 +318,8 @@ class AutomationRunner implements SessionEventListener {
                             run.getIssueNumber(),
                             automation.getCheckCommand(),
                             outcome.description(),
-                            outcome.output()));
+                            outcome.output()),
+                    Item.ORIGIN_CHECK_FAILED);
         }
     }
 
@@ -367,16 +378,17 @@ class AutomationRunner implements SessionEventListener {
         var text = started
                 ? IssuePrompt.resume(run.getIssueNumber())
                 : prompt(gitHub.issue(context.token(), context.repository(), run.getIssueNumber()), context);
-        send(run, context, text);
+        send(run, context, text, null);
     }
 
-    private void send(AutomationRun run, RunContext context, String text) {
+    private void send(AutomationRun run, RunContext context, String text, String origin) {
         try {
             agent.send(
                     context.userId(),
                     run.getSessionId(),
                     new SessionDtos.SendMessageRequest(text, null, null, null),
-                    null);
+                    null,
+                    origin);
         } catch (ApiException exception) {
             finishFailed(run, context, AutomationRun.AGENT_FAILED, exception.getMessage());
         }

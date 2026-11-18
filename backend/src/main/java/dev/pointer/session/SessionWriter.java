@@ -43,6 +43,12 @@ public class SessionWriter {
     @Transactional
     public AcceptedMessage acceptUserMessage(
             UUID userId, UUID sessionId, SessionDtos.SendMessageRequest request, String idempotencyKey) {
+        return acceptUserMessage(userId, sessionId, request, idempotencyKey, null);
+    }
+
+    @Transactional
+    public AcceptedMessage acceptUserMessage(
+            UUID userId, UUID sessionId, SessionDtos.SendMessageRequest request, String idempotencyKey, String origin) {
         var session = lockOwned(userId, sessionId);
         if (idempotencyKey != null) {
             var existing = turns.findBySessionIdAndIdempotencyKey(sessionId, idempotencyKey);
@@ -65,6 +71,9 @@ public class SessionWriter {
         }
         rejectPendingPlans(session);
         var payload = userMessage(request.text(), attachments(session, request.attachments()), session.getMode());
+        if (origin != null) {
+            payload.put("origin", origin);
+        }
         if (!isIdle(session)) {
             var queued = saveItem(session, null, Item.USER_MESSAGE, Item.COMPLETED, payload);
             sessions.save(session);

@@ -28,6 +28,7 @@ public final class AutomationDtos {
             String checkCommand,
             int maxAttempts,
             BigDecimal budgetUsd,
+            boolean escalation,
             String webhook,
             String webhookError,
             Instant updatedAt) {
@@ -42,6 +43,7 @@ public final class AutomationDtos {
                     null,
                     Automation.DEFAULT_MAX_ATTEMPTS,
                     null,
+                    false,
                     webhook,
                     null,
                     null);
@@ -57,6 +59,7 @@ public final class AutomationDtos {
                     automation.getCheckCommand(),
                     automation.getMaxAttempts(),
                     automation.getBudgetUsd(),
+                    automation.isEscalation(),
                     webhook,
                     webhookError,
                     automation.getUpdatedAt());
@@ -76,7 +79,9 @@ public final class AutomationDtos {
 
             @Min(1) @Max(10) Integer maxAttempts,
 
-            @DecimalMin("0") @DecimalMax("100000") BigDecimal budgetUsd) {}
+            @DecimalMin("0") @DecimalMax("100000") BigDecimal budgetUsd,
+
+            Boolean escalation) {}
 
     public record StartRunRequest(@NotNull @Min(1) Integer issueNumber) {}
 

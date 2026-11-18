@@ -26,7 +26,18 @@ class StruggleSignalsTests {
                         Map.entry(StruggleSignals.EDIT_THRASH, 1),
                         Map.entry(StruggleSignals.MALFORMED_CALL, 0),
                         Map.entry(StruggleSignals.DENIED, 0),
-                        Map.entry(StruggleSignals.READ_ONLY_STREAK, 0));
+                        Map.entry(StruggleSignals.READ_ONLY_STREAK, 0),
+                        Map.entry(StruggleSignals.CHECK_FAILED, 0));
+    }
+
+    @Test
+    void aFollowUpAfterAFailedCheckIsAnEventOfItsFirstStep() {
+        items.add(new HashMap<>(Map.of("type", Item.USER_MESSAGE, "origin", "check_failed", "text", "Fix it")));
+        call(0, "read_file", "{}", "succeeded", null);
+
+        assertThat(signal(StruggleSignals.CHECK_FAILED)).isEqualTo(1);
+        var steps = List.of(Map.of(StruggleSignals.CHECK_FAILED, 1), Map.of(StruggleSignals.CHECK_FAILED, 1));
+        assertThat(new EscalationPolicy(Map.of()).score(steps)).isEqualByComparingTo("0.5");
     }
 
     @Test
@@ -99,18 +110,37 @@ class StruggleSignalsTests {
     }
 
     @Test
-    void theScoreAddsTheWeightOfEveryFiringHalvedPerStepSinceIt() {
+    void eventsCountWhenTheyHappenAndStatesForAsLongAsTheyLast() {
         var policy = new EscalationPolicy(Map.of(StruggleSignals.REPEAT_CALL, 2.0, StruggleSignals.DENIED, 1.0));
         var repeat = Map.of(StruggleSignals.REPEAT_CALL, 1);
+        var repeatAgain = Map.of(StruggleSignals.REPEAT_CALL, 2);
         var quiet = Map.<String, Integer>of();
         var denied = Map.of(StruggleSignals.DENIED, 1, StruggleSignals.ERROR_STREAK, 2);
+        var failing = Map.of(StruggleSignals.ERROR_STREAK, 3);
+        var stillFailing = Map.of(StruggleSignals.ERROR_STREAK, 4);
 
         assertThat(policy.score(List.of(quiet))).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(policy.score(List.of(repeat))).isEqualByComparingTo("2");
         assertThat(policy.score(List.of(repeat, quiet))).isEqualByComparingTo("1");
         assertThat(policy.score(List.of(repeat, quiet, denied))).isEqualByComparingTo("1.5");
-        assertThat(policy.score(List.of(repeat, repeat))).isEqualByComparingTo("3");
-        assertThat(policy.score(List.of(repeat, repeat, repeat))).isEqualByComparingTo("3.5");
+        assertThat(policy.score(List.of(repeat, repeatAgain))).isEqualByComparingTo("3");
+        assertThat(policy.score(List.of(repeat, repeat))).isEqualByComparingTo("1");
+        assertThat(policy.score(List.of(failing, stillFailing))).isEqualByComparingTo("1.5");
+        assertThat(EscalationPolicy.firing(List.of(repeat, repeat, failing)))
+                .containsExactly(StruggleSignals.REPEAT_CALL, StruggleSignals.ERROR_STREAK);
+    }
+
+    @Test
+    void theNudgePolicyWarnsOnceBelowTheEscalationThreshold() {
+        var nudge = new EscalationPolicy(Map.of(), "nudge", new BigDecimal("1.5"), new BigDecimal("1.0"));
+        var escalate = new EscalationPolicy(Map.of(), "escalate", new BigDecimal("1.5"), new BigDecimal("1.0"));
+
+        assertThat(nudge.decide(new BigDecimal("0.5"), false)).isEqualTo(EscalationPolicy.Decision.CONTINUE);
+        assertThat(nudge.decide(new BigDecimal("1.0"), false)).isEqualTo(EscalationPolicy.Decision.NUDGE);
+        assertThat(nudge.decide(new BigDecimal("1.25"), true)).isEqualTo(EscalationPolicy.Decision.CONTINUE);
+        assertThat(nudge.decide(new BigDecimal("2.5"), false)).isEqualTo(EscalationPolicy.Decision.ESCALATE);
+        assertThat(escalate.decide(new BigDecimal("1.0"), false)).isEqualTo(EscalationPolicy.Decision.CONTINUE);
+        assertThat(escalate.decide(new BigDecimal("1.5"), false)).isEqualTo(EscalationPolicy.Decision.ESCALATE);
     }
 
     private int signal(String name) {

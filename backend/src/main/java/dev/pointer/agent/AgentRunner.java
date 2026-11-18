@@ -107,7 +107,12 @@ public class AgentRunner implements LiveItemSnapshots {
 
     public SessionDtos.SendMessageResponse send(
             UUID userId, UUID sessionId, SessionDtos.SendMessageRequest request, String idempotencyKey) {
-        var accepted = writer.acceptUserMessage(userId, sessionId, request, idempotencyKey);
+        return send(userId, sessionId, request, idempotencyKey, null);
+    }
+
+    public SessionDtos.SendMessageResponse send(
+            UUID userId, UUID sessionId, SessionDtos.SendMessageRequest request, String idempotencyKey, String origin) {
+        var accepted = writer.acceptUserMessage(userId, sessionId, request, idempotencyKey, origin);
         if (accepted.startTurn()) {
             launch(userId, sessionId, accepted.turnId());
         }
@@ -280,7 +285,7 @@ public class AgentRunner implements LiveItemSnapshots {
                     }
                 }
                 if (!Turn.CANCELLED.equals(reason)) {
-                    trajectory.recordStep(step, used.model().displayName());
+                    trajectory.recordStep(step, used.model().displayName(), reason == null);
                 }
             }
             if (context.needsTitle() && !Turn.CANCELLED.equals(reason)) {

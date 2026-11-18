@@ -162,6 +162,10 @@ class ContextAssembler {
                     messages.add(ChatMessage.user(
                             withSnapshot(carried, "Summary of the earlier conversation:\n" + text(item))));
                 }
+                case Item.MODEL_NUDGED -> {
+                    group.flushInto(messages);
+                    messages.add(ChatMessage.user(text(item)));
+                }
                 case Item.ASSISTANT_MESSAGE, Item.TOOL_CALL, Item.PLAN -> group.add(item, messages);
                 default -> {}
             }

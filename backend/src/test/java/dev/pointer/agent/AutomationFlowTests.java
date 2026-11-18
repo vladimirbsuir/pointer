@@ -34,6 +34,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
+import java.util.stream.StreamSupport;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
@@ -180,7 +181,8 @@ class AutomationFlowTests extends AgentIntegrationTest {
 
     @Test
     void failedCheckIsSentBackToTheAgentAndTheSecondCheckPasses() throws Exception {
-        var setup = automationSetUp(Map.of());
+        var setup = automationSetUp(Map.of("escalation", true));
+        assertThat(automation(setup).path("escalation").asBoolean()).isTrue();
         checkResults.add(checkResult(1, "FAILED test_parser\nboom"));
         checkResults.add(checkResult(0, "ok"));
         llm.enqueueText("First try.");
@@ -191,6 +193,24 @@ class AutomationFlowTests extends AgentIntegrationTest {
             var run = awaitRun(
                     setup, current -> "succeeded".equals(current.path("status").asString()));
             assertThat(run.path("attempts").asInt()).isEqualTo(2);
+            var sessionId = run.path("sessionId").asString();
+            var session = get(setup, "/api/v1/sessions/" + sessionId);
+            assertThat(session.path("routing").asString()).isEqualTo("smart");
+            assertThat(session.path("escalation").asString()).isEqualTo("on");
+            var followUp = StreamSupport.stream(
+                            get(setup, "/api/v1/sessions/" + sessionId + "/items")
+                                    .spliterator(),
+                            false)
+                    .filter(item -> item.path("type").asString().equals("user_message"))
+                    .reduce((first, second) -> second)
+                    .orElseThrow();
+            assertThat(followUp.path("origin").asString()).isEqualTo("check_failed");
+            var signals = get(
+                    setup,
+                    "/api/v1/sessions/" + sessionId + "/turns/"
+                            + followUp.path("turnId").asString() + "/signals");
+            assertThat(signals.get(0).path("signals").path("check_failed").asInt())
+                    .isEqualTo(1);
         }
 
         assertThat(llm.requests()).hasSize(2);

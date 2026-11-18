@@ -26,6 +26,7 @@ public class Automation extends BaseEntity {
     private String checkCommand;
     private int maxAttempts;
     private BigDecimal budgetUsd;
+    private boolean escalation;
     private Long webhookId;
     private byte[] webhookSecretEncrypted;
     private Instant createdAt;
@@ -53,6 +54,7 @@ public class Automation extends BaseEntity {
         this.checkCommand = settings.checkCommand();
         this.maxAttempts = settings.maxAttempts();
         this.budgetUsd = settings.budgetUsd();
+        this.escalation = settings.escalation();
         this.updatedAt = now;
     }
 
@@ -77,5 +79,6 @@ public class Automation extends BaseEntity {
             UUID modelId,
             String checkCommand,
             int maxAttempts,
-            BigDecimal budgetUsd) {}
+            BigDecimal budgetUsd,
+            boolean escalation) {}
 }

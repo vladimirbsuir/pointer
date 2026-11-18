@@ -9,6 +9,8 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -98,6 +100,30 @@ public class UsageLedger {
                             lastCallAt == null ? null : lastCallAt.toInstant());
                 })
                 .single();
+    }
+
+    List<SessionDtos.TurnSteps> turnSteps(UUID sessionId) {
+        var turns = new LinkedHashMap<UUID, SessionDtos.TurnSteps>();
+        jdbc.sql("""
+                        select s.turn_id, t.number, s.model_label, count(*) as steps, bool_or(s.escalated) as escalated
+                        from step_signals s
+                        join turns t on t.id = s.turn_id
+                        where s.session_id = :sessionId and t.rewound_at is null
+                        group by s.turn_id, t.number, s.model_label
+                        order by t.number, min(s.step)
+                        """)
+                .param("sessionId", sessionId)
+                .query((rs, row) -> {
+                    var turnId = rs.getObject("turn_id", UUID.class);
+                    var earlier = turns.get(turnId);
+                    var models = earlier == null ? new ArrayList<SessionDtos.ModelSteps>() : earlier.models();
+                    models.add(new SessionDtos.ModelSteps(rs.getString("model_label"), rs.getLong("steps")));
+                    var escalated = rs.getBoolean("escalated") || (earlier != null && earlier.escalated());
+                    turns.put(turnId, new SessionDtos.TurnSteps(turnId, rs.getInt("number"), escalated, models));
+                    return turnId;
+                })
+                .list();
+        return List.copyOf(turns.values());
     }
 
     List<UsageRow> summary(UUID sessionId) {

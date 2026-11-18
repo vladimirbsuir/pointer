@@ -24,8 +24,10 @@ public final class StruggleSignals {
     public static final String MALFORMED_CALL = "malformed_call";
     public static final String DENIED = "denied";
     public static final String READ_ONLY_STREAK = "read_only_streak";
+    public static final String CHECK_FAILED = "check_failed";
     public static final List<String> ALL =
-            List.of(REPEAT_CALL, ERROR_STREAK, EDIT_THRASH, MALFORMED_CALL, DENIED, READ_ONLY_STREAK);
+            List.of(REPEAT_CALL, ERROR_STREAK, EDIT_THRASH, MALFORMED_CALL, DENIED, READ_ONLY_STREAK, CHECK_FAILED);
+    public static final Set<String> EVENTS = Set.of(REPEAT_CALL, MALFORMED_CALL, DENIED, CHECK_FAILED);
     public static final int WINDOW_STEPS = 6;
 
     private static final String FAILED = "failed";
@@ -61,6 +63,10 @@ public final class StruggleSignals {
                 .count());
         signals.put(DENIED, (int) calls.stream().filter(Call::deniedByUser).count());
         signals.put(READ_ONLY_STREAK, agentMode ? trailingStepsWithoutChanges(steps) : 0);
+        signals.put(CHECK_FAILED, (int) turnItems.stream()
+                .filter(item -> Item.USER_MESSAGE.equals(item.get("type"))
+                        && Item.ORIGIN_CHECK_FAILED.equals(item.get("origin")))
+                .count());
         return signals;
     }
 

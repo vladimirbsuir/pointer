@@ -328,7 +328,7 @@ The conversation as the model sees it.
 | `turn_id` | uuid | FK `turns`, nullable for items queued between turns |
 | `position` | bigint | Order within the session |
 | `parent_item_id` | uuid | FK `items`, cascade, nullable; set on tool calls made by the `explore` sub-agent (ROUTE-4) |
-| `type` | text | `user_message`, `assistant_message`, `reasoning`, `tool_call`, `plan`, `compaction_summary`, `model_switched`, `model_escalated` |
+| `type` | text | `user_message`, `assistant_message`, `reasoning`, `tool_call`, `plan`, `compaction_summary`, `model_switched`, `model_escalated`, `model_nudged` |
 | `status` | text | `in_progress`, `completed`, `failed`, `cancelled` |
 | `payload` | jsonb | Type-specific fields from [protocol 5.2](03-protocol.md#52-items) |
 | `created_at`, `completed_at` | timestamptz | |
@@ -516,6 +516,7 @@ Issue to pull request automation (AUTO-1 to AUTO-6, [ADR 0023](adr/0023-issue-to
 | `check_command` | text | Nullable; without it a run succeeds after the first turn that pushed changes |
 | `max_attempts` | integer | 1 to 10, default 3; checks per run |
 | `budget_usd` | numeric(10,4) | Nullable; becomes the budget of the run's session |
+| `escalation` | boolean | The run's session gets smart routing and escalation ([F6](features/f6-trajectory-escalation.md)) |
 | `webhook_id` | bigint | Nullable; id of the repository webhook on GitHub |
 | `webhook_secret_encrypted` | bytea | AES-GCM like provider keys; 32 random bytes |
 | `created_at`, `updated_at` | timestamptz | |
@@ -614,9 +615,10 @@ Index: (`session_id`, `created_at`).
 | `turn_id` | uuid | Turn of the step |
 | `step` | integer | Step number within the turn, as on the items |
 | `model_label` | text | Model that made the call |
-| `signals` | jsonb | Raw value of every signal (`repeat_call`, `error_streak`, `edit_thrash`, `malformed_call`, `denied`, `read_only_streak`), so that any score can be recomputed offline |
-| `score` | numeric(6,3) | Score of the policy: every step in which a signal fired adds the signal's weight, halved for each step since then |
+| `signals` | jsonb | Raw value of every signal (`repeat_call`, `error_streak`, `edit_thrash`, `malformed_call`, `denied`, `read_only_streak`, `check_failed`), so that any score can be recomputed offline |
+| `score` | numeric(6,3) | Score of the policy: every step in which a signal fired adds the signal's weight, halved for each step since then; counters (`repeat_call`, `malformed_call`, `denied`, `check_failed`) fire in the step where they grow, states (`error_streak`, `edit_thrash`, `read_only_streak`) in every step they hold |
 | `escalated` | boolean | Whether this step moved the turn to the session model |
+| `nudged` | boolean | Whether this step appended a `model_nudged` note (policy `nudge`) |
 | `created_at` | timestamptz | |
 
 Index: (`session_id`, `turn_id`, `step`).
