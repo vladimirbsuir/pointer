@@ -151,13 +151,17 @@ function MessageItem({ item, nested, sessionId, running, onRewound }: MessageIte
   }
 
   if (item.type === "compaction_summary") {
+    if (item.status === "failed") {
+      return null;
+    }
+    const compactedKey = item.trigger === "soft" ? "chat.compactedSoft" : "chat.compacted";
     return (
       <details className="group rounded-lg border border-dashed px-3 py-2 text-sm">
         <summary className="flex cursor-pointer list-none items-center gap-2 text-muted-foreground select-none">
           <FoldVerticalIcon className="size-3.5" />
           {item.status === "in_progress"
             ? t("chat.compacting")
-            : t("chat.compacted", { count: Number(item.replacedItemCount ?? 0) })}
+            : t(compactedKey, { count: Number(item.replacedItemCount ?? 0) })}
           <ChevronRightIcon className="ml-auto size-3.5 transition-transform group-open:rotate-90" />
         </summary>
         <div className="mt-2 border-t pt-2">

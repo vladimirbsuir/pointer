@@ -218,6 +218,7 @@
     "compacting": "Summarizing the conversation…",
     "modelSwitched": "{{from}} is unavailable, switched to {{to}}",
     "compacted": "Conversation summarized ({{count}} items replaced)",
+    "compactedSoft": "Conversation summarized early to cut cost ({{count}} items replaced)",
     "queued": "Queued, delivered at the next step",
     "noFiles": "No matching files",
     "attachFailed": "Could not attach {{path}}",
