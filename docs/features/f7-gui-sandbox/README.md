@@ -32,7 +32,7 @@ In scope for stage 1:
 Out of scope for stage 1:
 
 - Sessions that run on the user's computer. They get a sandbox in stage 2 ([stage-2-local-sessions.md](stage-2-local-sessions.md)).
-- User takeover of the display. The live view is read-only; a VNC-based takeover is a possible later phase.
+- User takeover of the display. The live view is read-only; takeover would reuse the same VNC stream with input enabled and is a possible later phase.
 - Windows and macOS applications, GPU rendering, audio, camera and USB. A Linux container cannot run them. A passing test shows that the logic and the layout work on Linux with the Linux rendering engine (for Tauri, WebKitGTK instead of WebView2), not that the Windows build looks identical.
 - Controlling the user's real desktop.
 
@@ -54,7 +54,7 @@ Out of scope for stage 1:
 | GUI-4 | Desktop tools are offered only in Agent mode, only when the executor reports `desktop` and only when the step model supports vision. They follow the usual permission policies and are auto-approved in server sessions. |
 | GUI-5 | Screenshots are stored as session attachments, shown in the conversation and sent to the model as images right after the tool results of the step. |
 | GUI-6 | Old screenshots are replaced by a placeholder in the model's view, in blocks so that the prompt prefix stays stable between moves, under every context strategy. Originals stay in the database and the client. |
-| GUI-7 | While a turn runs the user can watch the display live and read-only. Frames are produced only while someone watches. |
+| GUI-7 | While a turn runs the user can watch the display live and read-only through a VNC stream shown by noVNC. The stream is reachable only through the backend, which authorizes the viewer. |
 | GUI-8 | The agent can read an accessibility tree of the display and click an element by its id. Applications without a tree are controlled by pixels only. |
 | GUI-9 | The display and its processes stop with the container. Resolution, memory, shared memory and image sizes are bounded. |
 | GUI-10 | A benchmark measures success rate, steps, duration, tokens and cost of GUI tasks per model, click accuracy, and the effect of image masking and of the accessibility tree. |
@@ -73,8 +73,8 @@ flowchart LR
     runner -->|exec.result with images| exec
     exec --> store[(attachments)]
     store -->|images after tool results| agent
-    runner -.->|desktop.frame while watched| gw[gateway]
-    gw -.-> viewer[Desktop client panel]
+    display -.->|x11vnc and websockify| proxy[Backend stream proxy]
+    proxy -.->|WebSocket with a ticket| viewer[Desktop client panel with noVNC]
 ```
 
 Key decisions:
@@ -84,7 +84,7 @@ Key decisions:
 3. **The screenshot has the display's resolution.** The default display is 1280x800, so the coordinates the model reads from the screenshot are the coordinates the runner clicks. No scaling arithmetic.
 4. **Images follow the tool results as a user message.** OpenAI-compatible tool messages carry text only, so the screenshots of a step are appended as one synthetic user message after the step's tool results. Details in [agent-and-context.md](agent-and-context.md).
 5. **Screenshots are the main cost, so they are masked by their own policy.** The newest few stay, older ones become placeholders, moving in blocks like F5's result masking.
-6. **Live view by frames through the gateway, not VNC.** The runner sends JPEG frames over its existing gateway connection only while a client watches. No port is opened in the container, nothing new needs authentication, and read-only is the only mode that exists. A VNC server remains the way to add takeover later.
+6. **Live view through VNC and noVNC.** The container runs `x11vnc` on the display and `websockify` to turn it into a WebSocket; the desktop client shows it with the noVNC library. The user never connects to the container: the backend authorizes a short-lived ticket and proxies the WebSocket. The stream is view-only twice over (the client only gets a view-only password, and `x11vnc` runs with `-viewonly`), and the same stream is the base for user takeover if it is added later. Sending JPEG frames through the gateway was considered and rejected: it is simpler to secure, but VNC gives smoother video at a lower bandwidth and a ready path to takeover. ADR 0027 records this when it is written.
 
 ## Phases
 
@@ -93,7 +93,7 @@ Each phase ships on its own and leaves the system working. Phases are numbered `
 1. **1.1 Display in the runner (GUI-1, GUI-2, GUI-3, GUI-9).** The `gui` target of the image, the `desktop` module in `pointer-executor`, the operations `desktop_start`, `desktop_launch`, `desktop_stop`, `desktop_screenshot`, `desktop_move`, `desktop_click`, `desktop_drag`, `desktop_scroll`, `desktop_type`, `desktop_key`, `desktop_wait`, the capability in `hello`, the shared memory size in the container spec. Verified by runner tests inside the image against a fixture GUI application. No backend or client change yet. Decides the default image and the memory limit from measurements ([container.md](container.md)).
 2. **1.2 Tools, images and the model (GUI-4, GUI-5).** Tool rows, capability filtering in `ToolRegistry`, images stored as attachments, the `images` field of `tool_call` items, the synthetic user message, vision gating, tool descriptions, protocol and data model docs, ADR 0027, a thumbnail of the screenshot in the conversation. After this phase an agent in a server session can test a GUI application end to end; the cost control and the live view are still missing.
 3. **1.3 Image masking (GUI-6).** `keep-images` and block alignment on the F5 mask arithmetic, image token estimate, property test of the append-only invariant with images, ADR for the amendment of ADR 0024.
-4. **1.4 Live view (GUI-7).** `desktop.watch`, `desktop.stream`, `desktop.frame`, watcher counting in the backend, frame producer in the runner, the Desktop panel in the client.
+4. **1.4 Live view (GUI-7).** `x11vnc` and `websockify` started with the display, per-session view credentials, how the backend reaches the container, the ticket endpoint and the WebSocket proxy, the Desktop panel with noVNC in the client. The packages are already in the image from phase 1.1, so the image size is measured once.
 5. **1.5 Accessibility tree (GUI-8).** AT-SPI reader in the runner, `desktop_tree`, `elementId` for `desktop_click`, toolkit environment variables and the browser wrapper in the image, a coverage table per toolkit measured on the fixture applications.
 6. **1.6 Benchmark and defaults (GUI-10).** The harness in `infra/bench/desktop/`, fixture applications and tasks, runs per model, defaults for `keep-images`, the display size and the settle delay, results in `docs/benchmarks/desktop.md`.
 
@@ -102,6 +102,7 @@ Stage 2 starts only after phase 1.6 shows the feature works well enough to justi
 ## Open questions
 
 - Whether the `gui` target replaces `full` as the default runner image or stays an option chosen at session creation. Decided in phase 1.1 from the measured image size and the memory of an idle display.
+- How the backend reaches a session container for the stream. In the compose deployment the backend and the runners share a Docker network and the container name resolves; in development the backend runs on the host and container addresses are not routable from it, so the stream port is published on `127.0.0.1` instead. Both are supported behind `pointer.container.desktop-access` (`network` or `published`); phase 1.4 confirms them on the real hosts.
 - Which of the test providers' models both support vision and click accurately enough. Unknown until phase 1.6; the feature is built to work with any vision model and report the differences.
 - Whether Telegram should receive a screenshot with the final answer of a GUI turn. Deferred: the Telegram bot does not show images today.
 - Retention of screenshots. They are stored as attachments and removed with the session; a long GUI session can store hundreds of megabytes. Phase 1.3 measures the growth and decides whether to cap by count or age.

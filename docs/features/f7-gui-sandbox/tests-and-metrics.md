@@ -48,10 +48,14 @@ Gated by an environment variable set only in the image, so a plain `cargo test` 
 ### 1.4 Live view
 
 - Watcher counting: the first watcher starts the stream, the last one stops it, a disconnect stops it, two watchers share one stream.
-- The runner skips identical frames, never exceeds the requested rate, sends nothing before the display exists, and stops on request.
+- In the image: after `desktop_start`, `x11vnc` and `websockify` are listening and the stream shows the display (a test RFB client reads the framebuffer and sees the fixture window); before `desktop_start` nothing listens; the password file has the expected structure.
+- View-only: a test RFB client authenticated with the view password sends pointer and key events and the display does not change; a wrong password is refused.
+- Tickets: single use, expire after 60 seconds, bound to the user and the session, refused for another user's session; the viewer limit returns `429`.
+- The relay forwards the handshake and frames both ways, closes when the container stops or the session is deleted, and a closed or failing stream never delays or fails a tool call.
+- Reachability: the `published` and `network` modes both reach the container (the first in the local test setup, the second in the compose setup).
 - A failing or slow stream does not delay or fail a tool call.
 - Authorization: another user cannot watch the session.
-- Client: the panel sends `watching` on open and close, ignores frames with an older `seq`, shows the empty state and the last-screenshot state.
+- Client: the panel asks for a ticket on open and disconnects on close, shows the empty state and the last-screenshot state, retries with a new ticket after a drop, and sets `viewOnly`.
 
 ### 1.5 Accessibility tree
 
@@ -77,4 +81,5 @@ Harness in `infra/bench/desktop/` in the style of `infra/bench/escalation/`: it 
 6. **Tree ablation (phase 1.5).** Pixels only against pixels plus the tree, per toolkit: success, steps, and the share of clicks done by `elementId`. The claim is where the tree pays off and where its coverage makes it useless.
 7. **Isolation levels.** A comparison table of the approaches in the [README](README.md) (container display, background control through accessibility APIs on macOS, foreground control on Windows) on interference with the user, reproducibility, coverage of applications and platform fidelity. Based on the measurements for the container and on published descriptions for the others; the table says which parts are measured here.
 8. **Resource cost.** Image size added, time from `desktop_start` to a usable display, memory of an idle display and of one with a browser, and how many GUI sessions fit on the production host.
-9. **What a pass proves.** For a Tauri app, the same task run in the Linux container and, where possible, against the Windows build, to show how often a Linux pass transfers; limited to a few tasks and reported as such.
+9. **Live view cost.** CPU and memory of `x11vnc` and `websockify` with no viewer and with one, and the bandwidth of the stream while the agent works, to show the view is cheap enough to leave on.
+10. **What a pass proves.** For a Tauri app, the same task run in the Linux container and, where possible, against the Windows build, to show how often a Linux pass transfers; limited to a few tasks and reported as such.

@@ -36,6 +36,8 @@ The tool descriptions carry the usage guidance (see [agent-and-context.md](agent
 
 The operations are the tools above. `exec.request` is unchanged ([03-protocol.md](../../03-protocol.md) section 6.1); `timeoutMs` defaults to 30 seconds, and `desktop_launch` counts the grace period inside it.
 
+One internal operation is added for the backend, never exposed to the model: `pointer.desktop_status` (no arguments) returns `{ running, width, height, processes }` and backs `GET /sessions/{sessionId}/desktop`. On a runner without the display stack it fails with `desktop_unavailable`.
+
 `exec.result.result` of an operation that captures a screen gets one new field:
 
 ```json
@@ -82,19 +84,37 @@ Screenshots reuse the session-scoped attachments table: they are removed with th
 
 Update [04-data-model.md](../../04-data-model.md) in the same commit.
 
-## Live view messages (phase 1.4)
+## Live view (phase 1.4)
 
-Frames travel over the connections that already exist: runner to backend, backend to the client's Rust core ([ADR 0007](../../adr/0007-communication-model.md)).
+The live view is a VNC stream of the display, shown in the client by noVNC and proxied by the backend. It does not use the gateway protocol and the agent never sees it.
 
-| Message | Direction | Payload |
-|---|---|---|
-| `desktop.watch` | client to server | `{ "sessionId": "...", "watching": true }` |
-| `desktop.stream` | server to runner | `{ "sessionId": "...", "fps": 3, "maxWidth": 960 }` or `{ "sessionId": "...", "stop": true }` |
-| `desktop.frame` | runner to server, and server to client | `{ "sessionId": "...", "seq": 17, "mediaType": "image/jpeg", "width": 960, "height": 600, "data": "..." }` |
+### Data model
 
-- Only the session's owner may watch. The backend counts watchers per session, sends `desktop.stream` when the first one arrives and `stop` when the last leaves or disconnects, and relays each frame to the connections watching that session. Frames are never stored.
-- The runner captures at the requested rate (at most 4 per second), downscales to `maxWidth`, encodes JPEG, and skips a frame identical to the previous one. It captures only while the display is running; before that it sends nothing.
-- A frame the relay cannot deliver in time is dropped; `seq` lets the client ignore old frames. The stream does not affect the agent: it is a separate capture, and a failing stream never fails a tool call.
-- When the container stops or the runner disconnects, the backend tells the watchers with `desktop.frame` replaced by `desktop.ended`, and the client falls back to the last screenshot attachment.
+```sql
+ALTER TABLE remote_workspaces
+    ADD COLUMN desktop_view_secret text;
+```
 
-[03-protocol.md](../../03-protocol.md) gets section updates for the capability, the `images` field of results, the `tool_call` item field and the three messages in the commit of the phase that introduces each.
+The view password of the container, encrypted with the cipher used for provider keys and generated with the container ([container.md](container.md#live-view-stack-phase-14)). The full password is never stored.
+
+### REST
+
+| Endpoint | Description |
+|---|---|
+| `GET /sessions/{sessionId}/desktop` | `{ available, running, width, height }`. `available` is true for a server session whose runner reports `desktop`; `running` is true once the display is up, read from the runner through the internal operation `pointer.desktop_status`. |
+| `POST /sessions/{sessionId}/desktop/ticket` | Issues a ticket for one stream connection: `{ ticket, expiresAt, path, password, width, height }`. `409 desktop_not_running`, `409 container_not_running`, `429 too_many_viewers` (more than `pointer.desktop.max-viewers`), `404` for another user's session. |
+| `GET /sessions/{sessionId}/desktop/stream?ticket=...` | WebSocket upgrade. The backend checks the ticket (single use, valid for 60 seconds, bound to the user and the session), connects to the container's `websockify` and relays binary messages in both directions. |
+
+### Rules
+
+- Only the session's owner gets a ticket. A ticket works once; reconnecting needs a new one. A ticket in the query string is acceptable because it is short-lived and single use; the long-lived access token never goes into a URL.
+- The relay forwards the whole VNC protocol, handshake and authentication included, so the backend implements no RFB logic. Because `x11vnc` runs view-only and the client has only the view password, input messages from the client are ignored by the server.
+- The relay closes the connection when the container stops, when the runner disconnects, when the session is deleted or archived, and after the viewer count limit is exceeded. Closing a connection never affects the agent or a tool call: the stream and the tools use different channels.
+- `Origin` is checked against the allowed client origins.
+- Nothing from the stream is stored, and the stream is not captured in the usage ledger.
+
+### Client connection
+
+The Rust core owns the gateway WebSocket ([ADR 0007](../../adr/0007-communication-model.md)). noVNC needs a WebSocket object in the page, so the frontend opens the stream connection itself, using the ticket and the backend URL it already knows. This is a deliberate exception to ADR 0007, recorded in ADR 0027, and the Tauri content security policy must allow the backend's `ws` and `wss` origin in `connect-src` (checked in phase 1.4).
+
+[03-protocol.md](../../03-protocol.md) gets section updates for the capability, the `images` field of results, the `tool_call` item field and the REST endpoints in the commit of the phase that introduces each.

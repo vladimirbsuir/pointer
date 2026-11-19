@@ -27,13 +27,13 @@ Tool-call rows for desktop tools are folded by default in long turns like other 
 
 A server session whose executor reports `desktop` gets a Desktop panel, a pane next to the conversation in the same layout system as the Changes panel.
 
-- **Content.** The live display, scaled to the pane keeping the aspect ratio, a status line with the resolution, the frame rate actually received and the last action (`Click (640, 360)`), and nothing else. It is read-only: pointer and keyboard events over it do nothing, and the cursor does not change.
-- **Watching.** Opening the panel sends `desktop.watch` with `watching: true`; closing it, hiding the pane, switching session or window blur for more than a few seconds sends `false`. A session nobody watches costs no capture and no bandwidth.
-- **No display yet.** Before `desktop_start` the panel shows the empty state "The agent has not started a display yet". After `desktop.ended`, or when the container is stopped, it shows the last screenshot attachment of the session, dimmed, with the note "The display is not running".
-- **Reconnects.** The panel resends `desktop.watch` after the gateway reconnects. Frames are applied only if their `seq` is newer than the last shown.
-- **Availability.** The panel entry appears only when the session is a server session and its runner reported `desktop`; it is hidden for sessions on the user's computer in stage 1.
+- **Content.** The live display shown by the noVNC `RFB` class, scaled to the pane keeping the aspect ratio, with a status line with the resolution, the connection state and the last action (`Click (640, 360)`), and nothing else. It is read-only: the client sets `viewOnly`, the server ignores input as well, and the cursor over the display does not change.
+- **Connecting.** Opening the panel calls `GET /sessions/{id}/desktop`; when `running`, it requests a ticket with `POST /sessions/{id}/desktop/ticket` and connects to the stream with the ticket and the returned view password. Closing the panel, hiding the pane or switching session disconnects, so a session nobody watches holds no stream. A hidden window keeps the connection for a short grace period before it drops it.
+- **No display yet.** Before the display is running (`running: false`) the panel shows the empty state "The agent has not started a display yet" and checks again when a `desktop_start` tool call completes in the conversation. When the stream closes because the container stopped, it shows the last screenshot attachment of the session, dimmed, with the note "The display is not running".
+- **Reconnects.** A dropped connection is retried with a new ticket, a few times with a growing delay, then the panel falls back to the last screenshot and a Reconnect button. Too many viewers (`429`) shows a message instead of retrying.
+- **Availability.** The panel entry appears only when the session is a server session and `available` is true; it is hidden for sessions on the user's computer in stage 1.
 
-The Rust core owns the WebSocket ([ADR 0007](../../adr/0007-communication-model.md)); it forwards `desktop.frame` to the frontend as an event with the base64 JPEG, and the frontend draws it into an `<img>` or canvas. Frames are not kept in the session store.
+The frontend opens the stream WebSocket itself, which is an exception to the rule that the Rust core owns the connection ([ADR 0007](../../adr/0007-communication-model.md)); see [tools-and-protocol.md](tools-and-protocol.md#client-connection). noVNC (MPL 2.0) is an npm dependency of the frontend. Nothing from the stream is stored.
 
 ## Settings
 
