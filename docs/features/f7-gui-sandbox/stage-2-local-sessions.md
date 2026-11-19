@@ -8,7 +8,7 @@ A local session runs its executor on the user's computer, which is a Windows mac
 
 ## Direction
 
-A **sandbox** is a second executor for a session: a container started from the same image, with the same `pointer-runner` binary and the `desktop` capability, created by the `container` module on demand. The session keeps its local executor for files and commands; the desktop tools are routed to the sandbox.
+A **sandbox** is a second executor for a session: a container started from the same image, with the same `pointer-runner` binary and the `desktop` capability, created by the `container` module on demand, with root and the reduced capability set of stage 1 ([container.md](container.md#privileges-gui-13)). The session keeps its local executor for files and commands; the desktop tools are routed to the sandbox. A sandbox has no repository access at all: the code arrives by sync, so neither the GitHub token nor the repository proxy is involved.
 
 ```mermaid
 flowchart LR
