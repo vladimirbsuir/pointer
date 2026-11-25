@@ -114,3 +114,24 @@ Observations:
 ### Storage of screenshots
 
 The 94 screenshots stored by the live checks of phases 1.2 and 1.3 are 1280x800 PNG files of 26.7–30.7 KB, 29.7 KB on average; a screen with a browser page or a photo holds more detail and is limited to 2 MB per image (`pointer.desktop.max-image-bytes`). A GUI session of a hundred steps therefore stores about 3 MB of screenshots of a simple application. Screenshots are removed with their session and no count or age limit is added in stage 1; the question is reopened if the benchmark of phase 1.6 finds sessions with much larger screens.
+
+## Phase 1.4: live view
+
+Measured on Docker Desktop (Windows host, `published` access) with a server session in the `gui` image, the backend under `bootRun` and the desktop frontend in the browser preview, which counted the bytes of the stream WebSocket. CPU is the share of one core over 15 seconds, read from `/proc` in the container and from the Java process on the host.
+
+| Scene | Viewer | `x11vnc` CPU | `websockify` CPU | Xvfb CPU | Backend CPU | Stream |
+|---|---|---|---|---|---|---|
+| xeyes, idle pointer | none | 0.1 % | 0 % | 0.3 % | | |
+| xeyes, idle pointer | one | 0.2–0.6 % | 0 % | 0.3 % | | |
+| xeyes, pointer moved 10 times a second | one | 0.7 % | 0 % | 0.9 % | | 0.2 KB/s |
+| Agent turn on `python3 -m tkinter` and xeyes (14 tool calls including an `apt-get install`) | one | | | | | 21 KB in the first 62 s of the stream, at most 1 KB/s |
+| Full-screen grid of random colours, 5 frames a second | none | 0.1 % | 0 % | 10.6 % | 0.3 % | |
+| Full-screen grid of random colours, 5 frames a second | one | 6.3 % | 0.9 % | 13.7 % | 4.6 % | 567 KB/s |
+
+Memory: `x11vnc` 17–21 MB, `websockify` 36 MB plus 28 MB for the process it forks per viewer, Xvfb 69–79 MB. The first frame of a new viewer was 7 KB for a mostly black screen.
+
+Observations:
+
+- **The view is cheap enough to leave on.** Without a viewer `x11vnc` does not poll the screen; with one, the stream of an ordinary GUI task stays near 1 KB/s because noVNC negotiates compressed encodings and only changed regions are sent.
+- **The worst case is bounded by the content, not by the relay.** Random colours defeat compression; at 567 KB/s the backend spent about 5 % of a core relaying. The per-viewer queue limit of 8 MB holds about 14 seconds of this stream before the viewer is dropped as too slow.
+- **The runner's display restarts nothing for the view.** The password file, the two processes and the published port add no measurable start-up time to `desktop_start`; the image is unchanged, as `x11vnc` and `websockify` were installed in phase 1.1.

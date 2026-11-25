@@ -63,6 +63,7 @@ pointer:
     github-api-url: ${pointer.github.api-url}
     github-git-url: ${POINTER_GITHUB_GIT_URL:https://github.com}
     desktop: ${POINTER_RUNNER_DESKTOP:false}
+    desktop-access: ${POINTER_RUNNER_DESKTOP_ACCESS:published}
   desktop:
     default-width: 1280
     default-height: 800
@@ -73,6 +74,10 @@ pointer:
     keep-images: ${POINTER_DESKTOP_KEEP_IMAGES:3}
     image-mask-block: ${POINTER_DESKTOP_IMAGE_MASK_BLOCK:4}
     pixels-per-token: 750
+    max-viewers: 2
+    ticket-ttl: 60s
+    viewer-buffer: 8MB
+    viewer-send-timeout: 10s
   memory:
     curation-enabled: ${POINTER_MEMORY_CURATION_ENABLED:true}
     curation-idle: ${POINTER_MEMORY_CURATION_IDLE:15m}

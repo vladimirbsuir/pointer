@@ -458,7 +458,7 @@ Used by the backend itself, never exposed to the model. Names start with `pointe
 | `pointer.read_attachment` | `path` | `content` of a text file attached with an `@` mention |
 | `pointer.repo_prepare` | `cloneUrl`, `branch`, `baseBranch?`, `authorName`, `authorEmail` | `branch`, `baseBranch`, `head`. Runner only: clones the repository into the workspace if it is not there yet (otherwise points `origin` at `cloneUrl`) and checks out `branch`, creating it from `origin/<baseBranch>` (default: the remote default branch). `cloneUrl` is the repository proxy of the backend. |
 | `pointer.repo_publish` | `branch`, `message` | `committed`, `pushed`, `commit`. Runner only: commits all changes with `message` and pushes `HEAD` to `branch`; pushes also when an earlier commit was not pushed. |
-| `pointer.desktop_status` | none | `running`, `width`, `height`, `imageWidth`, `imageHeight` (when running), `processes: [{ processId, pid, command, logPath }]`. Fails with `desktop_unavailable` on an executor without a display. |
+| `pointer.desktop_status` | none | `running`, `stream` (the live view of section 9.1 is up), `width`, `height`, `imageWidth`, `imageHeight` (when running), `processes: [{ processId, pid, command, logPath }]`. Fails with `desktop_unavailable` on an executor without a display. |
 | `pointer.worktree_create` | none | `branch`, `baseBranch`, `path`. Creates the worktree on a new branch from `HEAD`. Fails with `not_a_git_repository`, `not_repository_root`, `detached_head` or `worktree_exists`. |
 | `pointer.worktree_status` | `baseBranch` | `path`, `branch`, `baseBranch`, `commitsAhead`, `uncommittedFiles`, `baseCheckedOut` |
 | `pointer.worktree_merge` | `baseBranch`, `message` | `merged`, `commits`. Commits pending changes with `message`, merges the branch with `--no-ff` into the project folder, then removes the worktree and the branch. Fails with `base_not_checked_out`, `commit_failed` or `merge_conflict` (the merge is aborted). |
@@ -562,6 +562,18 @@ All endpoints are under `/api/v1`, authenticated with the access token unless ma
 | Custom tools | `GET /custom-tools`, `PATCH /custom-tools/{id}` with `defaultPolicy`, `modes`, `enabled`, `DELETE /custom-tools/{id}`, `GET /custom-tools/{id}/versions`, `POST /custom-tools/{id}/versions/{version}/restore` |
 
 `POST /sessions/{id}/messages` accepts an `Idempotency-Key` header so a retried request never starts a second turn.
+
+### 9.1 Desktop live view
+
+A read-only VNC stream of a server session's virtual display ([F7](features/f7-gui-sandbox/README.md), GUI-7). It does not use the gateway; the desktop frontend opens the stream WebSocket itself and shows it with noVNC ([ADR 0028](adr/0028-gui-sandbox-in-the-session-container.md)).
+
+| Endpoint | Description |
+|---|---|
+| `GET /sessions/{id}/desktop` | `{ available, running, width, height }`. `available`: a server session whose runner reports `desktop` and whose container was created with view passwords. `running`: the runner reports a running display and stream through `pointer.desktop_status`; the call never wakes a stopped container, so a stopped one reads `running: false`. Sizes are screen pixels, null when not running. `404` for another user's session or a session that is not on the server. |
+| `POST /sessions/{id}/desktop/ticket` | `{ ticket, expiresAt, path, password, width, height }`: a single-use ticket valid for 60 seconds (`pointer.desktop.ticket-ttl`), the stream path and the view-only VNC password. `409 desktop_unavailable`, `409 container_not_running`, `409 desktop_not_running`, `429 too_many_viewers` (`pointer.desktop.max-viewers`, 2, open streams), `404` as above. |
+| `GET /sessions/{id}/desktop/stream?ticket=` | Public WebSocket upgrade; the ticket is the credential. A missing, used, expired or other session's ticket and an `Origin` outside `pointer.auth.allowed-origins` get `403`. The `binary` subprotocol is accepted when offered. The backend connects to the container's `websockify` and relays binary messages both ways, partial messages included, without reading the RFB protocol. |
+
+Close codes of the stream: `1001` the display or container stopped, or the session was deleted or archived; `4408` the viewer did not read fast enough (more than `pointer.desktop.viewer-buffer`, 8 MB, queued, or a send blocked for `pointer.desktop.viewer-send-timeout`, 10 s); `4429` the session already had the maximum of open streams when this one opened; `4503` the container's stream port could not be reached. Input from the viewer reaches `x11vnc`, which runs view-only and ignores it.
 
 ## 10. Versioning
 

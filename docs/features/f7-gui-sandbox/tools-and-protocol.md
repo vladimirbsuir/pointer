@@ -145,7 +145,7 @@ The live view is a VNC stream of the display, shown in the client by noVNC and r
 
 ```sql
 ALTER TABLE remote_workspaces
-    ADD COLUMN desktop_view_secret text;
+    ADD COLUMN desktop_view_secret bytea;
 ```
 
 The view password of the container, encrypted with the cipher used for provider keys and generated with the container ([container.md](container.md#live-view-stack-phase-14)). The full password is never stored. A workspace whose container predates phase 1.4 has no secret; its container is recreated on the next start because its spec hash differs ([container.md](container.md#outdated-containers)), and until then `available` is false.
@@ -172,5 +172,7 @@ The view password of the container, encrypted with the cipher used for provider 
 ### Client connection
 
 The Rust core owns the gateway WebSocket ([ADR 0007](../../adr/0007-communication-model.md)). noVNC needs a WebSocket object in the page, so the frontend opens the stream connection itself, using the ticket and the backend URL it already knows. This is a deliberate exception to ADR 0007, recorded in [ADR 0028](../../adr/0028-gui-sandbox-in-the-session-container.md). The Tauri configuration sets no content security policy today (`csp: null`); if one is introduced, its `connect-src` must allow the backend's `ws` and `wss` origin.
+
+As implemented in phase 1.4 ([03-protocol.md](../../03-protocol.md) section 9.1): `running` is true only when the runner reports both the display and the stream, and the status call is made only while the container is running and its runner connected, so opening the panel never wakes a stopped container. The relay is `DesktopStreamHandler` and `DesktopViewer` in the `container` module: the ticket is checked in the handshake (`403` otherwise), the backend connects to `websockify` with the JDK WebSocket client and the `binary` subprotocol when the viewer offered it, and the handler accepts partial messages, so no message size limit is raised. Each viewer has a queue drained by its own virtual thread; more than `pointer.desktop.viewer-buffer` (8 MB) queued, or a send blocked for `pointer.desktop.viewer-send-timeout` (10 s), closes it with `4408`. Other close codes: `1001` when the stream ends upstream (the container or `websockify` stopped) or the session is deleted or archived, `4429` over the viewer limit at open, `4503` when the stream address cannot be reached. The relay does not close streams when the runner reconnects: the runner's WebSocket reconnects regularly when its access token expires, while `websockify` keeps running, and a stopped container ends the stream upstream anyway. Tickets live in memory (one backend instance).
 
 [03-protocol.md](../../03-protocol.md) gets section updates for the capability, the `images` field of results, the `images` and `marks` fields of the `tool_call` item, the repository proxy and the REST endpoints in the commit of the phase that introduces each.

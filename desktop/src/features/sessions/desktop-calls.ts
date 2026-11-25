@@ -166,3 +166,12 @@ export function collectScreenshots(t: TFunction, items: Item[]): Screenshot[] {
       })),
     );
 }
+
+export function displayStartsOf(items: Item[]) {
+  return items.filter(
+    (item) =>
+      item.type === "tool_call" &&
+      item.toolName === "desktop_start" &&
+      item.toolStatus === "succeeded",
+  ).length;
+}

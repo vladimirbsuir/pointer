@@ -741,5 +741,29 @@
     "start": "Start the display",
     "startSized": "Start the display {{width}}×{{height}}",
     "openScreenshot": "Open the screenshot"
+  },
+  "desktopView": {
+    "title": "Desktop",
+    "toggle": "Live view of the display",
+    "close": "Close the desktop view",
+    "reconnect": "Reconnect",
+    "busy": "Too many people are watching this display. Close another live view and try again.",
+    "notStarted": "The agent has not started a display yet",
+    "state": {
+      "connecting": "Connecting",
+      "live": "Live",
+      "offline": "Not running",
+      "failed": "Disconnected",
+      "busy": "Too many viewers",
+      "slow": "Too slow",
+      "paused": "Paused"
+    },
+    "note": {
+      "offline": "The display is not running",
+      "failed": "The live view is unavailable",
+      "slow": "The connection is too slow for the live view",
+      "paused": "The live view paused while the window was hidden",
+      "busy": "Too many viewers"
+    }
   }
 }

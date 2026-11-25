@@ -2,9 +2,11 @@ package dev.pointer.testing;
 
 import dev.pointer.container.ContainerRuntime;
 import dev.pointer.container.ContainerSpec;
+import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -22,6 +24,7 @@ public class FakeContainerRuntime implements ContainerRuntime {
     private final List<String> removed = new CopyOnWriteArrayList<>();
     private final Set<String> outdated = ConcurrentHashMap.newKeySet();
     private final List<String> removedContainers = new CopyOnWriteArrayList<>();
+    private volatile URI streamAddress;
 
     @Override
     public boolean isAvailable() {
@@ -68,6 +71,15 @@ public class FakeContainerRuntime implements ContainerRuntime {
         running.remove(name);
         outdated.remove(name);
         removedContainers.add(name);
+    }
+
+    @Override
+    public Optional<URI> streamAddress(String name) {
+        return running.contains(name) ? Optional.ofNullable(streamAddress) : Optional.empty();
+    }
+
+    public void useStreamAddress(URI address) {
+        this.streamAddress = address;
     }
 
     public void markOutdated(String name) {

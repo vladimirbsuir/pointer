@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use super::{Desktop, Screen, State, system};
+use super::{Desktop, Screen, State, stream, system};
 use crate::{ExecError, Request};
 
 const DEFAULT_WIDTH: u32 = 1280;
@@ -29,9 +29,14 @@ pub struct Display {
     window_manager: Option<Child>,
     bus_address: Option<String>,
     bus_pid: Option<u32>,
+    stream: Option<stream::Stream>,
 }
 
 impl Display {
+    pub fn is_streaming(&mut self) -> bool {
+        self.stream.as_mut().is_some_and(stream::Stream::is_running)
+    }
+
     pub fn screen(&self, display: &str) -> Screen {
         Screen {
             display: display.to_string(),
@@ -45,6 +50,7 @@ impl Display {
     }
 
     fn shutdown(&mut self) {
+        self.stream = None;
         if let Some(window_manager) = &mut self.window_manager {
             let _ = window_manager.kill();
             let _ = window_manager.wait();
@@ -128,6 +134,7 @@ impl Desktop {
             window_manager: None,
             bus_address: None,
             bus_pid: None,
+            stream: None,
         };
         wait_until_ready(&mut display, &self.display, &self.runtime_dir)?;
         if let Some((address, pid)) = start_bus() {
@@ -136,6 +143,10 @@ impl Desktop {
         }
         let screen = display.screen(&self.display);
         display.window_manager = start_window_manager(&screen, &self.runtime_dir);
+        display.stream = self
+            .stream
+            .as_ref()
+            .and_then(|settings| stream::start(settings, &screen, &self.runtime_dir));
         let result = started(&screen, false, display.window_manager.is_some());
         state.display = Some(display);
         Ok(result)

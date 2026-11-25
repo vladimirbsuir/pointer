@@ -497,6 +497,7 @@ Server sessions on a per-session container (REM-3, [ADR 0016](adr/0016-remote-ex
 | `error` | text | Nullable; last start or push failure |
 | `pushed_commit` | text | Nullable; last commit pushed to the branch |
 | `pull_request_url` | text | Nullable |
+| `desktop_view_secret` | bytea | Nullable; the view-only VNC password of the container, AES-GCM encrypted like provider keys; set when the container is created ([F7](features/f7-gui-sandbox/README.md) live view, V36). The full VNC password is never stored |
 | `last_active_at` | timestamptz | Drives the idle stop |
 | `created_at`, `updated_at` | timestamptz | |
 

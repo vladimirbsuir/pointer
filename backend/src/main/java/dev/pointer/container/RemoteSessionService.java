@@ -1,5 +1,6 @@
 package dev.pointer.container;
 
+import dev.pointer.common.crypto.SecretCipher;
 import dev.pointer.common.error.ApiException;
 import dev.pointer.device.DeviceService;
 import dev.pointer.execution.ExecutionListener;
@@ -58,6 +59,7 @@ public class RemoteSessionService {
     private final GitHubRepositories gitHub;
     private final ObjectProvider<ExecutionService> execution;
     private final TransactionTemplate transactions;
+    private final SecretCipher cipher;
     private final Clock clock;
     private final Set<UUID> starting = ConcurrentHashMap.newKeySet();
     private final Set<UUID> runningCommands = ConcurrentHashMap.newKeySet();
@@ -77,6 +79,7 @@ public class RemoteSessionService {
             GitHubRepositories gitHub,
             ObjectProvider<ExecutionService> execution,
             TransactionTemplate transactions,
+            SecretCipher cipher,
             Clock clock) {
         this.properties = properties;
         this.runtime = runtime;
@@ -88,6 +91,7 @@ public class RemoteSessionService {
         this.gitHub = gitHub;
         this.execution = execution;
         this.transactions = transactions;
+        this.cipher = cipher;
         this.clock = clock;
     }
 
@@ -240,6 +244,26 @@ public class RemoteSessionService {
         return new RemoteDtos.RemoteFile(path, String.valueOf(result.getOrDefault("content", "")));
     }
 
+    boolean isContainerRunning(RemoteWorkspace workspace) {
+        if (!workspace.isReady()) {
+            return false;
+        }
+        var session = sessions.get(workspace.getUserId(), workspace.getSessionId());
+        return execution.getObject().canExecute(workspace.getDeviceId(), session.projectId());
+    }
+
+    boolean hasDesktop(RemoteWorkspace workspace) {
+        return execution.getObject().hasCapability(workspace.getDeviceId(), DESKTOP_CAPABILITY);
+    }
+
+    Optional<Map<String, Object>> runIfRunning(RemoteWorkspace workspace, String operation, Duration timeout) {
+        if (!isContainerRunning(workspace)) {
+            return Optional.empty();
+        }
+        var result = runRepoOperation(workspace, operation, Map.of(), timeout);
+        return result.succeeded() ? Optional.ofNullable(result.result()) : Optional.empty();
+    }
+
     Set<String> defaultCapabilities() {
         return properties.desktop() ? Set.of(EXECUTOR_CAPABILITY, DESKTOP_CAPABILITY) : Set.of(EXECUTOR_CAPABILITY);
     }
@@ -336,13 +360,19 @@ public class RemoteSessionService {
         }
         var workspace = workspaces.findById(workspaceId).orElseThrow();
         try {
-            if (runtime.isOutdated(workspace.getContainerName(), spec(workspace, ""))) {
+            if (runtime.isOutdated(workspace.getContainerName(), spec(workspace, "", VncPasswords.NONE))) {
                 log.info("Recreating outdated container {}", workspace.getContainerName());
                 runtime.removeContainer(workspace.getContainerName());
             }
             if (!runtime.exists(workspace.getContainerName())) {
                 var secret = devices.rotateRunnerSecret(workspace.getDeviceId());
-                runtime.create(spec(workspace, secret));
+                var passwords = VncPasswords.generate();
+                var encryptedView = cipher.encrypt(passwords.view());
+                update(workspaceId, current -> {
+                    current.desktopViewSecretIssued(encryptedView, clock.instant());
+                    return current;
+                });
+                runtime.create(spec(workspace, secret, passwords));
             }
             runtime.start(workspace.getContainerName());
         } catch (ContainerException exception) {
@@ -525,7 +555,7 @@ public class RemoteSessionService {
                 null);
     }
 
-    private ContainerSpec spec(RemoteWorkspace workspace, String secret) {
+    private ContainerSpec spec(RemoteWorkspace workspace, String secret, VncPasswords passwords) {
         var session = sessions.get(workspace.getUserId(), workspace.getSessionId());
         var environment = new LinkedHashMap<String, String>();
         environment.put("POINTER_API_URL", properties.apiUrl());
@@ -533,6 +563,8 @@ public class RemoteSessionService {
         environment.put("POINTER_RUNNER_SECRET", secret);
         environment.put("POINTER_PROJECT_ID", session.projectId().toString());
         environment.put("POINTER_WORKSPACE", "/workspace/repo");
+        environment.put(VncPasswords.FULL_VARIABLE, passwords.full());
+        environment.put(VncPasswords.VIEW_VARIABLE, passwords.view());
         return new ContainerSpec(
                 workspace.getContainerName(),
                 workspace.getVolumeName(),

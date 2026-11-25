@@ -111,7 +111,8 @@ class DockerContainerRuntimeTests {
                 Duration.ofMinutes(10),
                 "https://api.github.com",
                 "https://github.com",
-                false);
+                false,
+                ContainerProperties.DesktopAccess.NETWORK);
         return new DockerContainerRuntime(properties, JsonMapper.builder().build());
     }
 }

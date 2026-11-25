@@ -10,6 +10,8 @@ use tempfile::TempDir;
 
 use super::*;
 
+mod rfb;
+
 const TIMEOUT: Duration = Duration::from_secs(20);
 
 fn enabled() -> bool {
@@ -24,9 +26,13 @@ struct Fixture {
 
 impl Fixture {
     fn new(display: &str) -> Self {
+        Self::with_stream(display, None)
+    }
+
+    fn with_stream(display: &str, stream: Option<StreamSettings>) -> Self {
         let runtime = tempfile::tempdir().unwrap();
         Self {
-            desktop: Desktop::new(display, runtime.path().to_path_buf()),
+            desktop: Desktop::new(display, runtime.path().to_path_buf()).with_stream(stream),
             root: tempfile::tempdir().unwrap(),
             _runtime: runtime,
         }
@@ -189,6 +195,7 @@ fn display_lifecycle_is_idempotent_and_bounded() {
     let status = fixture.ok(STATUS, json!({}));
     assert_eq!(status["running"], true);
     assert_eq!(status["width"], 1280);
+    assert_eq!(status["stream"], false);
 
     let environment = fixture.desktop.environment();
     assert!(
@@ -635,4 +642,105 @@ fn webkit_renders_with_the_image_variables_and_reports_which_are_needed() {
         outcomes.iter().all(|(_, works)| *works),
         "WebKitGTK failed in a variant: {outcomes:?}"
     );
+}
+
+#[test]
+fn live_view_streams_the_display_read_only() {
+    if !enabled() {
+        return;
+    }
+    const VNC_PORT: u16 = 5908;
+    const WEBSOCKET_PORT: u16 = 6088;
+    const PASSWORD: &str = "Full2k9Q";
+    const VIEW_PASSWORD: &str = "View7pX4";
+    let fixture = Fixture::with_stream(
+        ":108",
+        Some(StreamSettings::new(
+            PASSWORD,
+            VIEW_PASSWORD,
+            VNC_PORT,
+            WEBSOCKET_PORT,
+        )),
+    );
+    assert!(!stream::is_listening(VNC_PORT));
+    assert!(!stream::is_listening(WEBSOCKET_PORT));
+    assert_eq!(fixture.ok(STATUS, json!({}))["stream"], false);
+
+    fixture.ok("desktop_start", json!({}));
+    assert_eq!(fixture.ok(STATUS, json!({}))["stream"], true);
+    let password_file = fixture._runtime.path().join("vnc.passwd");
+    let content = std::fs::read_to_string(&password_file).unwrap();
+    let lines: Vec<&str> = content.lines().collect();
+    assert_eq!(lines, [PASSWORD, "__BEGIN_VIEWONLY__", VIEW_PASSWORD]);
+    assert!(
+        lines
+            .iter()
+            .all(|line| line.len() == 8 || line.starts_with("__"))
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&password_file)
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    let check = fixture.start_tk_counter();
+    let state = await_state(&check, |state| state["button"]["width"].as_u64() > Some(1));
+    let screenshot = decode(&fixture.ok("desktop_screenshot", json!({}))).to_rgb8();
+
+    let rfb::Login::Accepted(mut viewer) = rfb::connect(VNC_PORT, VIEW_PASSWORD) else {
+        panic!("the view password is accepted");
+    };
+    assert_eq!((viewer.width, viewer.height), (1280, 800));
+    let framebuffer = viewer.framebuffer();
+    let mut differing = 0;
+    let mut colors = std::collections::HashSet::new();
+    for y in (0..800u32).step_by(8) {
+        for x in (0..1280u32).step_by(8) {
+            let seen = framebuffer[(y * 1280 + x) as usize];
+            let captured = screenshot.get_pixel(x, y).0;
+            if seen.iter().zip(captured).any(|(a, b)| a.abs_diff(b) > 8) {
+                differing += 1;
+            }
+            colors.insert(seen);
+        }
+    }
+    assert!(
+        differing < 40,
+        "the stream shows the captured screen ({differing} of 16000 samples differ)"
+    );
+    assert!(
+        colors.len() > 2,
+        "the fixture window is visible in the stream"
+    );
+
+    let (x, y) = center(&state["button"]);
+    viewer.click(x as u16, y as u16);
+    std::thread::sleep(Duration::from_secs(1));
+    assert_eq!(read_state(&check)["count"], 0, "the stream ignores input");
+    fixture.ok("desktop_click", json!({ "x": x, "y": y, "observe": false }));
+    await_state(&check, |state| state["count"] == 1);
+
+    let rfb::Login::Refused(reason) = rfb::connect(VNC_PORT, "wrongpw1") else {
+        panic!("a wrong password is refused");
+    };
+    assert!(!reason.is_empty());
+    let rfb::Login::Accepted(mut full) = rfb::connect(VNC_PORT, PASSWORD) else {
+        panic!("the full password is accepted");
+    };
+    full.click(x as u16, y as u16);
+    std::thread::sleep(Duration::from_secs(1));
+    assert_eq!(read_state(&check)["count"], 1, "the server runs view-only");
+
+    let (head, greeting) = rfb::websocket_greeting(WEBSOCKET_PORT);
+    assert!(head.starts_with("HTTP/1.1 101"), "{head}");
+    assert!(
+        head.to_ascii_lowercase()
+            .contains("sec-websocket-protocol: binary"),
+        "{head}"
+    );
+    assert_eq!(greeting, b"RFB 003.008\n");
 }

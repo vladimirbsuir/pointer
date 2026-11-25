@@ -32,6 +32,7 @@ public class RemoteWorkspace extends BaseEntity {
     private String error;
     private String pushedCommit;
     private String pullRequestUrl;
+    private byte[] desktopViewSecret;
     private Instant lastActiveAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -81,6 +82,15 @@ public class RemoteWorkspace extends BaseEntity {
     void pullRequestOpened(String url, Instant now) {
         this.pullRequestUrl = url;
         this.updatedAt = now;
+    }
+
+    void desktopViewSecretIssued(byte[] secret, Instant now) {
+        this.desktopViewSecret = secret;
+        this.updatedAt = now;
+    }
+
+    boolean hasDesktopView() {
+        return desktopViewSecret != null;
     }
 
     void touch(Instant now) {

@@ -1,5 +1,6 @@
 package dev.pointer.container;
 
+import dev.pointer.common.crypto.SecretCipher;
 import dev.pointer.device.DeviceService;
 import dev.pointer.execution.ExecutionService;
 import dev.pointer.project.ProjectService;
@@ -51,6 +52,7 @@ class ContainerConfiguration {
             GitHubRepositories gitHub,
             ObjectProvider<ExecutionService> execution,
             TransactionTemplate transactions,
+            SecretCipher cipher,
             Clock clock) {
         return new RemoteSessionService(
                 properties,
@@ -63,6 +65,7 @@ class ContainerConfiguration {
                 gitHub,
                 execution,
                 transactions,
+                cipher,
                 clock);
     }
 }

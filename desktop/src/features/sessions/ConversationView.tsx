@@ -4,7 +4,7 @@ import { ContextStrategyPicker } from "./ContextStrategyPicker";
 import { SessionUsageDialog } from "./SessionUsageDialog";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { FileDiffIcon, FoldVerticalIcon, SquareTerminalIcon } from "lucide-react";
+import { FileDiffIcon, FoldVerticalIcon, MonitorIcon, SquareTerminalIcon } from "lucide-react";
 import { AutomationBadge } from "@/features/automation/AutomationBadge";
 import { useWorkspace } from "@/features/workspace/workspace-store";
 import { api, unwrap } from "@/shared/api/client";
@@ -20,6 +20,9 @@ import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
 import { Switch } from "@/shared/ui/switch";
 import { ChangesPanel } from "./ChangesPanel";
+import { DesktopPanel } from "./DesktopPanel";
+import { displayStartsOf } from "./desktop-calls";
+import { useDesktopStatus } from "./use-desktop-view";
 import { useChangedFiles } from "./use-changed-files";
 import { Composer, type Attachment } from "./Composer";
 import { MessageList } from "./MessageList";
@@ -35,7 +38,9 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
   const { state, patchSession } = useConversation(sessionId);
   const { data: providers } = useProviders();
   const { data: settings } = useSettings();
-  const [changesOpen, setChangesOpen] = useState(false);
+  const [pane, setPane] = useState<"changes" | "desktop" | null>(null);
+  const changesOpen = pane === "changes";
+  const desktopOpen = pane === "desktop";
   const terminalOpen = useWorkspace((state) => state.terminalOpen);
   const [draft, setDraft] = useState({ key: 0, text: "" });
   const { data: changedFiles } = useChangedFiles(sessionId, state.changesVersion);
@@ -44,6 +49,9 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
   const running = session ? BUSY_STATUSES.includes(session.status) : false;
   const { data: remoteSessions } = useRemoteSessions(session?.projectId ?? "", Boolean(session));
   const remote = remoteSessions?.some((workspace) => workspace.sessionId === sessionId) ?? false;
+  const displayStarts = displayStartsOf(state.items);
+  const { data: desktopStatus } = useDesktopStatus(sessionId, remote, displayStarts);
+  const desktopAvailable = remote && (desktopStatus?.available ?? false);
 
   useEffect(() => {
     if (!running) {
@@ -194,16 +202,27 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
             <Button
               size="sm"
               variant={changesOpen ? "secondary" : "ghost"}
-              onClick={() => setChangesOpen((open) => !open)}
+              onClick={() => setPane(changesOpen ? null : "changes")}
             >
               <FileDiffIcon />
-              <span className={cn(changesOpen && "sr-only")}>{t("chat.changes")}</span>
+              <span className={cn(pane !== null && "sr-only")}>{t("chat.changes")}</span>
               {activeChanges > 0 && (
                 <span className="rounded-full bg-primary px-1.5 text-[0.65rem] text-primary-foreground tabular-nums">
                   {activeChanges}
                 </span>
               )}
             </Button>
+            {desktopAvailable && (
+              <Button
+                size="icon-sm"
+                variant={desktopOpen ? "secondary" : "ghost"}
+                onClick={() => setPane(desktopOpen ? null : "desktop")}
+                title={t("desktopView.toggle")}
+                aria-label={t("desktopView.toggle")}
+              >
+                <MonitorIcon />
+              </Button>
+            )}
             <label
               className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
               title={t("chat.autoApproveHint")}
@@ -213,7 +232,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
                 checked={session.autoApprove}
                 onCheckedChange={(autoApprove) => void updateSession({ autoApprove })}
               />
-              <span className={cn(changesOpen && "sr-only")}>{t("chat.autoApprove")}</span>
+              <span className={cn(pane !== null && "sr-only")}>{t("chat.autoApprove")}</span>
             </label>
             <label
               className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
@@ -226,7 +245,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
                   void updateSession({ routing: smart ? "smart" : "off" })
                 }
               />
-              <span className={cn(changesOpen && "sr-only")}>{t("chat.smartRouting")}</span>
+              <span className={cn(pane !== null && "sr-only")}>{t("chat.smartRouting")}</span>
             </label>
             <label
               className={cn(
@@ -241,11 +260,11 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
                 disabled={!canEscalate && session.escalation !== "on"}
                 onCheckedChange={(on) => void updateSession({ escalation: on ? "on" : "off" })}
               />
-              <span className={cn(changesOpen && "sr-only")}>{t("chat.escalation")}</span>
+              <span className={cn(pane !== null && "sr-only")}>{t("chat.escalation")}</span>
             </label>
             <ContextStrategyPicker
               value={session.contextStrategy}
-              compact={changesOpen}
+              compact={pane !== null}
               onChange={(contextStrategy) => void updateSession({ contextStrategy })}
             />
             <ModelPicker
@@ -288,7 +307,16 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
           sessionId={sessionId}
           version={state.changesVersion}
           busy={running}
-          onClose={() => setChangesOpen(false)}
+          onClose={() => setPane(null)}
+        />
+      )}
+      {desktopOpen && desktopAvailable && (
+        <DesktopPanel
+          key={sessionId}
+          sessionId={sessionId}
+          items={state.items}
+          displayStarts={displayStarts}
+          onClose={() => setPane(null)}
         />
       )}
     </div>

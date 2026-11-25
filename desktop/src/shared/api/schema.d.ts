@@ -276,6 +276,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/desktop/ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ticket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/compact": {
         parameters: {
             query?: never;
@@ -1044,6 +1060,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/desktop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["status_3"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/changes": {
         parameters: {
             query?: never;
@@ -1115,7 +1147,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["status_3"];
+        get: operations["status_4"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1406,6 +1438,17 @@ export interface components {
             mode?: string;
             /** Format: uuid */
             modelId?: string;
+        };
+        DesktopTicket: {
+            ticket?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            path?: string;
+            password?: string;
+            /** Format: int32 */
+            width?: number;
+            /** Format: int32 */
+            height?: number;
         };
         RevertRequest: {
             path: string;
@@ -1880,6 +1923,14 @@ export interface components {
             event?: {
                 [key: string]: unknown;
             };
+        };
+        DesktopStatus: {
+            available?: boolean;
+            running?: boolean;
+            /** Format: int32 */
+            width?: number;
+            /** Format: int32 */
+            height?: number;
         };
         FileDiff: {
             path?: string;
@@ -2529,6 +2580,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SendMessageResponse"];
+                };
+            };
+        };
+    };
+    ticket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopTicket"];
                 };
             };
         };
@@ -4035,6 +4108,28 @@ export interface operations {
             };
         };
     };
+    status_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopStatus"];
+                };
+            };
+        };
+    };
     list_6: {
         parameters: {
             query?: never;
@@ -4127,7 +4222,7 @@ export interface operations {
             };
         };
     };
-    status_3: {
+    status_4: {
         parameters: {
             query?: never;
             header?: never;

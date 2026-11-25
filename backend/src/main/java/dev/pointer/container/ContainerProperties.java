@@ -20,4 +20,11 @@ record ContainerProperties(
         Duration prepareTimeout,
         String githubApiUrl,
         String githubGitUrl,
-        boolean desktop) {}
+        boolean desktop,
+        DesktopAccess desktopAccess) {
+
+    enum DesktopAccess {
+        NETWORK,
+        PUBLISHED
+    }
+}

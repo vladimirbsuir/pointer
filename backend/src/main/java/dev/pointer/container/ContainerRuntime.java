@@ -1,5 +1,8 @@
 package dev.pointer.container;
 
+import java.net.URI;
+import java.util.Optional;
+
 public interface ContainerRuntime {
 
     boolean isAvailable();
@@ -17,4 +20,6 @@ public interface ContainerRuntime {
     boolean isOutdated(String name, ContainerSpec spec);
 
     void removeContainer(String name);
+
+    Optional<URI> streamAddress(String name);
 }

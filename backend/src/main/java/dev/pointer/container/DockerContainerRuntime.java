@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeSet;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -27,7 +28,11 @@ class DockerContainerRuntime implements ContainerRuntime {
     static final List<String> CAPABILITIES =
             List.of("CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL", "NET_BIND_SERVICE", "SETGID", "SETUID");
 
+    static final int STREAM_PORT = 6080;
+
     private static final String WORKSPACE = "/workspace";
+    private static final String STREAM_PORT_KEY = STREAM_PORT + "/tcp";
+    private static final String LOOPBACK = "127.0.0.1";
     private static final int OK = 200;
     private static final int NOT_MODIFIED = 304;
     private static final int NOT_FOUND = 404;
@@ -127,6 +132,33 @@ class DockerContainerRuntime implements ContainerRuntime {
         return !imageId.isEmpty() && !imageId.equals(container.path("Image").asString(""));
     }
 
+    @Override
+    public Optional<URI> streamAddress(String name) {
+        if (properties.desktopAccess() == ContainerProperties.DesktopAccess.NETWORK) {
+            return Optional.of(webSocketAddress(name, STREAM_PORT));
+        }
+        var inspect = call(DockerHttpClient.Request.Method.GET, "/containers/" + encode(name) + "/json", null);
+        if (inspect.status() == NOT_FOUND) {
+            return Optional.empty();
+        }
+        inspect.ensureSuccess("inspect the container");
+        var bindings = json.readTree(inspect.body())
+                .path("NetworkSettings")
+                .path("Ports")
+                .path(STREAM_PORT_KEY);
+        for (var binding : bindings) {
+            var port = binding.path("HostPort").asString("");
+            if (!port.isEmpty()) {
+                return Optional.of(webSocketAddress(LOOPBACK, Integer.parseInt(port)));
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static URI webSocketAddress(String host, int port) {
+        return URI.create("ws://" + host + ":" + port + "/");
+    }
+
     String specHash(ContainerSpec spec) {
         var canonical = String.join(
                 ";",
@@ -141,6 +173,7 @@ class DockerContainerRuntime implements ContainerRuntime {
                 "memory=" + properties.memory().toBytes(),
                 "cpus=" + properties.cpus(),
                 "network=" + (properties.network() == null ? "" : properties.network()),
+                "ports=" + (isPublished() ? LOOPBACK + "::" + STREAM_PORT_KEY : ""),
                 "environment="
                         + String.join(",", new TreeSet<>(spec.environment().keySet())));
         try {
@@ -179,9 +212,16 @@ class DockerContainerRuntime implements ContainerRuntime {
         if (properties.network() != null && !properties.network().isBlank()) {
             hostConfig.put("NetworkMode", properties.network());
         }
+        if (isPublished()) {
+            hostConfig.put(
+                    "PortBindings", Map.of(STREAM_PORT_KEY, List.of(Map.of("HostIp", LOOPBACK, "HostPort", ""))));
+        }
         var labels = new LinkedHashMap<>(spec.labels());
         labels.put(SPEC_LABEL, specHash(spec));
         var body = new LinkedHashMap<String, Object>();
+        if (isPublished()) {
+            body.put("ExposedPorts", Map.of(STREAM_PORT_KEY, Map.of()));
+        }
         body.put("Image", properties.image());
         body.put("User", ROOT);
         body.put("Env", environment);
@@ -194,6 +234,10 @@ class DockerContainerRuntime implements ContainerRuntime {
             throw new ContainerException("The runner image " + properties.image() + " is not available");
         }
         created.ensureSuccess("create the container");
+    }
+
+    private boolean isPublished() {
+        return properties.desktopAccess() == ContainerProperties.DesktopAccess.PUBLISHED;
     }
 
     private Reply call(DockerHttpClient.Request.Method method, String path, Object body) {

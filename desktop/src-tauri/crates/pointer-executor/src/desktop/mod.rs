@@ -3,6 +3,7 @@ mod display;
 mod input;
 mod keys;
 mod processes;
+mod stream;
 mod system;
 
 use std::collections::HashMap;
@@ -12,6 +13,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use serde_json::{Value, json};
 
 use super::{ExecError, ExecOutcome, Request};
+use stream::StreamSettings;
 
 pub const STATUS: &str = "pointer.desktop_status";
 const DEFAULT_DISPLAY: &str = ":99";
@@ -34,6 +36,7 @@ pub struct Desktop {
     state: Arc<Mutex<State>>,
     display: String,
     runtime_dir: PathBuf,
+    stream: Option<StreamSettings>,
 }
 
 #[derive(Default)]
@@ -80,6 +83,7 @@ impl Default for Desktop {
             .filter(|display| display.starts_with(':'))
             .unwrap_or_else(|| DEFAULT_DISPLAY.to_string());
         Self::new(display, PathBuf::from(RUNTIME_DIRECTORY))
+            .with_stream(StreamSettings::from_environment())
     }
 }
 
@@ -89,7 +93,13 @@ impl Desktop {
             state: Arc::new(Mutex::new(State::default())),
             display: display.into(),
             runtime_dir,
+            stream: None,
         }
+    }
+
+    pub fn with_stream(mut self, stream: Option<StreamSettings>) -> Self {
+        self.stream = stream;
+        self
     }
 
     pub fn environment(&self) -> Vec<(String, String)> {
@@ -142,6 +152,10 @@ impl Desktop {
     fn status(&self) -> Value {
         let mut state = self.lock();
         let screen = display::alive(&mut state).map(|display| display.screen(&self.display));
+        let stream = state
+            .display
+            .as_mut()
+            .is_some_and(display::Display::is_streaming);
         processes::reap(&mut state.processes);
         let processes: Vec<Value> = processes::list(&state.processes);
         match screen {
@@ -153,10 +167,11 @@ impl Desktop {
                     "height": screen.height,
                     "imageWidth": image_width,
                     "imageHeight": image_height,
+                    "stream": stream,
                     "processes": processes,
                 })
             }
-            None => json!({ "running": false, "processes": processes }),
+            None => json!({ "running": false, "stream": false, "processes": processes }),
         }
     }
 
