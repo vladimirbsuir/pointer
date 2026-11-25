@@ -7,6 +7,7 @@ pub struct Config {
     pub runner_secret: String,
     pub project_id: String,
     pub workspace: PathBuf,
+    pub git_auth_file: Option<PathBuf>,
 }
 
 impl Config {
@@ -21,6 +22,10 @@ impl Config {
             workspace: env::var("POINTER_WORKSPACE")
                 .map(PathBuf::from)
                 .unwrap_or_else(|_| PathBuf::from("/workspace/repo")),
+            git_auth_file: env::var("POINTER_GIT_AUTH_CONFIG")
+                .ok()
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from),
         })
     }
 

@@ -20,6 +20,8 @@ public class FakeContainerRuntime implements ContainerRuntime {
     private final Set<ContainerSpec> claimed = ConcurrentHashMap.newKeySet();
     private final List<String> starts = new CopyOnWriteArrayList<>();
     private final List<String> removed = new CopyOnWriteArrayList<>();
+    private final Set<String> outdated = ConcurrentHashMap.newKeySet();
+    private final List<String> removedContainers = new CopyOnWriteArrayList<>();
 
     @Override
     public boolean isAvailable() {
@@ -53,6 +55,31 @@ public class FakeContainerRuntime implements ContainerRuntime {
         containers.remove(name);
         running.remove(name);
         removed.add(name);
+    }
+
+    @Override
+    public boolean isOutdated(String name, ContainerSpec spec) {
+        return outdated.contains(name);
+    }
+
+    @Override
+    public void removeContainer(String name) {
+        containers.remove(name);
+        running.remove(name);
+        outdated.remove(name);
+        removedContainers.add(name);
+    }
+
+    public void markOutdated(String name) {
+        outdated.add(name);
+    }
+
+    public List<String> removedContainers() {
+        return List.copyOf(removedContainers);
+    }
+
+    public List<ContainerSpec> createdNamed(String name) {
+        return created.stream().filter(spec -> spec.name().equals(name)).toList();
     }
 
     public ContainerSpec awaitCreatedForProject(Object projectId, Duration timeout) throws InterruptedException {

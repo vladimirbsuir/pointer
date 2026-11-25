@@ -43,6 +43,8 @@ Runner tests inside the `gui` image, gated by an environment variable set only i
 
 Measurements recorded with the tests: image size, memory of an idle display and of one with Chromium, and the peak process and thread count of Chromium and of `electron-todo` next to a parallel `cargo build`, which sets `pointer.container.pids-limit`.
 
+As implemented in phase 1.1: the runner tests are in `desktop/src-tauri/crates/pointer-executor/src/desktop/tests.rs` and run with `POINTER_DESKTOP_TESTS=1` inside the `gui` image (the command is in `infra/bench/desktop/README.md`), each test on its own display so they run in parallel. The fixtures `tk-counter`, `form-web` and `webkit-counter` (a `wry` window standing in for `tauri-counter`) are in `infra/bench/desktop/apps/`; `electron-todo`, `tauri-counter`, `gtk-notes`, `qt-settings` and `swing-calc` come with phase 1.5 and 1.6, so the Electron process peak is measured then. The measurements come from `infra/bench/desktop/measure.sh` and are in [desktop.md](../../benchmarks/desktop.md). The backend tests are `RepositoryProxyTests` (real `git` against `git http-backend` through the proxy), `ReceivePackCommandsTests`, `DockerContainerRuntimeTests` (a real container through Docker) and `RemoteExecutionTests`.
+
 ### 1.2 Backend and agent
 
 - `ToolRegistry`: desktop tools appear for a device with `desktop` and not for one without; for an offline runner the stored capabilities decide; a runner that never connected follows `pointer.container.desktop`.

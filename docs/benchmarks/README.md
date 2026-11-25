@@ -9,6 +9,7 @@ Measurements for the thesis. Each page describes its setup, results and threats 
 | [routing.md](routing.md) | Model routing ([F3](../features/f3-model-routing.md)) | `infra/bench/routing/run.py` |
 | [cache.md](cache.md) | Cache-aware context ([F5](../features/f5-cache-aware-context.md)) | `infra/bench/cache/run.py` |
 | [escalation.md](escalation.md) | Trajectory-aware escalation ([F6](../features/f6-trajectory-escalation.md)) | `infra/bench/escalation/` |
+| [desktop.md](desktop.md) | GUI testing sandbox ([F7](../features/f7-gui-sandbox/README.md)) | `infra/bench/desktop/` |
 
 ## Running the agent benchmarks locally
 

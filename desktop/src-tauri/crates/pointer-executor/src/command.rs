@@ -66,13 +66,16 @@ pub struct ProcessRun {
 pub async fn run_command(
     root: &Path,
     request: &Request,
+    environment: &[(String, String)],
     output: impl FnMut(&str, String),
     cancel: watch::Receiver<bool>,
 ) -> Result<ExecOutcome, ExecError> {
     let command = request.required_str("command")?;
     let directory = resolve(root, request.str_arg("workingDirectory").unwrap_or("."))?;
     let mut process = shell_command(command);
-    process.current_dir(&directory);
+    process
+        .current_dir(&directory)
+        .envs(environment.iter().map(|(key, value)| (key, value)));
     let run = run_process(process, None, request.timeout_ms, output, cancel).await?;
     let truncated = run.combined.truncated();
     let output_text = run.combined.into_text();
@@ -305,6 +308,7 @@ mod tests {
         let outcome = run_command(
             root.path(),
             &request(json!({"command": PRINT_AND_EXIT}), 30_000),
+            &[],
             |_, text| streamed.push_str(&text),
             cancel,
         )
@@ -329,6 +333,7 @@ mod tests {
         let error = run_command(
             root.path(),
             &request(json!({"command": SLEEP}), 1_500),
+            &[],
             |_, _| {},
             cancel,
         )
@@ -351,6 +356,7 @@ mod tests {
         let error = run_command(
             root.path(),
             &request(json!({"command": SLEEP}), 60_000),
+            &[],
             |_, _| {},
             cancel,
         )

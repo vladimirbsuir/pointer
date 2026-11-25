@@ -1,9 +1,9 @@
 use std::path::Path;
 use std::process::Command;
 
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use serde_json::{Value, json};
+
+use crate::git_auth::GitAuth;
 
 pub const PREPARE: &str = "pointer.repo_prepare";
 pub const PUBLISH: &str = "pointer.repo_publish";
@@ -25,10 +25,15 @@ impl RepoError {
 
 type RepoResult<T> = Result<T, RepoError>;
 
-pub fn handle(workspace: &Path, operation: &str, args: &Value) -> RepoResult<Value> {
+pub fn handle(
+    workspace: &Path,
+    operation: &str,
+    args: &Value,
+    auth: &GitAuth,
+) -> RepoResult<Value> {
     match operation {
-        PREPARE => prepare(workspace, args),
-        PUBLISH => publish(workspace, args),
+        PREPARE => prepare(workspace, args, auth),
+        PUBLISH => publish(workspace, args, auth),
         other => Err(RepoError::new(
             "unknown_operation",
             format!("Unknown operation {other}"),
@@ -36,17 +41,21 @@ pub fn handle(workspace: &Path, operation: &str, args: &Value) -> RepoResult<Val
     }
 }
 
-fn prepare(workspace: &Path, args: &Value) -> RepoResult<Value> {
+fn prepare(workspace: &Path, args: &Value, auth: &GitAuth) -> RepoResult<Value> {
     let clone_url = required(args, "cloneUrl")?;
     let branch = required(args, "branch")?;
-    let token = args["token"].as_str();
-    if !workspace.join(".git").is_dir() {
+    let remote = Some(auth);
+    if workspace.join(".git").is_dir() {
+        git(workspace, None)
+            .args(["remote", "set-url", "origin", clone_url])
+            .run("remote_failed")?;
+    } else {
         let parent = workspace
             .parent()
             .ok_or_else(|| RepoError::new("invalid_workspace", "The workspace has no parent"))?;
         std::fs::create_dir_all(parent)
             .map_err(|error| RepoError::new("io_error", error.to_string()))?;
-        git(parent, token)
+        git(parent, remote)
             .args(["clone", "--no-tags", clone_url])
             .arg(workspace)
             .run("clone_failed")?;
@@ -61,7 +70,7 @@ fn prepare(workspace: &Path, args: &Value) -> RepoResult<Value> {
             .args(["checkout", branch])
             .run("checkout_failed")?;
     } else {
-        git(workspace, token)
+        git(workspace, remote)
             .args(["fetch", "origin", &base_branch])
             .run("fetch_failed")?;
         git(workspace, None)
@@ -75,10 +84,10 @@ fn prepare(workspace: &Path, args: &Value) -> RepoResult<Value> {
     }))
 }
 
-fn publish(workspace: &Path, args: &Value) -> RepoResult<Value> {
+fn publish(workspace: &Path, args: &Value, auth: &GitAuth) -> RepoResult<Value> {
     let branch = required(args, "branch")?;
     let message = required(args, "message")?;
-    let token = args["token"].as_str();
+    let remote = Some(auth);
     git(workspace, None)
         .args(["add", "--all"])
         .run("add_failed")?;
@@ -94,7 +103,7 @@ fn publish(workspace: &Path, args: &Value) -> RepoResult<Value> {
     }
     let unpushed = !remote_contains_head(workspace, branch);
     if committed || unpushed {
-        git(workspace, token)
+        git(workspace, remote)
             .args([
                 "push",
                 "--quiet",
@@ -177,20 +186,13 @@ fn required<'a>(args: &'a Value, name: &str) -> RepoResult<&'a str> {
         .ok_or_else(|| RepoError::new("invalid_arguments", format!("Missing argument {name}")))
 }
 
-fn git(directory: &Path, token: Option<&str>) -> Command {
+fn git(directory: &Path, auth: Option<&GitAuth>) -> Command {
     let mut command = Command::new("git");
     command
         .current_dir(directory)
         .env("GIT_TERMINAL_PROMPT", "0");
-    if let Some(token) = token.filter(|token| !token.is_empty()) {
-        let credentials = STANDARD.encode(format!("x-access-token:{token}"));
-        command
-            .env("GIT_CONFIG_COUNT", "1")
-            .env("GIT_CONFIG_KEY_0", "http.extraHeader")
-            .env(
-                "GIT_CONFIG_VALUE_0",
-                format!("Authorization: Basic {credentials}"),
-            );
+    if let Some(auth) = auth {
+        auth.apply(&mut command);
     }
     command
 }
@@ -257,11 +259,13 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let workspace = root.path().join("repo");
         let clone_url = origin.path().to_string_lossy().to_string();
+        let auth = GitAuth::new("http://backend", None);
 
         let prepared = handle(
             &workspace,
             PREPARE,
             &json!({ "cloneUrl": clone_url, "branch": "pointer/abc-task" }),
+            &auth,
         )
         .unwrap();
         assert_eq!(prepared["baseBranch"], "main");
@@ -271,6 +275,7 @@ mod tests {
             &workspace,
             PUBLISH,
             &json!({ "branch": "pointer/abc-task", "message": "Empty" }),
+            &auth,
         )
         .unwrap();
         assert_eq!(nothing["committed"], false);
@@ -280,6 +285,7 @@ mod tests {
             &workspace,
             PUBLISH,
             &json!({ "branch": "pointer/abc-task", "message": "Add new file" }),
+            &auth,
         )
         .unwrap();
         assert_eq!(published["committed"], true);
@@ -299,8 +305,36 @@ mod tests {
             &workspace,
             PREPARE,
             &json!({ "cloneUrl": clone_url, "branch": "pointer/abc-task" }),
+            &auth,
         )
         .unwrap();
         assert_eq!(again["head"], published["commit"]);
+
+        let moved = tempfile::tempdir().unwrap();
+        run(
+            moved.path(),
+            &["clone", "--quiet", "--bare", &clone_url, "origin.git"],
+        );
+        let moved_url = moved
+            .path()
+            .join("origin.git")
+            .to_string_lossy()
+            .to_string();
+        handle(
+            &workspace,
+            PREPARE,
+            &json!({ "cloneUrl": moved_url, "branch": "pointer/abc-task" }),
+            &auth,
+        )
+        .unwrap();
+        let origin_url = Command::new("git")
+            .current_dir(&workspace)
+            .args(["remote", "get-url", "origin"])
+            .output()
+            .unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&origin_url.stdout).trim(),
+            moved_url
+        );
     }
 }

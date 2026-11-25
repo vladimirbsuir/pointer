@@ -9,7 +9,7 @@ The design is described in [ADR 0017](adr/0017-server-deployment.md); this page 
 |---|---|
 | `infra/deploy/compose.yml` | PostgreSQL with pgvector, the backend, the Docker socket proxy, optional Caddy |
 | `ghcr.io/vladimirbsuir/pointer-backend:latest` | built by the `Images` workflow on every push to `main` |
-| `ghcr.io/vladimirbsuir/pointer-runner:slim` / `:latest` | the same workflow; `slim` has git and Python, `latest` all toolchains |
+| `ghcr.io/vladimirbsuir/pointer-runner:slim` / `:latest` / `:gui` | the same workflow; `slim` has git and Python, `latest` all toolchains, `gui` adds a virtual display, Chromium and GUI toolkits for the desktop tools of [F7](features/f7-gui-sandbox/README.md) |
 | `infra/deploy/.env` | created on the server by `init-env.sh`, never committed |
 
 Scripts in `infra/deploy`:
@@ -25,7 +25,7 @@ All scripts print their options with `--help` and are safe to run again.
 ## 2. Requirements
 
 - Ubuntu 22.04+ or Debian 12+ with `git`, `curl`, `openssl`, a user with `sudo`.
-- At least 1 vCPU, 1 GB of RAM with swap and 3 GB of free disk for the slim runner. The full runner needs about 3 GB more disk and 4 GB of RAM per running session.
+- At least 1 vCPU, 1 GB of RAM with swap and 3 GB of free disk for the slim runner. The full runner needs about 3 GB more disk and 4 GB of RAM per running session; the gui runner about 1.3 GB more disk than full.
 - A DNS name pointing at the server. Without an own domain, `<ip-with-dashes>.sslip.io` resolves to the address, for example `46-183-21-5.sslip.io`.
 - Ports 80 and 443 open for the certificate and HTTPS.
 - A GitHub OAuth App with the callback URL `http://127.0.0.1/callback`; the one used for local development works, since the callback is a loopback address.

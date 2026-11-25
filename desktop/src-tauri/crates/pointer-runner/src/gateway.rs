@@ -11,6 +11,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 
 use crate::config::Config;
+use crate::git_auth::GitAuth;
 use crate::repo;
 
 const PROTOCOL_VERSION: u32 = 1;
@@ -75,10 +76,11 @@ pub async fn run(config: Config) {
     let http = reqwest::Client::new();
     let executor = Arc::new(Executor::default());
     let outbox = Arc::new(Outbox::default());
+    let git_auth = Arc::new(GitAuth::new(&config.api_url, config.git_auth_file.clone()));
     let mut backoff = MIN_BACKOFF;
     loop {
         let started = Instant::now();
-        match connect_once(&config, &http, &executor, &outbox).await {
+        match connect_once(&config, &http, &executor, &outbox, &git_auth).await {
             Err(TokenError::Revoked) => {
                 eprintln!("pointer-runner: the runner secret was revoked");
                 return;
@@ -97,7 +99,11 @@ pub async fn run(config: Config) {
     }
 }
 
-async fn fetch_token(config: &Config, http: &reqwest::Client) -> Result<String, TokenError> {
+async fn fetch_token(
+    config: &Config,
+    http: &reqwest::Client,
+    git_auth: &GitAuth,
+) -> Result<String, TokenError> {
     let response = http
         .post(format!("{}/api/v1/runner/token", config.api_url))
         .json(&json!({ "deviceId": config.device_id, "secret": config.runner_secret }))
@@ -113,11 +119,13 @@ async fn fetch_token(config: &Config, http: &reqwest::Client) -> Result<String, 
             response.status()
         )));
     }
-    response
+    let token = response
         .json::<TokenResponse>()
         .await
         .map(|body| body.access_token)
-        .map_err(|error| TokenError::Unavailable(error.to_string()))
+        .map_err(|error| TokenError::Unavailable(error.to_string()))?;
+    git_auth.update(&token);
+    Ok(token)
 }
 
 async fn connect_once(
@@ -125,8 +133,9 @@ async fn connect_once(
     http: &reqwest::Client,
     executor: &Arc<Executor>,
     outbox: &Arc<Outbox>,
+    git_auth: &Arc<GitAuth>,
 ) -> Result<(), TokenError> {
-    let token = fetch_token(config, http).await?;
+    let token = fetch_token(config, http, git_auth).await?;
     let mut request = config
         .gateway_url()
         .into_client_request()
@@ -144,6 +153,10 @@ async fn connect_once(
     outbox.attach(Some(sender));
 
     let interpreters: Vec<&str> = executor.interpreters().await.names();
+    let mut capabilities = vec!["executor"];
+    if pointer_executor::desktop_supported() {
+        capabilities.push("desktop");
+    }
     outbox.send(
         "hello",
         json!({
@@ -152,7 +165,7 @@ async fn connect_once(
             "deviceName": "Pointer runner",
             "clientVersion": CLIENT_VERSION,
             "platform": { "os": std::env::consts::OS, "arch": std::env::consts::ARCH, "shell": "sh" },
-            "capabilities": ["executor"],
+            "capabilities": capabilities,
             "interpreters": interpreters,
             "projects": [config.project_id],
             "undeliveredResults": outbox.take_undelivered(),
@@ -171,10 +184,11 @@ async fn connect_once(
         let config = config.clone();
         let http = http.clone();
         let outbox = outbox.clone();
+        let git_auth = git_auth.clone();
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(TOKEN_REFRESH_INTERVAL).await;
-                if let Ok(token) = fetch_token(&config, &http).await {
+                if let Ok(token) = fetch_token(&config, &http, &git_auth).await {
                     outbox.send("auth.refresh", json!({ "accessToken": token }));
                 }
             }
@@ -191,7 +205,13 @@ async fn connect_once(
             continue;
         };
         match envelope["type"].as_str().unwrap_or_default() {
-            "exec.request" => handle_request(config, executor, outbox, envelope["payload"].clone()),
+            "exec.request" => handle_request(
+                config,
+                executor,
+                outbox,
+                git_auth,
+                envelope["payload"].clone(),
+            ),
             "exec.cancel" => {
                 executor.cancel(envelope["payload"]["callId"].as_str().unwrap_or_default())
             }
@@ -204,7 +224,13 @@ async fn connect_once(
     Ok(())
 }
 
-fn handle_request(config: &Config, executor: &Arc<Executor>, outbox: &Arc<Outbox>, payload: Value) {
+fn handle_request(
+    config: &Config,
+    executor: &Arc<Executor>,
+    outbox: &Arc<Outbox>,
+    git_auth: &Arc<GitAuth>,
+    payload: Value,
+) {
     let operation = payload["operation"]
         .as_str()
         .unwrap_or_default()
@@ -212,12 +238,13 @@ fn handle_request(config: &Config, executor: &Arc<Executor>, outbox: &Arc<Outbox
     if operation == repo::PREPARE || operation == repo::PUBLISH {
         let workspace = config.workspace.clone();
         let outbox = outbox.clone();
+        let git_auth = git_auth.clone();
         tokio::spawn(async move {
             let started = Instant::now();
             let call_id = payload["callId"].as_str().unwrap_or_default().to_string();
             let arguments = payload["arguments"].clone();
             let outcome = tokio::task::spawn_blocking(move || {
-                repo::handle(&workspace, &operation, &arguments)
+                repo::handle(&workspace, &operation, &arguments, &git_auth)
             })
             .await
             .unwrap_or_else(|error| {

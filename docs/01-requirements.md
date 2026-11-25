@@ -207,6 +207,24 @@ Specified in [F4](features/f4-agent-memory.md).
 | CACHE-6 | A provider can be marked to receive a prompt cache key (the session id) with every request. | F5 |
 | CACHE-7 | A benchmark compares the strategies on cost, tokens, cache use, compactions, task success and recall. | F5 |
 
+### 2.16 GUI testing sandbox (GUI)
+
+| ID | Requirement | Priority |
+|---|---|---|
+| GUI-1 | The runner image has a graphics variant; a runner started from it reports the device capability `desktop`, one without the display stack does not ([F7](features/f7-gui-sandbox/README.md)). | F7 |
+| GUI-2 | The agent can start a virtual display, launch and stop long-running GUI processes on it, take screenshots and wait for a window or a log line. | F7 |
+| GUI-3 | The agent can move the pointer, click, drag, scroll, type and press keys; input returns a screenshot taken after the interface settled, in the coordinate space of the model. | F7 |
+| GUI-4 | Desktop tools are offered only in Agent mode, on an executor with `desktop` and a step model with vision; a fast tier without vision escalates. | F7 |
+| GUI-5 | Screenshots are stored as session attachments, shown in the conversation and sent to the model after the tool results of the step. | F7 |
+| GUI-6 | Old screenshots are masked in blocks so the prompt prefix stays stable, under every context strategy. | F7 |
+| GUI-7 | The user can watch the display live and read-only through a VNC stream relayed and authorized by the backend. | F7 |
+| GUI-8 | The agent can read an accessibility tree and click an element by its id. | F7 |
+| GUI-9 | The display and its processes stop with the container; size, images, memory, shared memory and process count are bounded. | F7 |
+| GUI-10 | A benchmark measures success, steps, time, tokens and cost of GUI tasks per model, click accuracy, and the effect of masking and of the tree. | F7 |
+| GUI-11 | (Stage 2) A session on the user's computer can get a sandbox container with the same tools. | F7 |
+| GUI-12 | (Stage 2) Code reaches that sandbox with the user's consent and the sandbox is bounded and cleaned up. | F7 |
+| GUI-13 | Commands in a runner container run as root with a reduced capability set; the GitHub token never enters the container and pushes go through a backend proxy that allows the session branch only. | F7 |
+
 ## 3. Non-functional requirements
 
 | ID | Requirement |

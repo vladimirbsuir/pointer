@@ -13,4 +13,8 @@ public interface ContainerRuntime {
     void stop(String name);
 
     void remove(String name, String volume);
+
+    boolean isOutdated(String name, ContainerSpec spec);
+
+    void removeContainer(String name);
 }

@@ -31,6 +31,15 @@ class ContainerConfiguration {
     }
 
     @Bean
+    RepositoryProxy repositoryProxy(
+            ContainerProperties properties,
+            RemoteWorkspaceRepository workspaces,
+            DeviceService devices,
+            UserService users) {
+        return new RepositoryProxy(properties, workspaces, devices, users);
+    }
+
+    @Bean
     RemoteSessionService remoteSessionService(
             ContainerProperties properties,
             ContainerRuntime runtime,

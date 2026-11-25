@@ -56,10 +56,12 @@ pointer:
     cpus: ${POINTER_RUNNER_CPUS:2}
     memory: ${POINTER_RUNNER_MEMORY:4GB}
     pids-limit: 512
+    shm-size: 512MB
     max-running: ${POINTER_RUNNER_MAX_RUNNING:2}
     idle-timeout: 30m
     prepare-timeout: 10m
     github-api-url: ${pointer.github.api-url}
+    github-git-url: ${POINTER_GITHUB_GIT_URL:https://github.com}
   memory:
     curation-enabled: ${POINTER_MEMORY_CURATION_ENABLED:true}
     curation-idle: ${POINTER_MEMORY_CURATION_IDLE:15m}

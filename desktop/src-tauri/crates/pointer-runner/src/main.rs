@@ -1,5 +1,6 @@
 mod config;
 mod gateway;
+mod git_auth;
 mod repo;
 
 use std::process::ExitCode;

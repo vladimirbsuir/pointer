@@ -3,12 +3,13 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: ./init-env.sh --domain DOMAIN [--runner slim|full] [--max-running N] [--bundled-proxy] [--force]
+Usage: ./init-env.sh --domain DOMAIN [--runner slim|full|gui] [--max-running N] [--bundled-proxy] [--force]
 
 Creates .env next to compose.yml with generated secrets. An existing .env is kept unless --force is given.
 
   --domain DOMAIN    public name of the backend, for example 203-0-113-7.sslip.io
-  --runner VARIANT   runner image: slim (git, Python, about 340 MB, default) or full (all toolchains, about 2.8 GB)
+  --runner VARIANT   runner image: slim (git, Python, about 340 MB, default), full (all toolchains, about 2.8 GB)
+                     or gui (full plus a virtual display and GUI toolkits, about 4 GB)
   --max-running N    session containers running at once (default 1)
   --bundled-proxy    start the bundled Caddy on ports 80 and 443 for hosts without a reverse proxy
   --force            overwrite an existing .env; the database password changes too
@@ -42,7 +43,8 @@ fi
 case "$runner" in
   slim) runner_image=ghcr.io/vladimirbsuir/pointer-runner:slim; runner_cpus=1; runner_memory=512MB ;;
   full) runner_image=ghcr.io/vladimirbsuir/pointer-runner:latest; runner_cpus=2; runner_memory=4GB ;;
-  *) echo "--runner is slim or full." >&2; exit 2 ;;
+  gui) runner_image=ghcr.io/vladimirbsuir/pointer-runner:gui; runner_cpus=2; runner_memory=4GB ;;
+  *) echo "--runner is slim, full or gui." >&2; exit 2 ;;
 esac
 if [ -f .env ] && [ "$force" != true ]; then
   echo ".env already exists; edit it or pass --force." >&2

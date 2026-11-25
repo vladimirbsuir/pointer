@@ -14,7 +14,9 @@ record ContainerProperties(
         double cpus,
         DataSize memory,
         long pidsLimit,
+        DataSize shmSize,
         int maxRunning,
         Duration idleTimeout,
         Duration prepareTimeout,
-        String githubApiUrl) {}
+        String githubApiUrl,
+        String githubGitUrl) {}

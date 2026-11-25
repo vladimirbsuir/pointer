@@ -1,6 +1,7 @@
 mod chunker;
 mod command;
 mod custom_tool;
+mod desktop;
 mod files;
 mod index;
 mod paths;
@@ -9,6 +10,7 @@ mod web;
 mod worktree;
 
 pub use custom_tool::Interpreters;
+pub use desktop::is_supported as desktop_supported;
 pub use files::read_attachment;
 pub use search::suggest_files;
 pub use worktree::Worktree;
@@ -129,6 +131,7 @@ impl Workspace {
 pub struct Executor {
     running: Mutex<HashMap<String, watch::Sender<bool>>>,
     interpreters: OnceCell<Interpreters>,
+    desktop: desktop::Desktop,
 }
 
 impl Executor {
@@ -167,6 +170,7 @@ impl Executor {
                         call_id: &call_id,
                         mcp: mcp.as_deref(),
                         interpreters,
+                        desktop: executor.desktop.clone(),
                         emit: emit.clone(),
                     };
                     execute(workspace, request, context, cancel).await
@@ -203,6 +207,7 @@ struct Context<'a> {
     call_id: &'a str,
     mcp: Option<&'a dyn McpCaller>,
     interpreters: &'a Interpreters,
+    desktop: desktop::Desktop,
     emit: Emit,
 }
 
@@ -249,7 +254,9 @@ async fn execute(
     }
     let root = workspace.root()?;
     if request.operation == "run_command" {
-        return command::run_command(&root, &request, context.output_sink(), cancel).await;
+        let environment = context.desktop.environment();
+        return command::run_command(&root, &request, &environment, context.output_sink(), cancel)
+            .await;
     }
     if request.operation == "custom_tool.run" {
         return custom_tool::run(
@@ -263,7 +270,9 @@ async fn execute(
         .await;
     }
     let operation = request.operation.clone();
+    let desktop = context.desktop.clone();
     let task = tokio::task::spawn_blocking(move || match operation.as_str() {
+        operation if desktop::is_operation(operation) => desktop.handle(&root, &request),
         "list_directory" => files::list_directory(&root, &request),
         "read_file" => files::read_file(&root, &request),
         "write_file" => files::write_file(&root, &request),

@@ -99,8 +99,8 @@ class RemoteExecutionTests extends AgentIntegrationTest {
             var prepare = requests.getFirst();
             assertThat(prepare.path("operation").asString()).isEqualTo("pointer.repo_prepare");
             assertThat(prepare.path("arguments").path("cloneUrl").asString())
-                    .isEqualTo("https://github.com/" + REPOSITORY + ".git");
-            assertThat(prepare.path("arguments").path("token").asString()).isEqualTo(GITHUB_TOKEN);
+                    .isEqualTo("http://host.docker.internal:8080/api/v1/runner/git/" + REPOSITORY + ".git");
+            assertThat(prepare.path("arguments").has("token")).isFalse();
             assertThat(prepare.path("arguments").path("baseBranch").asString()).isEqualTo("main");
 
             client.post()
@@ -125,7 +125,7 @@ class RemoteExecutionTests extends AgentIntegrationTest {
                 .containsExactly("pointer.repo_prepare", "run_command", "pointer.repo_publish");
         var publish = requests.getLast();
         assertThat(publish.path("arguments").path("message").asString()).isEqualTo("Run the tests");
-        assertThat(publish.path("arguments").path("token").asString()).isEqualTo(GITHUB_TOKEN);
+        assertThat(publish.path("arguments").has("token")).isFalse();
 
         when(gitHub.openPullRequest(eq(GITHUB_TOKEN), any()))
                 .thenReturn("https://github.com/" + REPOSITORY + "/pull/7");
@@ -138,6 +138,49 @@ class RemoteExecutionTests extends AgentIntegrationTest {
                 .expectBody()
                 .jsonPath("$.url")
                 .isEqualTo("https://github.com/" + REPOSITORY + "/pull/7");
+    }
+
+    @Test
+    void outdatedContainerIsRecreatedOnTheSameVolumeWhenTheSessionWakes() throws Exception {
+        var setup = remoteSetUp();
+        llm.enqueueToolCall("call_1", "run_command", "{\"command\":\"ls\"}");
+        llm.enqueueText("Done.");
+        var sessionId = UUID.fromString(
+                createRemoteSession(setup).path("session").path("id").asString());
+        var name = "pointer-session-" + sessionId;
+
+        try (var runner = startRunner(setup, new CopyOnWriteArrayList<>())) {
+            awaitWorkspace(
+                    setup,
+                    sessionId,
+                    workspace -> "ready".equals(workspace.path("status").asString()));
+            fakeRuntime().stop(name);
+            jdbc.sql("update remote_workspaces set status = 'stopped' where session_id = ?")
+                    .param(sessionId)
+                    .update();
+            fakeRuntime().markOutdated(name);
+
+            client.post()
+                    .uri("/api/v1/sessions/{id}/messages", sessionId)
+                    .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                    .body(Map.of("text", "List the files"))
+                    .exchange()
+                    .expectStatus()
+                    .isAccepted();
+
+            awaitTrue(() -> fakeRuntime().createdNamed(name).size() == 2);
+            awaitWorkspace(
+                    setup,
+                    sessionId,
+                    workspace -> "ready".equals(workspace.path("status").asString()));
+        }
+
+        assertThat(fakeRuntime().removedContainers()).contains(name);
+        assertThat(fakeRuntime().removed()).doesNotContain(name);
+        var specs = fakeRuntime().createdNamed(name);
+        assertThat(specs.getLast().volume()).isEqualTo(specs.getFirst().volume());
+        assertThat(specs.getLast().environment().get("POINTER_RUNNER_SECRET"))
+                .isNotEqualTo(specs.getFirst().environment().get("POINTER_RUNNER_SECRET"));
     }
 
     @Test

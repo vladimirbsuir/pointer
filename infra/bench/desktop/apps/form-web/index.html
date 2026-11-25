@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>form-web</title>
+<style>
+  body { margin: 0; font: 16px "DejaVu Sans", sans-serif; background: #ffffff; }
+  #list { list-style: none; margin: 24px; padding: 0; width: 320px; }
+  #list li { height: 56px; margin-bottom: 12px; color: #ffffff; display: flex; align-items: center; padding-left: 16px; cursor: grab; }
+  #list li[data-id="A"] { background: #ff0000; }
+  #list li[data-id="B"] { background: #00ff00; color: #000000; }
+  #list li[data-id="C"] { background: #0000ff; }
+  #list li[data-id="D"] { background: #ff00ff; }
+  #text { margin: 0 24px; font-size: 18px; width: 320px; height: 40px; border: none; background: #ffff00; }
+</style>
+</head>
+<body>
+<ul id="list">
+  <li draggable="true" data-id="A">A</li>
+  <li draggable="true" data-id="B">B</li>
+  <li draggable="true" data-id="C">C</li>
+  <li draggable="true" data-id="D">D</li>
+</ul>
+<input id="text" type="text" autocomplete="off">
+<script>
+  const list = document.getElementById("list");
+  const text = document.getElementById("text");
+  let dragged = null;
+
+  function report() {
+    const order = [...list.children].map((item) => item.dataset.id).join("");
+    document.title = "form-web " + JSON.stringify({ order, text: text.value });
+  }
+
+  list.addEventListener("dragstart", (event) => {
+    dragged = event.target;
+    event.dataTransfer.setData("text/plain", dragged.dataset.id);
+  });
+  list.addEventListener("dragover", (event) => event.preventDefault());
+  list.addEventListener("drop", (event) => {
+    event.preventDefault();
+    const target = event.target.closest("li");
+    if (!dragged || !target || target === dragged) {
+      return;
+    }
+    const after = event.clientY > target.getBoundingClientRect().top + target.offsetHeight / 2;
+    list.insertBefore(dragged, after ? target.nextSibling : target);
+    dragged = null;
+    report();
+  });
+  text.addEventListener("input", report);
+  report();
+</script>
+</body>
+</html>

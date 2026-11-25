@@ -330,6 +330,10 @@ public class RemoteSessionService {
         }
         var workspace = workspaces.findById(workspaceId).orElseThrow();
         try {
+            if (runtime.isOutdated(workspace.getContainerName(), spec(workspace, ""))) {
+                log.info("Recreating outdated container {}", workspace.getContainerName());
+                runtime.removeContainer(workspace.getContainerName());
+            }
             if (!runtime.exists(workspace.getContainerName())) {
                 var secret = devices.rotateRunnerSecret(workspace.getDeviceId());
                 runtime.create(spec(workspace, secret));
@@ -346,8 +350,7 @@ public class RemoteSessionService {
             return;
         }
         var arguments = new LinkedHashMap<String, Object>();
-        arguments.put("cloneUrl", "https://github.com/" + workspace.getRepository() + ".git");
-        arguments.put("token", credentials.accessToken());
+        arguments.put("cloneUrl", RepositoryProxy.cloneUrl(properties.apiUrl(), workspace.getRepository()));
         arguments.put("branch", workspace.getBranch());
         arguments.put("baseBranch", workspace.getBaseBranch());
         arguments.put("authorName", credentials.login());
@@ -439,7 +442,6 @@ public class RemoteSessionService {
             var arguments = new LinkedHashMap<String, Object>();
             arguments.put("branch", workspace.getBranch());
             arguments.put("message", commitMessage(sessionId, turnId));
-            arguments.put("token", credentials.accessToken());
             var result = runRepoOperation(workspace, PUBLISH, arguments, PUBLISH_TIMEOUT);
             update(workspace.getId(), current -> {
                 var now = clock.instant();

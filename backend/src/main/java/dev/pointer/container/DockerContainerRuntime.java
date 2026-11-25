@@ -8,15 +8,24 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeSet;
 import tools.jackson.databind.json.JsonMapper;
 
 class DockerContainerRuntime implements ContainerRuntime {
+
+    static final String SPEC_LABEL = "dev.pointer.spec";
+    static final String ROOT = "0";
+    static final List<String> CAPABILITIES =
+            List.of("CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL", "NET_BIND_SERVICE", "SETGID", "SETUID");
 
     private static final String WORKSPACE = "/workspace";
     private static final int OK = 200;
@@ -81,14 +90,64 @@ class DockerContainerRuntime implements ContainerRuntime {
 
     @Override
     public void remove(String name, String volume) {
-        var removed = call(DockerHttpClient.Request.Method.DELETE, "/containers/" + encode(name) + "?force=true", null);
-        if (removed.status() != NOT_FOUND) {
-            removed.ensureSuccess("remove the container");
-        }
+        removeContainer(name);
         var volumeRemoved =
                 call(DockerHttpClient.Request.Method.DELETE, "/volumes/" + encode(volume) + "?force=true", null);
         if (volumeRemoved.status() != NOT_FOUND) {
             volumeRemoved.ensureSuccess("remove the volume");
+        }
+    }
+
+    @Override
+    public void removeContainer(String name) {
+        var removed = call(DockerHttpClient.Request.Method.DELETE, "/containers/" + encode(name) + "?force=true", null);
+        if (removed.status() != NOT_FOUND) {
+            removed.ensureSuccess("remove the container");
+        }
+    }
+
+    @Override
+    public boolean isOutdated(String name, ContainerSpec spec) {
+        var inspect = call(DockerHttpClient.Request.Method.GET, "/containers/" + encode(name) + "/json", null);
+        if (inspect.status() == NOT_FOUND) {
+            return false;
+        }
+        inspect.ensureSuccess("inspect the container");
+        var container = json.readTree(inspect.body());
+        var label = container.path("Config").path("Labels").path(SPEC_LABEL).asString("");
+        if (!label.equals(specHash(spec))) {
+            return true;
+        }
+        var image = call(DockerHttpClient.Request.Method.GET, "/images/" + encode(properties.image()) + "/json", null);
+        if (image.status() == NOT_FOUND) {
+            return false;
+        }
+        image.ensureSuccess("inspect the runner image");
+        var imageId = json.readTree(image.body()).path("Id").asString("");
+        return !imageId.isEmpty() && !imageId.equals(container.path("Image").asString(""));
+    }
+
+    String specHash(ContainerSpec spec) {
+        var canonical = String.join(
+                ";",
+                "image=" + properties.image(),
+                "user=" + ROOT,
+                "capAdd=" + String.join(",", CAPABILITIES),
+                "capDrop=ALL",
+                "securityOpt=no-new-privileges",
+                "init=true",
+                "shm=" + properties.shmSize().toBytes(),
+                "pids=" + properties.pidsLimit(),
+                "memory=" + properties.memory().toBytes(),
+                "cpus=" + properties.cpus(),
+                "network=" + (properties.network() == null ? "" : properties.network()),
+                "environment="
+                        + String.join(",", new TreeSet<>(spec.environment().keySet())));
+        try {
+            var digest = MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest, 0, 8);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(exception);
         }
     }
 
@@ -110,17 +169,23 @@ class DockerContainerRuntime implements ContainerRuntime {
         hostConfig.put("NanoCpus", Math.round(properties.cpus() * 1_000_000_000L));
         hostConfig.put("Memory", properties.memory().toBytes());
         hostConfig.put("PidsLimit", properties.pidsLimit());
+        hostConfig.put("ShmSize", properties.shmSize().toBytes());
+        hostConfig.put("Init", true);
         hostConfig.put("CapDrop", List.of("ALL"));
+        hostConfig.put("CapAdd", CAPABILITIES);
         hostConfig.put("SecurityOpt", List.of("no-new-privileges"));
         hostConfig.put("ExtraHosts", List.of("host.docker.internal:host-gateway"));
         hostConfig.put("LogConfig", Map.of("Type", "json-file", "Config", Map.of("max-size", "10m", "max-file", "2")));
         if (properties.network() != null && !properties.network().isBlank()) {
             hostConfig.put("NetworkMode", properties.network());
         }
+        var labels = new LinkedHashMap<>(spec.labels());
+        labels.put(SPEC_LABEL, specHash(spec));
         var body = new LinkedHashMap<String, Object>();
         body.put("Image", properties.image());
+        body.put("User", ROOT);
         body.put("Env", environment);
-        body.put("Labels", spec.labels());
+        body.put("Labels", labels);
         body.put("WorkingDir", WORKSPACE);
         body.put("HostConfig", hostConfig);
         var created =

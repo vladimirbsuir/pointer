@@ -47,7 +47,7 @@ ENV DISPLAY=:99 \
     ELECTRON_DISABLE_SANDBOX=1
 ```
 
-Package names and variables are indicative; the exact list is fixed in phase 1.1 by building and starting the fixture applications. What each part is for:
+Package names and variables are indicative; the exact list is fixed in phase 1.1 by building and starting the fixture applications. As built in phase 1.1 the list also has `xauth` and `dbus`, uses `libgtk-3-0t64`, and the image sets `LANG=C.UTF-8`, which `xdotool type` needs for non-ASCII text. The wrapper `pointer-chromium` is written by the Dockerfile itself, because the build context is `desktop/src-tauri`. What each part is for:
 
 | Part | Purpose |
 |---|---|
@@ -75,11 +75,11 @@ Environment variables:
 | `DISPLAY=:99` | Every process in the container finds the display, including those started by `run_command`. |
 | `LIBGL_ALWAYS_SOFTWARE=1` | Mesa renders in software. WebGL and heavy animation run slowly; this is a stated limit, not a bug to fix. |
 | `GDK_BACKEND=x11`, `QT_QPA_PLATFORM=xcb` | Force GTK and Qt to X11; there is no Wayland. |
-| `WEBKIT_DISABLE_DMABUF_RENDERER=1`, `WEBKIT_DISABLE_COMPOSITING_MODE=1` | WebKitGTK, and therefore Tauri, shows a blank window when its DMA-BUF and accelerated compositing paths have no GPU behind them. Phase 1.1 confirms which of the two is needed under Xvfb with `tauri-counter`. |
+| `WEBKIT_DISABLE_DMABUF_RENDERER=1`, `WEBKIT_DISABLE_COMPOSITING_MODE=1` | WebKitGTK, and therefore Tauri, shows a blank window when its DMA-BUF and accelerated compositing paths have no GPU behind them. Phase 1.1 found that WebKitGTK 2.50 of Debian trixie renders under Xvfb without either; both stay as a safeguard ([desktop.md](../../benchmarks/desktop.md)). |
 | `WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1`, `ELECTRON_DISABLE_SANDBOX=1` | WebKitGTK's bubblewrap sandbox and Electron's Chromium sandbox need user namespaces and refuse root; the container is the sandbox. |
 | `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`, `ACCESSIBILITY_ENABLED=1` | Qt and Chromium-based applications (Electron, Chromium) export their accessibility tree only when they detect an assistive technology; these force it. Confirmed per toolkit in phase 1.5. |
 
-The image size grows by an estimated several hundred megabytes over `full`, mostly Chromium, WebKitGTK and the Java runtime. Phase 1.1 measures it.
+The image size grows by 1.24 GB unpacked over `full` (3.24 GB in total, 1.18 GB compressed), mostly Chromium, WebKitGTK and the Java runtime ([desktop.md](../../benchmarks/desktop.md)).
 
 ## Privileges (GUI-13)
 
@@ -117,15 +117,17 @@ Creating the pull request already happens on the backend with the user's token a
 
 ### Outdated containers
 
-Containers created before a phase lack its changes: root and capabilities in phase 1.1, the `gui` image when it becomes the default, the view passwords in phase 1.4. The `container` module labels each container with a hash of its spec (image, user, capabilities, shared memory, process limit, published ports and the names of its environment values). When a container is started and its label differs from the current spec, it is removed and created again on the same volume. The checkout survives; installed packages and running processes do not, as after any container restart.
+Containers created before a phase lack its changes: root and capabilities in phase 1.1, the `gui` image when it becomes the default, the view passwords in phase 1.4. The `container` module labels each container with a hash of its spec (`dev.pointer.spec`: image name, user, capabilities, security options, init, shared memory, process limit, memory, CPUs, network, published ports and the names of its environment values). When a container is started and its label differs from the current spec, or the container was created from another image ID than the configured image name now resolves to (a rebuilt `latest` with a new runner), it is removed and created again on the same volume. The checkout survives; installed packages and running processes do not, as after any container restart.
+
+Implemented in phase 1.1 together with two settings the display needs in every container: `Init: true`, so Docker's init is PID 1 and reaps processes orphaned by GUI applications and killed process groups, and `ShmSize` from `pointer.container.shm-size`.
 
 ## Display lifecycle
 
 The runner owns the display. Nothing starts at container start, so a session that never uses a GUI pays nothing.
 
-1. `desktop_start` runs `Xvfb :99 -screen 0 <width>x<height>x24 -nolisten tcp`, waits until `xdpyinfo` succeeds (at most 10 seconds), starts a D-Bus session bus and `openbox`, and records the state. Width and height default to 1280x800 and are bounded to 800x600 up to 1920x1200.
+1. `desktop_start` runs `Xvfb :99 -screen 0 <width>x<height>x24 -nolisten tcp`, waits until `xdpyinfo` succeeds (at most 10 seconds), starts a D-Bus session bus and `openbox`, waits until openbox has published `_NET_CLIENT_LIST` (its end of start-up; a window opened earlier stays unmapped), and records the state. Stale X lock files of a display whose server is gone, left by a stopped container, are removed first. Width and height default to 1280x800 and are bounded to 800x600 up to 1920x1200.
 2. The call is idempotent. When the display is already running, a call without dimensions or with the current ones returns the current state; a call with other dimensions fails with `display_running` instead of resizing.
-3. After start the runner adds `DBUS_SESSION_BUS_ADDRESS` to its own environment, so every process started afterwards, by `desktop_launch` or by `run_command`, finds the session bus and through it the accessibility bus.
+3. After start the runner passes `DISPLAY` and `DBUS_SESSION_BUS_ADDRESS` to every process it starts afterwards, by `desktop_launch` or by `run_command`, so they find the display, the session bus and through it the accessibility bus.
 4. The display stays up until the container stops. There is no `desktop_stop` for the display, only for processes: restarting the display would kill every window and the agent has no use for it.
 5. A container stopped for idleness ([ADR 0016](../../adr/0016-remote-execution-in-containers.md)) loses the display and the processes. The next `desktop_*` call on a fresh container fails with `display_not_started`; the agent starts it again. The checkout survives on the volume, the running application does not.
 
@@ -172,8 +174,8 @@ After `desktop_start`, anything started with `run_command` that opens a window (
 | Display size | 800x600 to 1920x1200, default 1280x800 | `pointer.desktop.default-width`, `default-height` |
 | Image sent to the model | At most 1280x800, aspect ratio kept; larger displays are scaled down | `pointer.desktop.max-image-width`, `max-image-height` |
 | Shared memory | 512 MB, needed by browsers | container spec `shmSize` (new field, set for every runner container) |
-| Process count | `pointer.container.pids-limit`, today 512, which counts threads as well as processes. A browser or Electron next to a parallel build can approach it; phase 1.1 measures the peak and raises the default if needed | container spec `PidsLimit` |
-| Container memory | measured in phase 1.1; an idle display with a browser is expected to need several hundred megabytes more than a runner without one | `pointer.container.memory` |
+| Process count | `pointer.container.pids-limit`, 512, which counts threads as well as processes. Chromium next to a parallel `cargo build` peaked at 283, so the default stays | container spec `PidsLimit` |
+| Container memory | unchanged: an idle display needs 26 MB and one with Chromium about 160 MB ([desktop.md](../../benchmarks/desktop.md)) | `pointer.container.memory` |
 | Live processes | 8 | `pointer.desktop.max-processes` |
 | Wait | 10 seconds for a plain wait, 120 seconds for a wait on a condition | `pointer.desktop.max-wait-ms`, `max-condition-wait-ms` |
 | Viewers per session | 2 | `pointer.desktop.max-viewers` |

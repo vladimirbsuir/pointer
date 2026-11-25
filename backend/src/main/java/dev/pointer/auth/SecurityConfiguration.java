@@ -60,6 +60,8 @@ class SecurityConfiguration {
                         .permitAll()
                         .requestMatchers("/ws")
                         .authenticated()
+                        .requestMatchers("/api/v1/runner/git/**")
+                        .authenticated()
                         .anyRequest()
                         .access((authentication, context) ->
                                 new AuthorizationDecision(isUserToken(authentication.get()))))

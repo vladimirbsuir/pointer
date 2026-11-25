@@ -57,6 +57,15 @@ public class DeviceService {
                 && devices.findById(deviceId).filter(Device::isRunner).isPresent();
     }
 
+    @Transactional(readOnly = true)
+    public boolean isActiveRunner(UUID deviceId) {
+        return deviceId != null
+                && devices.findById(deviceId)
+                        .filter(Device::isRunner)
+                        .filter(device -> !device.isRevoked())
+                        .isPresent();
+    }
+
     public record RunnerDevice(UUID id, String secret) {}
 
     @Transactional
