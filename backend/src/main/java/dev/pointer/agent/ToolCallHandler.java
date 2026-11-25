@@ -1,5 +1,6 @@
 package dev.pointer.agent;
 
+import dev.pointer.agent.desktop.DesktopCalls;
 import dev.pointer.customtool.CustomToolService;
 import dev.pointer.customtool.ProposeTool;
 import dev.pointer.execution.ExecutionListener;
@@ -51,6 +52,7 @@ class ToolCallHandler {
     private final SessionEventBus bus;
     private final JsonMapper json;
     private final CustomToolService customTools;
+    private final DesktopCalls desktop;
 
     void handle(TurnScope scope, int step, String providerCallId, String toolName, String argumentsJson) {
         handle(scope, null, step, providerCallId, toolName, argumentsJson);
@@ -113,6 +115,10 @@ class ToolCallHandler {
                     "Tool " + toolName + " is not available in " + scope.mode() + " mode.");
             return;
         }
+        if (tool.isDesktop() && !scope.step().vision()) {
+            fail(scope, itemId, ToolErrorCodes.NEEDS_VISION, needsVisionMessage(scope.step()));
+            return;
+        }
         var autoApprove =
                 sessionService.owned(scope.userId(), scope.sessionId()).isAutoApprove();
         var policy = permissions.evaluate(
@@ -129,6 +135,13 @@ class ToolCallHandler {
                     scope.userId(), scope.sessionId(), itemId, Map.of("customToolVersion", tool.getVersion()));
         }
         execute(scope, itemId, tool, arguments);
+    }
+
+    private static String needsVisionMessage(StepModel step) {
+        var message = "Not run: the desktop tools need a model that can see the screen.";
+        return step.visionFallback() == null
+                ? message
+                : message + " The turn continues on " + step.visionFallback() + ".";
     }
 
     void proposeTool(TurnScope scope, int step, String providerCallId, String argumentsJson) {
@@ -234,6 +247,11 @@ class ToolCallHandler {
             preview.put("server", tool.getMcpServer());
             preview.put("tool", tool.getMcpTool());
             preview.put("arguments", arguments);
+        } else if (tool.isDesktop()) {
+            preview = new LinkedHashMap<>();
+            preview.put("kind", "desktop");
+            preview.put("tool", tool.getName());
+            preview.put("arguments", arguments);
         } else if (WEB_FETCH.equals(tool.getOperation())) {
             preview = new LinkedHashMap<>();
             preview.put("kind", "fetch");
@@ -280,7 +298,49 @@ class ToolCallHandler {
         return true;
     }
 
+    private void executeDesktop(TurnScope scope, UUID itemId, ToolDefinition tool, Map<String, Object> arguments) {
+        writer.updateItem(scope.userId(), scope.sessionId(), itemId, Map.of("toolStatus", "running"));
+        var context = new DesktopCalls.CallContext(
+                scope.sessionId(),
+                scope.projectId(),
+                scope.deviceId(),
+                scope.worktree(),
+                scope.cancellation(),
+                scope.step().coordinateSystem());
+        var operation = tool.getOperation();
+        var prepared = desktop.prepare(context, operation, arguments);
+        if (prepared.failure() != null) {
+            complete(scope, itemId, prepared.failure(), null);
+            return;
+        }
+        var result = execution.execute(
+                new ExecutionRequest(
+                        scope.sessionId(),
+                        scope.projectId(),
+                        scope.deviceId(),
+                        operation,
+                        prepared.arguments(),
+                        false,
+                        desktop.timeout(operation, arguments),
+                        scope.worktree()),
+                statusListener(scope),
+                scope.cancellation());
+        var finished = desktop.finish(context, operation, prepared, result);
+        var extras = new LinkedHashMap<String, Object>();
+        if (!finished.images().isEmpty()) {
+            extras.put("images", finished.images());
+        }
+        if (!finished.marks().isEmpty()) {
+            extras.put("marks", finished.marks());
+        }
+        complete(scope, itemId, finished.result(), null, extras);
+    }
+
     private void execute(TurnScope scope, UUID itemId, ToolDefinition tool, Map<String, Object> arguments) {
+        if (tool.isDesktop()) {
+            executeDesktop(scope, itemId, tool, arguments);
+            return;
+        }
         writer.updateItem(scope.userId(), scope.sessionId(), itemId, Map.of("toolStatus", "running"));
         var output = new StringBuilder();
         var outputChars = new AtomicInteger();
@@ -311,6 +371,11 @@ class ToolCallHandler {
     }
 
     private void complete(TurnScope scope, UUID itemId, ExecutionResult result, String output) {
+        complete(scope, itemId, result, output, Map.of());
+    }
+
+    private void complete(
+            TurnScope scope, UUID itemId, ExecutionResult result, String output, Map<String, Object> extras) {
         var updates = new LinkedHashMap<String, Object>();
         var toolStatus = switch (result.status()) {
             case ExecutionResult.SUCCEEDED -> "succeeded";
@@ -334,7 +399,9 @@ class ToolCallHandler {
                                 "linesAdded", change.getOrDefault("linesAdded", 0),
                                 "linesRemoved", change.getOrDefault("linesRemoved", 0)))
                         .toList());
-        updates.put("resultText", resultText(result));
+        var text = resultText(result);
+        updates.put("resultText", extras.containsKey("images") ? text + "\n" + DesktopCalls.SCREENSHOT_NOTE : text);
+        updates.putAll(extras);
         var itemStatus = switch (toolStatus) {
             case "succeeded" -> Item.COMPLETED;
             case "cancelled" -> Item.CANCELLED;
@@ -461,5 +528,28 @@ class ToolCallHandler {
             UUID turnId,
             String mode,
             String worktree,
-            Cancellation cancellation) {}
+            Cancellation cancellation,
+            StepModel step) {
+
+        TurnScope(
+                UUID userId,
+                UUID sessionId,
+                UUID projectId,
+                UUID deviceId,
+                UUID turnId,
+                String mode,
+                String worktree,
+                Cancellation cancellation) {
+            this(userId, sessionId, projectId, deviceId, turnId, mode, worktree, cancellation, StepModel.NONE);
+        }
+
+        TurnScope forStep(StepModel step) {
+            return new TurnScope(userId, sessionId, projectId, deviceId, turnId, mode, worktree, cancellation, step);
+        }
+    }
+
+    record StepModel(boolean vision, String coordinateSystem, String visionFallback) {
+
+        static final StepModel NONE = new StepModel(false, null, null);
+    }
 }

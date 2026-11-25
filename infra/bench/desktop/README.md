@@ -7,6 +7,7 @@ Fixtures and scripts for [F7](../../../docs/features/f7-gui-sandbox/README.md). 
 | `apps/tk-counter/app.py` | Tk window with a button, an entry, a list and `ctrl+s`; writes its state and the screen bounds of its widgets to the JSON file given as the first argument and prints `tk-counter ready` once mapped. Tk has no accessibility tree, so it is also the pixels-only case. |
 | `apps/form-web/index.html` | Page for Chromium with a list reordered by HTML5 drag and drop and a text field; the page title carries `{"order", "text"}`, so a test reads the result from the window title. Items and the field have distinct colours for locating them in a screenshot. |
 | `apps/webkit-counter/` | A `wry` window (the webview layer of Tauri) on WebKitGTK with a counter button; the title shows the count. Stands in for `tauri-counter` until phase 1.6. |
+| `live_check.py` | Live check of phase 1.2 with real models: runs the bench device inside the `gui` image, gives the agent a task on `tk-counter`, sends a second message while the turn runs and records whether the provider accepted the screenshot message after the tool results and two user messages in a row; `--schema-cost` compares the prompt tokens of a one-step turn with and without the desktop tools. |
 | `measure.sh`, `measure-inner.sh` | Image size, display start-up time, memory and process counts of the display, Chromium and Tk, and the process peak of Chromium next to a parallel `cargo build`. |
 
 ## Build the image
@@ -36,3 +37,19 @@ Without `POINTER_DESKTOP_TESTS` the display tests return early, so `cargo test` 
 ```sh
 infra/bench/desktop/measure.sh pointer-runner:gui
 ```
+
+## Live check with real models
+
+Build the bench device inside the image once; it then reports the `desktop` capability because `Xvfb` and `xdotool` are on its path:
+
+```sh
+docker run --rm -v "$PWD:/repo" -v pointer-bench-device-target:/target -w /repo/infra/bench/device   --entrypoint cargo pointer-runner:gui build --release --target-dir /target
+```
+
+With the backend running and the benchmark account loaded (`eval "$(python infra/bench/account.py env)"`, see [docs/benchmarks/README.md](../../../docs/benchmarks/README.md)):
+
+```sh
+python infra/bench/desktop/live_check.py --model "Experiential Labs::gpt-6-luna" --schema-cost
+```
+
+`--model` takes a key or `provider::key` and can be repeated; `--coordinates normalized` switches the models to the 0–1000 grid first. The script turns vision on for the models during the run, restores their settings afterwards and saves the runs in the git-ignored `results/`. The task passes when the application's state file shows two increments and the typed text. Free plans limit requests per minute: a model that needs about ten requests per task can hit a limit of ten per minute, so run such models one at a time.

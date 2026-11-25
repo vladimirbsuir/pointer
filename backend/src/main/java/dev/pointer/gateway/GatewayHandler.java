@@ -2,6 +2,7 @@ package dev.pointer.gateway;
 
 import dev.pointer.common.error.ApiException;
 import dev.pointer.common.security.AuthPrincipal;
+import dev.pointer.device.DeviceService;
 import dev.pointer.execution.ExecutionService;
 import dev.pointer.session.LiveItemSnapshots;
 import dev.pointer.session.SessionService;
@@ -39,7 +40,7 @@ class GatewayHandler extends TextWebSocketHandler {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final Logger log = LoggerFactory.getLogger(GatewayHandler.class);
 
-    private static final String RUNNER_CAPABILITY = "executor";
+    private static final Set<String> RUNNER_CAPABILITIES = Set.of("executor", "desktop");
 
     private final ConnectionRegistry registry;
     private final McpToolCatalog mcpTools;
@@ -50,6 +51,7 @@ class GatewayHandler extends TextWebSocketHandler {
     private final JwtDecoder jwtDecoder;
     private final JsonMapper json;
     private final Clock clock;
+    private final DeviceService devices;
 
     GatewayHandler(
             ConnectionRegistry registry,
@@ -60,7 +62,8 @@ class GatewayHandler extends TextWebSocketHandler {
             JwtDecoder jwtDecoder,
             JsonMapper json,
             McpToolCatalog mcpTools,
-            Clock clock) {
+            Clock clock,
+            DeviceService devices) {
         this.registry = registry;
         this.mcpTools = mcpTools;
         this.sessionService = sessionService;
@@ -70,6 +73,7 @@ class GatewayHandler extends TextWebSocketHandler {
         this.jwtDecoder = jwtDecoder;
         this.json = json;
         this.clock = clock;
+        this.devices = devices;
     }
 
     @Override
@@ -173,12 +177,13 @@ class GatewayHandler extends TextWebSocketHandler {
         var capabilities = new HashSet<String>();
         payload.path("capabilities").forEach(capability -> capabilities.add(capability.asString()));
         if (connection.isRunner()) {
-            capabilities.retainAll(Set.of(RUNNER_CAPABILITY));
+            capabilities.retainAll(RUNNER_CAPABILITIES);
         }
         var interpreters = new HashSet<String>();
         payload.path("interpreters").forEach(interpreter -> interpreters.add(interpreter.asString()));
         connection.markReady(deviceId, capabilities, uuids(payload.path("projects")), interpreters);
         registry.registerDevice(connection);
+        devices.reportCapabilities(connection.userId(), deviceId, capabilities);
         var welcome = new LinkedHashMap<String, Object>();
         welcome.put("connectionId", connection.id());
         welcome.put("serverVersion", "0.1.0");

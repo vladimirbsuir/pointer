@@ -128,6 +128,10 @@ async fn connect(
 
     let interpreters: Vec<&str> = executor.interpreters().await.names();
     let shell = if cfg!(windows) { "powershell" } else { "sh" };
+    let mut capabilities = vec!["executor"];
+    if pointer_executor::desktop_supported() {
+        capabilities.push("desktop");
+    }
     send(
         "hello",
         json!({
@@ -136,7 +140,7 @@ async fn connect(
             "deviceName": DEVICE_NAME,
             "clientVersion": env!("CARGO_PKG_VERSION"),
             "platform": { "os": std::env::consts::OS, "arch": std::env::consts::ARCH, "shell": shell },
-            "capabilities": ["executor"],
+            "capabilities": capabilities,
             "interpreters": interpreters,
             "projects": [config.project_id],
             "undeliveredResults": [],

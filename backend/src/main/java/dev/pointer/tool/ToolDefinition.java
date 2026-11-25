@@ -24,6 +24,8 @@ public class ToolDefinition extends BaseEntity {
     public static final String MCP_OPERATION = "mcp.call";
     public static final String CUSTOM = "custom";
     public static final String CUSTOM_OPERATION = "custom_tool.run";
+    public static final String DESKTOP_CAPABILITY = "desktop";
+    private static final String DESKTOP_OPERATION_PREFIX = "desktop_";
 
     private String name;
     private String description;
@@ -125,6 +127,10 @@ public class ToolDefinition extends BaseEntity {
 
     public boolean isCustom() {
         return CUSTOM.equals(source);
+    }
+
+    public boolean isDesktop() {
+        return operation != null && operation.startsWith(DESKTOP_OPERATION_PREFIX);
     }
 
     public boolean availableIn(String mode) {

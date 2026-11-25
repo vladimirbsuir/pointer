@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.SequencedMap;
 import java.util.UUID;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -92,6 +93,9 @@ class ContextAssembler {
     private static final int MAX_PLACEHOLDER_ARGUMENT_CHARS = 80;
     private static final String IMAGE_UNSUPPORTED =
             "[An image was attached here, but the current model does not accept images.]";
+    static final String SCREENSHOTS_HEADER = "Screenshots from this step, in call order:";
+    static final String SCREENSHOTS_UNSUPPORTED_HEADER =
+            "Screenshots from this step, not shown because the current model does not accept images:";
 
     private final Clock clock;
     private final AttachmentService attachments;
@@ -149,7 +153,7 @@ class ContextAssembler {
         var messages = new ArrayList<ChatMessage>();
         messages.add(ChatMessage.system(systemPrompt));
         var pending = new LinkedHashMap<>(snapshots);
-        var group = new StepGroup(new ResultMask(maskBoundary));
+        var group = new StepGroup(new ResultMask(maskBoundary), calls -> screenshots(calls, supportsVision));
         for (var item : items) {
             var type = String.valueOf(item.get("type"));
             switch (type) {
@@ -184,7 +188,7 @@ class ContextAssembler {
         }
         messages.add(ChatMessage.system(prompt.toString()));
         messages.add(ChatMessage.user(request));
-        var group = new StepGroup(new ResultMask(0));
+        var group = new StepGroup(new ResultMask(0), calls -> screenshots(calls, false));
         nestedItems.forEach(item -> group.add(item, messages));
         group.flushInto(messages);
         return messages;
@@ -248,6 +252,55 @@ class ContextAssembler {
                 .orElse(null);
     }
 
+    static boolean hasScreenshots(List<Map<String, Object>> items) {
+        return items.stream()
+                .filter(item -> Item.TOOL_CALL.equals(item.get("type")))
+                .anyMatch(item -> !screenshotIds(item).isEmpty());
+    }
+
+    private Optional<ChatMessage> screenshots(List<Map<String, Object>> calls, boolean supportsVision) {
+        var lines = new ArrayList<String>();
+        var urls = new ArrayList<String>();
+        for (var call : calls) {
+            for (var id : screenshotIds(call)) {
+                var url = supportsVision ? attachments.dataUrl(id) : Optional.<String>empty();
+                if (url.isPresent()) {
+                    urls.add(url.get());
+                    lines.add((urls.size()) + ". " + callLabel(call));
+                } else {
+                    lines.add("[Screenshot omitted: " + callLabel(call) + "]");
+                }
+            }
+        }
+        if (lines.isEmpty()) {
+            return Optional.empty();
+        }
+        var header = urls.isEmpty() ? SCREENSHOTS_UNSUPPORTED_HEADER : SCREENSHOTS_HEADER;
+        var text = header + "\n" + String.join("\n", lines);
+        return Optional.of(urls.isEmpty() ? ChatMessage.user(text) : ChatMessage.user(text, List.copyOf(urls)));
+    }
+
+    private static List<UUID> screenshotIds(Map<String, Object> call) {
+        if (!(call.get("images") instanceof List<?> images)) {
+            return List.of();
+        }
+        return images.stream()
+                .filter(image -> image instanceof Map<?, ?> map && map.get("attachmentId") != null)
+                .map(image -> UUID.fromString(String.valueOf(((Map<?, ?>) image).get("attachmentId"))))
+                .toList();
+    }
+
+    private static String callLabel(Map<String, Object> call) {
+        return call.get("toolName") + "(" + shortArguments(call) + ")";
+    }
+
+    private static String shortArguments(Map<String, Object> call) {
+        var arguments = String.valueOf(call.getOrDefault("argumentsJson", "{}"));
+        return arguments.length() > MAX_PLACEHOLDER_ARGUMENT_CHARS
+                ? arguments.substring(0, MAX_PLACEHOLDER_ARGUMENT_CHARS) + "..."
+                : arguments;
+    }
+
     static int countResults(List<Map<String, Object>> items) {
         return (int) items.stream()
                 .filter(item -> Item.TOOL_CALL.equals(item.get("type")) && item.get("providerCallId") != null)
@@ -255,12 +308,8 @@ class ContextAssembler {
     }
 
     static String placeholder(Map<String, Object> call, String result) {
-        var arguments = String.valueOf(call.getOrDefault("argumentsJson", "{}"));
-        if (arguments.length() > MAX_PLACEHOLDER_ARGUMENT_CHARS) {
-            arguments = arguments.substring(0, MAX_PLACEHOLDER_ARGUMENT_CHARS) + "...";
-        }
-        return "[Result of " + call.get("toolName") + "(" + arguments + ") omitted: "
-                + result.lines().count() + " lines. Run the tool again if you need it.]";
+        return "[Result of " + callLabel(call) + " omitted: " + result.lines().count()
+                + " lines. Run the tool again if you need it.]";
     }
 
     private static String withSnapshot(String snapshot, String text) {
@@ -382,12 +431,14 @@ class ContextAssembler {
     private static final class StepGroup {
 
         private final ResultMask mask;
+        private final Function<List<Map<String, Object>>, Optional<ChatMessage>> screenshots;
         private String key;
         private final StringBuilder text = new StringBuilder();
         private final List<Map<String, Object>> calls = new ArrayList<>();
 
-        StepGroup(ResultMask mask) {
+        StepGroup(ResultMask mask, Function<List<Map<String, Object>>, Optional<ChatMessage>> screenshots) {
             this.mask = mask;
+            this.screenshots = screenshots;
         }
 
         void add(Map<String, Object> item, List<ChatMessage> messages) {
@@ -426,6 +477,7 @@ class ContextAssembler {
                             String.valueOf(call.get("providerCallId")),
                             mask.render(call, result == null ? NOT_EXECUTED : String.valueOf(result))));
                 }
+                screenshots.apply(calls).ifPresent(messages::add);
             }
             key = null;
             text.setLength(0);

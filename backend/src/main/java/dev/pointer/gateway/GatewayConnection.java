@@ -71,6 +71,10 @@ final class GatewayConnection {
         return capabilities.contains(capability);
     }
 
+    Set<String> capabilities() {
+        return capabilities;
+    }
+
     Set<UUID> projects() {
         return projects;
     }

@@ -5,7 +5,10 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import lombok.Getter;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -28,6 +31,10 @@ public class Device extends BaseEntity {
     private String clientVersion;
     private String kind;
     private String runnerSecretHash;
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    private List<String> capabilities = List.of();
+
     private Instant lastSeenAt;
     private Instant revokedAt;
     private Instant createdAt;
@@ -60,6 +67,15 @@ public class Device extends BaseEntity {
         this.revokedAt = now;
         this.runnerSecretHash = null;
         this.updatedAt = now;
+    }
+
+    void reportCapabilities(Set<String> reported, Instant now) {
+        this.capabilities = List.copyOf(new TreeSet<>(reported));
+        this.lastSeenAt = now;
+    }
+
+    public Set<String> capabilitySet() {
+        return capabilities == null ? Set.of() : Set.copyOf(capabilities);
     }
 
     void touch(Instant now) {

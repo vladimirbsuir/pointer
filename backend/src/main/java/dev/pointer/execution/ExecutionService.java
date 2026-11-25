@@ -1,6 +1,7 @@
 package dev.pointer.execution;
 
 import dev.pointer.common.Ids;
+import dev.pointer.device.DeviceService;
 import dev.pointer.provider.llm.Cancellation;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -29,6 +30,7 @@ public class ExecutionService {
     private final DeviceChannel channel;
     private final ObjectProvider<ServerOperation> serverOperations;
     private final ObjectProvider<ExecutorReadiness> readiness;
+    private final DeviceService devices;
     private final Map<UUID, PendingCall> pending = new ConcurrentHashMap<>();
 
     public ExecutionResult execute(ExecutionRequest request, ExecutionListener listener, Cancellation cancellation) {
@@ -65,6 +67,29 @@ public class ExecutionService {
 
     public Optional<Set<String>> interpreters(UUID deviceId) {
         return deviceId == null ? Optional.empty() : channel.interpreters(deviceId);
+    }
+
+    public Set<String> capabilities(UUID deviceId) {
+        if (deviceId == null) {
+            return Set.of();
+        }
+        var live = channel.capabilities(deviceId);
+        if (live.isPresent()) {
+            return live.get();
+        }
+        var stored = devices.storedCapabilities(deviceId);
+        if (!stored.isEmpty()) {
+            return stored;
+        }
+        return readiness.stream()
+                .filter(hook -> hook.manages(deviceId))
+                .findFirst()
+                .map(hook -> hook.defaultCapabilities(deviceId))
+                .orElse(Set.of());
+    }
+
+    public boolean hasCapability(UUID deviceId, String capability) {
+        return capabilities(deviceId).contains(capability);
     }
 
     public boolean isOperationAvailable(String operation, UUID projectId) {

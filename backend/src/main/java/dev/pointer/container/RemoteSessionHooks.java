@@ -5,6 +5,7 @@ import dev.pointer.execution.ExecutorReadiness;
 import dev.pointer.session.SessionEventListener;
 import dev.pointer.session.SessionEventRecord;
 import dev.pointer.session.SessionService;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -32,6 +33,11 @@ class RemoteSessionHooks implements ExecutorReadiness, SessionEventListener {
     @Override
     public void wake(ExecutionRequest request) {
         service.wake(request);
+    }
+
+    @Override
+    public Set<String> defaultCapabilities(UUID deviceId) {
+        return service.defaultCapabilities();
     }
 
     @Override

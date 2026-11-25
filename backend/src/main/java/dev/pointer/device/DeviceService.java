@@ -4,6 +4,7 @@ import dev.pointer.common.Ids;
 import dev.pointer.common.crypto.Tokens;
 import java.time.Clock;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -64,6 +65,20 @@ public class DeviceService {
                         .filter(Device::isRunner)
                         .filter(device -> !device.isRevoked())
                         .isPresent();
+    }
+
+    @Transactional
+    public void reportCapabilities(UUID userId, UUID deviceId, Set<String> capabilities) {
+        devices.findById(deviceId)
+                .filter(device -> device.getUserId().equals(userId))
+                .ifPresent(device -> device.reportCapabilities(capabilities, clock.instant()));
+    }
+
+    @Transactional(readOnly = true)
+    public Set<String> storedCapabilities(UUID deviceId) {
+        return deviceId == null
+                ? Set.of()
+                : devices.findById(deviceId).map(Device::capabilitySet).orElse(Set.of());
     }
 
     public record RunnerDevice(UUID id, String secret) {}

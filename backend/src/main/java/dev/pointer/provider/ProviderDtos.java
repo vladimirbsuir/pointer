@@ -45,7 +45,8 @@ public final class ProviderDtos {
             String embeddingDocumentPrefix,
             String source,
             boolean enabled,
-            List<UUID> fallbackModelIds) {}
+            List<UUID> fallbackModelIds,
+            String coordinateSystem) {}
 
     public record CreateProviderRequest(
             @NotBlank @Size(max = 100) String name,
@@ -80,7 +81,8 @@ public final class ProviderDtos {
             @DecimalMin("0") @DecimalMax("100000") BigDecimal outputPricePerMtok,
             Boolean clearPrices,
             @Size(max = 200) String embeddingQueryPrefix,
-            @Size(max = 200) String embeddingDocumentPrefix) {}
+            @Size(max = 200) String embeddingDocumentPrefix,
+            @Pattern(regexp = "pixels|normalized") String coordinateSystem) {}
 
     public record FallbacksResponse(List<UUID> modelIds) {}
 

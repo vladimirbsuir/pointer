@@ -45,6 +45,7 @@ public final class StruggleSignals {
         var calls = turnItems.stream()
                 .filter(item -> Item.TOOL_CALL.equals(item.get("type")) && item.get("parentItemId") == null)
                 .map(Call::of)
+                .filter(call -> !call.hasErrorCode(Set.of(ToolErrorCodes.NEEDS_VISION)))
                 .toList();
         var steps = new TreeMap<Integer, List<Call>>();
         calls.forEach(call ->

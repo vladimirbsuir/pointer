@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   BrainIcon,
@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import type { Item } from "@/shared/api/types";
 import { AttachmentImage } from "./AttachmentImage";
+import { collectScreenshots } from "./desktop-calls";
+import { ScreenshotGallery } from "./DesktopScreenshot";
 import { ExploreCard } from "./ExploreCard";
 import { Markdown } from "./Markdown";
 import { PlanCard } from "./PlanCard";
@@ -51,6 +53,7 @@ export function MessageList({ sessionId, items, running, turnError, onRewound }:
       ].includes(item.type),
   );
   const lastText = visible.at(-1)?.text?.length ?? 0;
+  const screenshots = useMemo(() => collectScreenshots(t, items), [t, items]);
 
   useEffect(() => {
     const element = container.current;
@@ -78,54 +81,56 @@ export function MessageList({ sessionId, items, running, turnError, onRewound }:
           element.scrollHeight - element.scrollTop - element.clientHeight < STICK_TO_BOTTOM_PX;
       }}
     >
-      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-8">
-        {visible.length === 0 && !running && (
-          <p className="text-center text-sm text-muted-foreground">{t("chat.empty")}</p>
-        )}
-        {visible.map((item) => (
-          <MessageItem
-            key={item.id}
-            item={item}
-            nested={
-              item.toolName === "explore"
-                ? items.filter((other) => other.parentItemId === item.id)
-                : NO_ITEMS
-            }
-            sessionId={sessionId}
-            running={running}
-            onRewound={onRewound}
-          />
-        ))}
-        {waitingForFirstToken && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="size-2 animate-pulse rounded-full bg-primary" />
-            {t("chat.thinking")}
-          </div>
-        )}
-        {turnError && (
-          <div className="flex gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
-            <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
-            <div>
-              {turnError.code === "budget_exceeded" ? (
-                <>
-                  <p className="font-medium">{t("chat.budgetExceeded")}</p>
-                  <p className="text-muted-foreground">{turnError.message}</p>
-                </>
-              ) : turnError.code === "interrupted" ? (
-                <>
-                  <p className="font-medium">{t("chat.turnInterrupted")}</p>
-                  <p className="text-muted-foreground">{t("chat.turnInterruptedHint")}</p>
-                </>
-              ) : (
-                <>
-                  <p className="font-medium">{t("chat.turnFailed")}</p>
-                  <p className="text-muted-foreground">{turnError.message || turnError.code}</p>
-                </>
-              )}
+      <ScreenshotGallery sessionId={sessionId} screenshots={screenshots}>
+        <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-8">
+          {visible.length === 0 && !running && (
+            <p className="text-center text-sm text-muted-foreground">{t("chat.empty")}</p>
+          )}
+          {visible.map((item) => (
+            <MessageItem
+              key={item.id}
+              item={item}
+              nested={
+                item.toolName === "explore"
+                  ? items.filter((other) => other.parentItemId === item.id)
+                  : NO_ITEMS
+              }
+              sessionId={sessionId}
+              running={running}
+              onRewound={onRewound}
+            />
+          ))}
+          {waitingForFirstToken && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="size-2 animate-pulse rounded-full bg-primary" />
+              {t("chat.thinking")}
             </div>
-          </div>
-        )}
-      </div>
+          )}
+          {turnError && (
+            <div className="flex gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+              <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
+              <div>
+                {turnError.code === "budget_exceeded" ? (
+                  <>
+                    <p className="font-medium">{t("chat.budgetExceeded")}</p>
+                    <p className="text-muted-foreground">{turnError.message}</p>
+                  </>
+                ) : turnError.code === "interrupted" ? (
+                  <>
+                    <p className="font-medium">{t("chat.turnInterrupted")}</p>
+                    <p className="text-muted-foreground">{t("chat.turnInterruptedHint")}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium">{t("chat.turnFailed")}</p>
+                    <p className="text-muted-foreground">{turnError.message || turnError.code}</p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </ScreenshotGallery>
     </div>
   );
 }
@@ -219,10 +224,12 @@ function MessageItem({ item, nested, sessionId, running, onRewound }: MessageIte
         <span className="min-w-0 truncate">
           {item.reason === "context"
             ? t("chat.modelEscalatedContext", values)
-            : t("chat.modelEscalated", {
-                ...values,
-                signals: signals.map((signal) => t(`chat.signals.${signal}`, signal)).join(", "),
-              })}
+            : item.reason === "vision"
+              ? t("chat.modelEscalatedVision", values)
+              : t("chat.modelEscalated", {
+                  ...values,
+                  signals: signals.map((signal) => t(`chat.signals.${signal}`, signal)).join(", "),
+                })}
         </span>
       </div>
     );

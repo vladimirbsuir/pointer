@@ -18,9 +18,43 @@ public record ResolvedModel(
         BigDecimal cachedInputPricePerMtok,
         BigDecimal outputPricePerMtok,
         EmbeddingPrefixes embeddingPrefixes,
-        Endpoint endpoint) {
+        Endpoint endpoint,
+        String coordinateSystem) {
 
+    public static final String PIXELS = "pixels";
+    public static final String NORMALIZED = "normalized";
     private static final BigDecimal MILLION = BigDecimal.valueOf(1_000_000);
+
+    public ResolvedModel(
+            UUID modelId,
+            String modelKey,
+            String displayName,
+            Integer contextWindow,
+            boolean supportsTools,
+            boolean supportsVision,
+            BigDecimal inputPricePerMtok,
+            BigDecimal cachedInputPricePerMtok,
+            BigDecimal outputPricePerMtok,
+            EmbeddingPrefixes embeddingPrefixes,
+            Endpoint endpoint) {
+        this(
+                modelId,
+                modelKey,
+                displayName,
+                contextWindow,
+                supportsTools,
+                supportsVision,
+                inputPricePerMtok,
+                cachedInputPricePerMtok,
+                outputPricePerMtok,
+                embeddingPrefixes,
+                endpoint,
+                PIXELS);
+    }
+
+    public boolean normalizedCoordinates() {
+        return NORMALIZED.equals(coordinateSystem);
+    }
 
     public BigDecimal cost(StreamListener.Usage usage) {
         return cost(usage.promptTokens(), usage.cachedPromptTokens(), usage.completionTokens());

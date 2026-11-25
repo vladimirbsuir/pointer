@@ -47,6 +47,11 @@ class GatewayDeviceChannel implements DeviceChannel {
     }
 
     @Override
+    public Optional<Set<String>> capabilities(UUID deviceId) {
+        return registry.device(deviceId).map(GatewayConnection::capabilities);
+    }
+
+    @Override
     public void sendRequest(UUID deviceId, Map<String, Object> payload) {
         registry.device(deviceId).ifPresent(connection -> connection.send("exec.request", null, payload));
     }

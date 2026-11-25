@@ -19,4 +19,5 @@ record ContainerProperties(
         Duration idleTimeout,
         Duration prepareTimeout,
         String githubApiUrl,
-        String githubGitUrl) {}
+        String githubGitUrl,
+        boolean desktop) {}

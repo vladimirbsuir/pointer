@@ -20,12 +20,14 @@ public class ToolRegistry {
     public List<ToolDefinition> available(UUID userId, UUID projectId, UUID deviceId) {
         var reported = mcpTools.reportedBy(deviceId);
         var interpreters = execution.interpreters(deviceId);
+        var desktop = execution.hasCapability(deviceId, ToolDefinition.DESKTOP_CAPABILITY);
         return tools.findAvailable(userId, projectId).stream()
                 .filter(tool -> !tool.isMcp() || reported.contains(tool.getName()))
                 .filter(tool -> !tool.isCustom()
                         || interpreters
                                 .map(found -> found.contains(tool.getInterpreter()))
                                 .orElse(true))
+                .filter(tool -> !tool.isDesktop() || desktop)
                 .filter(tool -> execution.isOperationAvailable(tool.getOperation(), projectId))
                 .toList();
     }

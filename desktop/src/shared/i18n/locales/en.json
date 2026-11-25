@@ -250,7 +250,8 @@
       "read_only_streak": "reading without changes",
       "check_failed": "the check failed"
     },
-    "modelNudged": "Asked {{model}} to change its approach ({{signals}})"
+    "modelNudged": "Asked {{model}} to change its approach ({{signals}})",
+    "modelEscalatedVision": "{{from}} cannot see the screen, continuing on {{to}}"
   },
   "modes": {
     "ask": "Ask",
@@ -307,7 +308,11 @@
     "planModel": "Planning model",
     "roleNotSet": "not set, the session model is used",
     "escalationDefault": "Escalation for new sessions",
-    "escalationDescription": "With escalation and smart routing, the agent works on the fast model and switches to the session model for the rest of a turn when that turn shows signs of trouble. Plan mode always uses the planning or session model."
+    "escalationDescription": "With escalation and smart routing, the agent works on the fast model and switches to the session model for the rest of a turn when that turn shows signs of trouble. Plan mode always uses the planning or session model.",
+    "coordinates": "Coordinates",
+    "coordinatesPixels": "Pixels",
+    "coordinatesGrid": "0–1000 grid",
+    "coordinatesHint": "How the model points at a screenshot. Pick the grid for models documented to answer on a 0–1000 grid, such as Qwen3-VL and Gemini."
   },
   "approval": {
     "title": "Allow this action?",
@@ -706,5 +711,35 @@
     "sessionBadge": "#{{number}} · check {{done}}/{{max}}",
     "escalation": "Start on the fast model and escalate",
     "escalationHint": "The run's session uses smart routing with escalation: the agent works on the fast model and moves to the selected model when it struggles. A failed check makes the next struggle escalate at once."
+  },
+  "desktop": {
+    "click": "Click {{point}}",
+    "rightClick": "Right-click {{point}}",
+    "middleClick": "Middle-click {{point}}",
+    "doubleClick": "Double-click {{point}}",
+    "tripleClick": "Triple-click {{point}}",
+    "move": "Move to {{point}}",
+    "drag": "Drag {{from}} → {{to}}",
+    "scroll": "Scroll {{direction}} ×{{amount}} at {{point}}",
+    "directions": {
+      "up": "up",
+      "down": "down",
+      "left": "left",
+      "right": "right"
+    },
+    "type": "Type \"{{text}}\"",
+    "key": "Press {{keys}}",
+    "launch": "Launch {{command}}",
+    "stop": "Stop {{process}}",
+    "wait": "Wait {{seconds}} s",
+    "waitWindow": "Wait for window \"{{title}}\"",
+    "waitLog": "Wait for \"{{text}}\" in the log",
+    "notMet": "not met after {{seconds}} s",
+    "exited": "Exited with code {{code}}",
+    "screenshot": "Screenshot",
+    "zoom": "Zoom",
+    "start": "Start the display",
+    "startSized": "Start the display {{width}}×{{height}}",
+    "openScreenshot": "Open the screenshot"
   }
 }

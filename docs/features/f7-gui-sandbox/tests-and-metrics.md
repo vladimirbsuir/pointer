@@ -58,6 +58,8 @@ As implemented in phase 1.1: the runner tests are in `desktop/src-tauri/crates/p
 - Providers: a live check against every test provider sends the sequences tool, user, assistant and tool, user, user with an image and records whether each is accepted.
 - Schema cost: the token count of the desktop tool schemas, per convention, is recorded for the open question on one tool or twelve.
 
+As implemented in phase 1.2: `DesktopCoordinatesTests` (identity, grid, scaled display, out-of-range values, zoom rectangles, description variants), `DesktopContextTests` (one screenshot message per step in call order, identical renders and append-only growth, placeholders without vision) and `DesktopToolTests`, which drives whole turns with the fake LLM and a fake desktop executor: a pixel model on the default display with the largest allowed image through the gateway, a grid model on a 1920x1200 display with an out-of-range call that never reaches the executor, the tool list without vision or without a desktop device, a blind `fast` tier that escalates with `vision`, and oversized and malformed screenshots. `RemoteExecutionTests` checks that a runner's `desktop` survives its disconnection and that `viewer` and `relay` are dropped. The provider check and the schema cost are the live check in [desktop.md](../../benchmarks/desktop.md) (`infra/bench/desktop/live_check.py`).
+
 ### 1.3 Masking
 
 - Boundary arithmetic of the image counter: keep, block alignment, `block = 1` equal to per-step masking, one screenshot per step and several per step.

@@ -110,7 +110,8 @@ class DockerContainerRuntimeTests {
                 Duration.ofMinutes(30),
                 Duration.ofMinutes(10),
                 "https://api.github.com",
-                "https://github.com");
+                "https://github.com",
+                false);
         return new DockerContainerRuntime(properties, JsonMapper.builder().build());
     }
 }

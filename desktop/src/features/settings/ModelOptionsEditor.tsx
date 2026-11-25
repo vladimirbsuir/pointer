@@ -35,6 +35,7 @@ export function ModelOptionsEditor({
   const [cached, setCached] = useState(model.cachedInputPricePerMtok?.toString() ?? "");
   const [output, setOutput] = useState(model.outputPricePerMtok?.toString() ?? "");
   const [supportsVision, setSupportsVision] = useState(model.supportsVision);
+  const [coordinateSystem, setCoordinateSystem] = useState(model.coordinateSystem);
   const [queryPrefix, setQueryPrefix] = useState(model.embeddingQueryPrefix ?? "");
   const [documentPrefix, setDocumentPrefix] = useState(model.embeddingDocumentPrefix ?? "");
   const [fallbacks, setFallbacks] = useState(model.fallbackModelIds);
@@ -79,10 +80,11 @@ export function ModelOptionsEditor({
         ...path,
         body:
           inputPrice === null && cachedPrice === null && outputPrice === null
-            ? { clearPrices: true, supportsVision, ...prefixes }
+            ? { clearPrices: true, supportsVision, coordinateSystem, ...prefixes }
             : {
                 clearPrices: true,
                 supportsVision,
+                coordinateSystem,
                 inputPricePerMtok: inputPrice ?? 0,
                 outputPricePerMtok: outputPrice ?? 0,
                 ...(cachedPrice === null ? {} : { cachedInputPricePerMtok: cachedPrice }),
@@ -129,6 +131,21 @@ export function ModelOptionsEditor({
       <label className="flex h-8 items-center gap-1.5 text-xs text-muted-foreground">
         <Switch size="sm" checked={supportsVision} onCheckedChange={setSupportsVision} />
         {t("providers.supportsVision")}
+      </label>
+      <label
+        className="flex flex-col gap-1 text-xs text-muted-foreground"
+        title={t("providers.coordinatesHint")}
+      >
+        {t("providers.coordinates")}
+        <select
+          className="h-8 w-36 rounded-md border bg-background px-2 text-xs disabled:opacity-50"
+          value={coordinateSystem}
+          disabled={!supportsVision}
+          onChange={(event) => setCoordinateSystem(event.target.value as typeof coordinateSystem)}
+        >
+          <option value="pixels">{t("providers.coordinatesPixels")}</option>
+          <option value="normalized">{t("providers.coordinatesGrid")}</option>
+        </select>
       </label>
       {showPrefixes && (
         <div className="flex w-full flex-wrap items-end gap-2">

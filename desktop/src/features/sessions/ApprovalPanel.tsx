@@ -69,6 +69,13 @@ export function ApprovalPanel({ sessionId, approvalId, preview }: ApprovalPanelP
             {JSON.stringify(preview.arguments ?? {}, null, 2)}
           </pre>
         </div>
+      ) : preview.kind === "desktop" ? (
+        <div className="overflow-hidden rounded-md border bg-muted/40 font-mono text-xs">
+          <p className="border-b px-2 py-1 text-muted-foreground">{String(preview.tool)}</p>
+          <pre className="max-h-60 overflow-auto p-2">
+            {JSON.stringify(preview.arguments ?? {}, null, 2)}
+          </pre>
+        </div>
       ) : preview.kind === "tool" ? (
         <div className="overflow-hidden rounded-md border bg-muted/40 font-mono text-xs">
           <p className="border-b px-2 py-1 text-muted-foreground">

@@ -138,7 +138,19 @@ public class ProviderService {
         if (request.contextWindow() != null) {
             model.update(
                     new ProviderDtos.UpdateModelRequest(
-                            null, request.contextWindow(), null, null, null, null, null, null, null, null, null, null),
+                            null,
+                            request.contextWindow(),
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null),
                     clock.instant());
         }
         return toResponse(models.save(model), fallbacks.list(model.getId()));
@@ -178,7 +190,8 @@ public class ProviderService {
                 model.getCachedInputPricePerMtok(),
                 model.getOutputPricePerMtok(),
                 model.embeddingPrefixes(),
-                endpoint(provider, preferredDeviceId));
+                endpoint(provider, preferredDeviceId),
+                model.getCoordinateSystem());
     }
 
     @Transactional(readOnly = true)
@@ -347,6 +360,7 @@ public class ProviderService {
                 model.getEmbeddingDocumentPrefix(),
                 model.getSource(),
                 model.isEnabled(),
-                fallbackIds);
+                fallbackIds,
+                model.getCoordinateSystem());
     }
 }

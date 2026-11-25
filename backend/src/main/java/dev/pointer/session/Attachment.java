@@ -13,7 +13,13 @@ import lombok.Getter;
 @Getter
 public class Attachment extends BaseEntity {
 
+    public static final String ORIGIN_USER = "user";
+    public static final String ORIGIN_DESKTOP = "desktop";
+
     private UUID sessionId;
+    private String origin;
+    private Integer width;
+    private Integer height;
     private String mediaType;
     private int sizeBytes;
     private byte[] data;
@@ -22,8 +28,16 @@ public class Attachment extends BaseEntity {
     protected Attachment() {}
 
     Attachment(UUID sessionId, String mediaType, byte[] data, Instant now) {
+        this(sessionId, ORIGIN_USER, mediaType, data, null, null, now);
+    }
+
+    Attachment(
+            UUID sessionId, String origin, String mediaType, byte[] data, Integer width, Integer height, Instant now) {
         super(Ids.newId());
         this.sessionId = sessionId;
+        this.origin = origin;
+        this.width = width;
+        this.height = height;
         this.mediaType = mediaType;
         this.sizeBytes = data.length;
         this.data = data;

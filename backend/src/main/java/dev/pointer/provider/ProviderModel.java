@@ -29,6 +29,7 @@ public class ProviderModel extends BaseEntity {
     private BigDecimal outputPricePerMtok;
     private String embeddingQueryPrefix;
     private String embeddingDocumentPrefix;
+    private String coordinateSystem = ResolvedModel.PIXELS;
     private String source;
     private boolean enabled;
     private Instant createdAt;
@@ -81,6 +82,9 @@ public class ProviderModel extends BaseEntity {
         }
         if (request.enabled() != null) {
             enabled = request.enabled();
+        }
+        if (request.coordinateSystem() != null) {
+            coordinateSystem = request.coordinateSystem();
         }
         if (Boolean.TRUE.equals(request.clearPrices())) {
             inputPricePerMtok = null;

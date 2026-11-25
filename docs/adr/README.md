@@ -34,3 +34,4 @@ File name: `NNNN-short-title.md`. Status: `Proposed`, `Accepted`, `Superseded by
 | [0025](0025-cache-aware-compaction.md) | Cache-aware compaction | Accepted |
 | [0026](0026-trajectory-aware-escalation.md) | Trajectory-aware model escalation | Accepted |
 | [0027](0027-root-runner-and-repository-proxy.md) | Root in runner containers and a repository proxy | Accepted |
+| [0028](0028-gui-sandbox-in-the-session-container.md) | GUI sandbox in the session container | Accepted |

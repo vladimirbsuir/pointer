@@ -35,6 +35,8 @@ public class RemoteSessionService {
     static final String PREPARE = "pointer.repo_prepare";
     static final String PUBLISH = "pointer.repo_publish";
     static final String RUN_COMMAND = "run_command";
+    static final String EXECUTOR_CAPABILITY = "executor";
+    static final String DESKTOP_CAPABILITY = "desktop";
 
     private static final Logger log = LoggerFactory.getLogger(RemoteSessionService.class);
     private static final Duration PUBLISH_TIMEOUT = Duration.ofMinutes(5);
@@ -236,6 +238,10 @@ public class RemoteSessionService {
     RemoteDtos.RemoteFile readFile(UUID userId, UUID sessionId, String path) {
         var result = runFileOperation(userId, sessionId, "pointer.read_attachment", Map.of("path", path));
         return new RemoteDtos.RemoteFile(path, String.valueOf(result.getOrDefault("content", "")));
+    }
+
+    Set<String> defaultCapabilities() {
+        return properties.desktop() ? Set.of(EXECUTOR_CAPABILITY, DESKTOP_CAPABILITY) : Set.of(EXECUTOR_CAPABILITY);
     }
 
     boolean manages(UUID deviceId) {

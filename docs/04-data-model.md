@@ -101,6 +101,7 @@ Unique: (`provider`, `provider_user_id`), (`user_id`, `provider`).
 | `revoked_at` | timestamptz | Nullable |
 | `kind` | text | `desktop` or `runner` (the device of a server session, [ADR 0016](adr/0016-remote-execution-in-containers.md)) |
 | `runner_secret_hash` | text | Nullable; SHA-256 of the runner secret, cleared on revoke |
+| `capabilities` | text[] | Capabilities of the latest `hello` (`executor`, `desktop`, ...), sorted; empty until the device first connects. Decides the tools of an offline device (F7, GUI-4) |
 | `created_at`, `updated_at` | timestamptz | |
 
 Connection presence is kept in memory, not in the database.
@@ -169,6 +170,7 @@ Unique: (`user_id`, `name`).
 | `cached_input_price_per_mtok` | numeric(12,6) | Nullable; price of prompt tokens the provider serves from its cache; the input price applies when null (CACHE-1) |
 | `output_price_per_mtok` | numeric(12,6) | Nullable |
 | `embedding_query_prefix`, `embedding_document_prefix` | text | Nullable; prepended to search queries and to indexed chunks when the model computes embeddings (CTX-9). Filled for known families when the model is created: `nomic-embed`, `e5`, `bge-small/base/large`, `mxbai-embed`, `snowflake-arctic-embed` |
+| `coordinate_system` | text | `pixels` (default) or `normalized`: how the model addresses a screenshot, in pixels of the image or on a 0–1000 grid (F7, GUI-3) |
 | `source` | text | `discovered`, `manual` |
 | `enabled` | boolean | |
 | `created_at`, `updated_at` | timestamptz | |
@@ -380,14 +382,16 @@ The replayable event log ([protocol 4.4](03-protocol.md#44-sessionevent-server--
 
 ### `attachments`
 
-Images attached to user messages (SESS-11). Messages reference them by id; the context sends them to vision models as `image_url` data URLs and replaces them with a short note for other models.
+Images attached to user messages (SESS-11) and screenshots of the desktop tools (F7, GUI-5). Messages and `tool_call` items reference them by id; the context sends them to vision models as `image_url` data URLs and replaces them with a short note for other models. The backend caches recently used data URLs in memory (24 MB), since attachments never change.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | PK |
 | `session_id` | uuid | FK `sessions`, `ON DELETE CASCADE` |
+| `origin` | text | `user` (uploaded with a message) or `desktop` (a screenshot of a desktop tool) |
+| `width`, `height` | integer | Nullable; image size in pixels, recorded for screenshots and, from V35 on, for uploads whose format Java can read (not WebP) |
 | `media_type` | text | `image/png`, `image/jpeg`, `image/gif`, `image/webp` |
-| `size_bytes` | integer | At most 5 MB |
+| `size_bytes` | integer | At most 5 MB for uploads, 2 MB for screenshots |
 | `data` | bytea | |
 | `created_at` | timestamptz | |
 

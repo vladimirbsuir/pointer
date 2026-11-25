@@ -1,19 +1,9 @@
-import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { ImageOffIcon } from "lucide-react";
-import { api } from "@/shared/api/client";
+import { useAttachmentUrl } from "./attachment-url";
 
-function useObjectUrl(blob: Blob | undefined) {
-  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
-  useEffect(
-    () => () => {
-      if (url) {
-        URL.revokeObjectURL(url);
-      }
-    },
-    [url],
-  );
-  return url;
+async function openInNewTab(dataUrl: string) {
+  const blob = await (await fetch(dataUrl)).blob();
+  window.open(URL.createObjectURL(blob), "_blank", "noreferrer");
 }
 
 export function AttachmentImage({
@@ -23,21 +13,7 @@ export function AttachmentImage({
   sessionId: string;
   attachmentId: string;
 }) {
-  const { data, isError } = useQuery({
-    queryKey: ["attachment", sessionId, attachmentId],
-    queryFn: async () => {
-      const { data, response } = await api().GET(
-        "/api/v1/sessions/{sessionId}/attachments/{attachmentId}",
-        { params: { path: { sessionId, attachmentId } }, parseAs: "blob" },
-      );
-      if (!response.ok || !data) {
-        throw new Error(String(response.status));
-      }
-      return data as unknown as Blob;
-    },
-    staleTime: Infinity,
-  });
-  const url = useObjectUrl(data);
+  const { url, isError } = useAttachmentUrl(sessionId, attachmentId);
 
   if (isError) {
     return (
@@ -47,9 +23,9 @@ export function AttachmentImage({
     );
   }
   return url ? (
-    <a href={url} target="_blank" rel="noreferrer">
+    <button type="button" className="cursor-zoom-in" onClick={() => void openInNewTab(url)}>
       <img src={url} alt="" className="max-h-48 max-w-64 rounded-lg border object-contain" />
-    </a>
+    </button>
   ) : (
     <span className="size-24 animate-pulse rounded-lg bg-muted" />
   );

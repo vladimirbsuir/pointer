@@ -1,5 +1,6 @@
 package dev.pointer.agent;
 
+import dev.pointer.agent.desktop.DesktopTools;
 import dev.pointer.agent.escalation.EscalationController;
 import dev.pointer.common.error.ApiException;
 import dev.pointer.customtool.ProposeTool;
@@ -47,7 +48,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -193,8 +194,9 @@ public class AgentRunner implements LiveItemSnapshots {
                 writer.recordContextSnapshot(sessionId, turnId, contextAssembler.snapshot(project));
             }
             var globalInstructions = settingsService.get(userId).globalInstructions();
-            Supplier<List<ChatRequest.ToolDefinition>> stepTools = () -> model.supportsTools()
-                    ? toolDefinitions(userId, context.projectId(), context.executorDeviceId(), context.mode(), routes)
+            Function<ResolvedModel, List<ChatRequest.ToolDefinition>> stepTools = caller -> model.supportsTools()
+                    ? toolDefinitions(
+                            userId, context.projectId(), context.executorDeviceId(), context.mode(), routes, caller)
                     : List.of();
             var summarizer =
                     new Summarizer(scope, routes, failover, turn, project, globalInstructions, mask, stepTools);
@@ -207,7 +209,14 @@ public class AgentRunner implements LiveItemSnapshots {
             var contextWindow = model.contextWindow() == null ? DEFAULT_CONTEXT_WINDOW : model.contextWindow();
             long contextTokens = context.contextTokens();
             var trajectory = escalation.begin(new EscalationController.TurnStart(
-                    userId, sessionId, turnId, context.mode(), smart && session.isEscalating(), routes, contextTokens));
+                    userId,
+                    sessionId,
+                    turnId,
+                    context.mode(),
+                    smart && session.isEscalating(),
+                    routes,
+                    contextTokens,
+                    ContextAssembler.hasScreenshots(ContextAssembler.activeItems(writer.conversation(sessionId)))));
             String reason = null;
             Map<String, Object> error = null;
             for (var step = 0; reason == null; step++) {
@@ -242,12 +251,16 @@ public class AgentRunner implements LiveItemSnapshots {
                         writer.contextSnapshots(sessionId),
                         mask,
                         tier.model().supportsVision());
-                var tools = stepTools.get();
+                var tools = stepTools.apply(tier.model());
                 var listener = new TurnListener(userId, sessionId, turnId, step, turn, Item.ASSISTANT_MESSAGE);
                 var request = new ChatRequest(tier.model().modelKey(), messages, tools, null).withCacheKey(sessionId);
                 var used = failover.stream(tier, request, listener, turn.cancellation);
                 listener.completeAll(turn.cancellation.isCancelled() ? Item.CANCELLED : Item.COMPLETED, Map.of());
                 contextTokens = recordUsage(scope, used, model.contextWindow(), listener.usage, request);
+                var stepScope = scope.forStep(new ToolCallHandler.StepModel(
+                        used.model().supportsVision(),
+                        used.model().coordinateSystem(),
+                        trajectory.visionFallback().orElse(null)));
                 if (turn.cancellation.isCancelled()) {
                     reason = Turn.CANCELLED;
                 } else if (listener.toolCalls.isEmpty()) {
@@ -260,12 +273,13 @@ public class AgentRunner implements LiveItemSnapshots {
                             break;
                         }
                         if (PlanTool.NAME.equals(call.name()) && "plan".equals(context.mode())) {
-                            planProposed |= toolCalls.proposePlan(scope, step, call.id(), call.arguments.toString());
+                            planProposed |=
+                                    toolCalls.proposePlan(stepScope, step, call.id(), call.arguments.toString());
                         } else if (ProposeTool.NAME.equals(call.name()) && AGENT.equals(context.mode())) {
-                            toolCalls.proposeTool(scope, step, call.id(), call.arguments.toString());
+                            toolCalls.proposeTool(stepScope, step, call.id(), call.arguments.toString());
                         } else if (ExploreAgent.NAME.equals(call.name()) && ExploreAgent.offered(routes)) {
                             explore.run(
-                                    scope,
+                                    stepScope,
                                     step,
                                     call.id(),
                                     call.arguments.toString(),
@@ -273,7 +287,7 @@ public class AgentRunner implements LiveItemSnapshots {
                                     failover,
                                     project);
                         } else {
-                            toolCalls.handle(scope, step, call.id(), call.name(), call.arguments.toString());
+                            toolCalls.handle(stepScope, step, call.id(), call.name(), call.arguments.toString());
                         }
                     }
                     if (turn.cancellation.isCancelled()) {
@@ -308,12 +322,24 @@ public class AgentRunner implements LiveItemSnapshots {
     }
 
     private List<ChatRequest.ToolDefinition> toolDefinitions(
-            UUID userId, UUID projectId, UUID deviceId, String mode, ModelRouter.ModelPlan routes) {
+            UUID userId,
+            UUID projectId,
+            UUID deviceId,
+            String mode,
+            ModelRouter.ModelPlan routes,
+            ResolvedModel caller) {
         var definitions = new ArrayList<ChatRequest.ToolDefinition>();
+        var canSee = routes.step().model().supportsVision();
         toolRegistry.available(userId, projectId, deviceId).stream()
                 .filter(tool -> tool.availableIn(mode))
+                .filter(tool -> canSee || !tool.isDesktop())
                 .map(tool -> new ChatRequest.ToolDefinition(
-                        tool.getName(), tool.getDescription(), tool.getParametersSchema()))
+                        tool.getName(),
+                        tool.isDesktop()
+                                ? DesktopTools.describe(
+                                        tool.getOperation(), tool.getDescription(), caller.coordinateSystem())
+                                : tool.getDescription(),
+                        tool.getParametersSchema()))
                 .forEach(definitions::add);
         if ("plan".equals(mode)) {
             definitions.add(PlanTool.DEFINITION);
@@ -517,7 +543,7 @@ public class AgentRunner implements LiveItemSnapshots {
         private final ContextAssembler.ProjectContext project;
         private final String globalInstructions;
         private final MaskPolicy mask;
-        private final Supplier<List<ChatRequest.ToolDefinition>> tools;
+        private final Function<ResolvedModel, List<ChatRequest.ToolDefinition>> tools;
 
         Summarizer(
                 ToolCallHandler.TurnScope scope,
@@ -527,7 +553,7 @@ public class AgentRunner implements LiveItemSnapshots {
                 ContextAssembler.ProjectContext project,
                 String globalInstructions,
                 MaskPolicy mask,
-                Supplier<List<ChatRequest.ToolDefinition>> tools) {
+                Function<ResolvedModel, List<ChatRequest.ToolDefinition>> tools) {
             this.scope = scope;
             this.routes = routes;
             this.failover = failover;
@@ -575,7 +601,7 @@ public class AgentRunner implements LiveItemSnapshots {
                     model.supportsVision(),
                     scope.turnId(),
                     carried != null);
-            var definitions = tools.get();
+            var definitions = tools.apply(model);
             var cacheSafeTokens = ContextAssembler.estimateTokens(cacheSafe) + TokenEstimate.tools(definitions);
             var history = ledger.compactionHistory(scope.sessionId());
             var estimate = new CompactionPlanner.Estimate(

@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 import dev.pointer.container.ContainerRuntime;
 import dev.pointer.container.ContainerSpec;
 import dev.pointer.container.GitHubRepositories;
+import dev.pointer.execution.DeviceChannel;
+import dev.pointer.execution.ExecutionService;
 import dev.pointer.session.SessionStatus;
 import dev.pointer.session.SessionWriter;
 import dev.pointer.testing.FakeContainerRuntime;
@@ -68,6 +70,12 @@ class RemoteExecutionTests extends AgentIntegrationTest {
 
     @Autowired
     private JdbcClient jdbc;
+
+    @Autowired
+    private ExecutionService execution;
+
+    @Autowired
+    private DeviceChannel channel;
 
     @MockitoBean
     private GitHubRepositories gitHub;
@@ -181,6 +189,30 @@ class RemoteExecutionTests extends AgentIntegrationTest {
         assertThat(specs.getLast().volume()).isEqualTo(specs.getFirst().volume());
         assertThat(specs.getLast().environment().get("POINTER_RUNNER_SECRET"))
                 .isNotEqualTo(specs.getFirst().environment().get("POINTER_RUNNER_SECRET"));
+    }
+
+    @Test
+    void aRunnersDesktopCapabilityIsKeptStoredAndUsedWhileItIsOffline() throws Exception {
+        var setup = remoteSetUp();
+        var sessionId = UUID.fromString(
+                createRemoteSession(setup).path("session").path("id").asString());
+        var spec = fakeRuntime().awaitCreatedNamed("pointer-session-" + sessionId, TIMEOUT);
+        var deviceId = UUID.fromString(spec.environment().get("POINTER_DEVICE_ID"));
+        assertThat(execution.capabilities(deviceId)).containsExactly("executor");
+
+        try (var runner = GatewayTestClient.connect(
+                port, runnerToken(spec), deviceId, List.of("executor", "desktop", "viewer", "relay"), List.of())) {
+            awaitTrue(() -> execution.capabilities(deviceId).contains("desktop"));
+            assertThat(execution.capabilities(deviceId)).containsExactlyInAnyOrder("executor", "desktop");
+        }
+
+        awaitTrue(() -> !channel.isConnected(deviceId));
+        assertThat(execution.capabilities(deviceId)).containsExactlyInAnyOrder("executor", "desktop");
+        assertThat(jdbc.sql("select array_to_string(capabilities, ',') from devices where id = ?")
+                        .param(deviceId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("desktop,executor");
     }
 
     @Test

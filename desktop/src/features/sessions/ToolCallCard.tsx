@@ -13,7 +13,10 @@ import {
   GlobeIcon,
   HistoryIcon,
   HammerIcon,
+  KeyboardIcon,
   Loader2Icon,
+  MonitorIcon,
+  MousePointerClickIcon,
   SearchIcon,
   SquareTerminalIcon,
   PlugIcon,
@@ -29,6 +32,14 @@ import { errorMessage } from "@/shared/i18n/errors";
 import { cn } from "@/shared/lib/utils";
 import { ApprovalPanel } from "./ApprovalPanel";
 import { DiffView } from "./DiffView";
+import { DesktopThumbnail } from "./DesktopScreenshot";
+import {
+  desktopDetail,
+  desktopSummary,
+  isDesktopTool,
+  marksOf,
+  screenshotsOf,
+} from "./desktop-calls";
 
 type ToolCall = Item & {
   toolName?: string;
@@ -59,6 +70,12 @@ const icons: Record<string, typeof WrenchIcon> = {
   memory_search: BrainIcon,
   memory_delete: BrainIcon,
   search_sessions: HistoryIcon,
+  desktop_click: MousePointerClickIcon,
+  desktop_move: MousePointerClickIcon,
+  desktop_drag: MousePointerClickIcon,
+  desktop_scroll: MousePointerClickIcon,
+  desktop_type: KeyboardIcon,
+  desktop_key: KeyboardIcon,
 };
 
 function sessionResultsText(results: unknown) {
@@ -110,12 +127,17 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
   const [undone, setUndone] = useState(false);
   const toolName = call.toolName ?? "";
   const mcpParts = toolName.startsWith("mcp__") ? toolName.slice(5).split("__") : null;
-  const Icon = icons[toolName] ?? (mcpParts ? PlugIcon : WrenchIcon);
+  const desktop = isDesktopTool(toolName);
+  const Icon = icons[toolName] ?? (mcpParts ? PlugIcon : desktop ? MonitorIcon : WrenchIcon);
+  const screenshots = screenshotsOf(item);
   const status = call.toolStatus ?? "pending";
   const awaitingApproval =
     status === "awaiting_approval" && call.approvalId && call.approvalPreview;
 
   const summary = (() => {
+    if (desktop) {
+      return desktopSummary(t, item);
+    }
     switch (toolName) {
       case "read_file":
       case "list_directory":
@@ -155,6 +177,9 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
 
   const detail = (() => {
     const result = call.result ?? {};
+    if (desktop) {
+      return desktopDetail(t, item);
+    }
     if (status !== "succeeded") {
       return null;
     }
@@ -288,6 +313,22 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
               {JSON.stringify(call.arguments, null, 2)}
             </pre>
           )}
+        </div>
+      )}
+      {screenshots.length > 0 && (
+        <div className="flex flex-wrap gap-2 border-t px-3 py-2">
+          {screenshots.map((image) => (
+            <DesktopThumbnail
+              key={image.attachmentId}
+              sessionId={sessionId}
+              shot={{
+                attachmentId: image.attachmentId,
+                width: image.width,
+                height: image.height,
+                marks: image.zoom ? [] : marksOf(item),
+              }}
+            />
+          ))}
         </div>
       )}
       {!open && status === "running" && call.liveOutput && (

@@ -62,6 +62,14 @@ pointer:
     prepare-timeout: 10m
     github-api-url: ${pointer.github.api-url}
     github-git-url: ${POINTER_GITHUB_GIT_URL:https://github.com}
+    desktop: ${POINTER_RUNNER_DESKTOP:false}
+  desktop:
+    default-width: 1280
+    default-height: 800
+    max-image-width: 1280
+    max-image-height: 800
+    max-image-bytes: 2MB
+    settle-ms: 300
   memory:
     curation-enabled: ${POINTER_MEMORY_CURATION_ENABLED:true}
     curation-idle: ${POINTER_MEMORY_CURATION_IDLE:15m}

@@ -4,12 +4,14 @@ import dev.pointer.provider.ResolvedModel;
 import dev.pointer.routing.ModelRouter;
 import dev.pointer.session.Item;
 import dev.pointer.session.SessionWriter;
+import dev.pointer.tool.ToolErrorCodes;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +22,7 @@ public class EscalationController {
 
     public static final String REASON_STRUGGLE = "struggle";
     public static final String REASON_CONTEXT = "context";
+    public static final String REASON_VISION = "vision";
     static final double FAST_CONTEXT_LIMIT = 0.8;
     private static final Logger log = LoggerFactory.getLogger(EscalationController.class);
     private static final String AGENT_MODE = "agent";
@@ -39,7 +42,8 @@ public class EscalationController {
         var turnItems = turnItems(start.sessionId(), start.turnId());
         var startsFast = start.enabled()
                 && !PLAN_MODE.equals(start.mode())
-                && fastTierUsable(start.routes(), start.contextTokens(), hasImages(turnItems));
+                && fastTierUsable(
+                        start.routes(), start.contextTokens(), hasImages(turnItems) || start.contextHasScreenshots());
         return new Trajectory(
                 start, startsFast ? start.routes().fast() : start.routes().step(), startsFast);
     }
@@ -63,6 +67,14 @@ public class EscalationController {
                 .toList();
     }
 
+    private static boolean calledWithoutVision(List<Map<String, Object>> turnItems, int step) {
+        return turnItems.stream()
+                .filter(item -> Item.TOOL_CALL.equals(item.get("type")) && item.get("parentItemId") == null)
+                .filter(item -> item.get("step") instanceof Number number && number.intValue() == step)
+                .anyMatch(item -> item.get("error") instanceof Map<?, ?> error
+                        && ToolErrorCodes.NEEDS_VISION.equals(error.get("code")));
+    }
+
     private static boolean hasImages(List<Map<String, Object>> turnItems) {
         return turnItems.stream()
                 .filter(item -> Item.USER_MESSAGE.equals(item.get("type")))
@@ -79,7 +91,20 @@ public class EscalationController {
             String mode,
             boolean enabled,
             ModelRouter.ModelPlan routes,
-            long contextTokens) {}
+            long contextTokens,
+            boolean contextHasScreenshots) {
+
+        public TurnStart(
+                UUID userId,
+                UUID sessionId,
+                UUID turnId,
+                String mode,
+                boolean enabled,
+                ModelRouter.ModelPlan routes,
+                long contextTokens) {
+            this(userId, sessionId, turnId, mode, enabled, routes, contextTokens, false);
+        }
+    }
 
     public final class Trajectory {
 
@@ -102,14 +127,23 @@ public class EscalationController {
             return current;
         }
 
+        public Optional<String> visionFallback() {
+            var step = start.routes().step().model();
+            return onFastTier && step.supportsVision() ? Optional.of(step.displayName()) : Optional.empty();
+        }
+
         public void recordStep(int step, String modelLabel, boolean turnContinues) {
             try {
-                var signals = StruggleSignals.compute(
-                        turnItems(start.sessionId(), start.turnId()), AGENT_MODE.equals(start.mode()));
+                var items = turnItems(start.sessionId(), start.turnId());
+                var signals = StruggleSignals.compute(items, AGENT_MODE.equals(start.mode()));
                 history.add(signals);
                 var score = policy.score(history);
-                var decision =
-                        onFastTier && turnContinues ? policy.decide(score, nudged) : EscalationPolicy.Decision.CONTINUE;
+                var needsVision = turnContinues && visionFallback().isPresent() && calledWithoutVision(items, step);
+                var decision = needsVision
+                        ? EscalationPolicy.Decision.ESCALATE
+                        : onFastTier && turnContinues
+                                ? policy.decide(score, nudged)
+                                : EscalationPolicy.Decision.CONTINUE;
                 stepSignals.record(
                         start.sessionId(),
                         start.turnId(),
@@ -120,7 +154,11 @@ public class EscalationController {
                         decision == EscalationPolicy.Decision.ESCALATE,
                         decision == EscalationPolicy.Decision.NUDGE);
                 switch (decision) {
-                    case ESCALATE -> escalate(REASON_STRUGGLE, score, EscalationPolicy.firing(history));
+                    case ESCALATE ->
+                        escalate(
+                                needsVision ? REASON_VISION : REASON_STRUGGLE,
+                                score,
+                                needsVision ? List.of() : EscalationPolicy.firing(history));
                     case NUDGE -> nudge(score, EscalationPolicy.firing(history));
                     case CONTINUE -> {}
                 }
