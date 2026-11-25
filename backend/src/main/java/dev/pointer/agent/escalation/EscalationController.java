@@ -43,7 +43,9 @@ public class EscalationController {
         var startsFast = start.enabled()
                 && !PLAN_MODE.equals(start.mode())
                 && fastTierUsable(
-                        start.routes(), start.contextTokens(), hasImages(turnItems) || start.contextHasScreenshots());
+                        start.routes(),
+                        start.contextTokens(),
+                        hasImages(turnItems) || start.contextHasVisibleScreenshots());
         return new Trajectory(
                 start, startsFast ? start.routes().fast() : start.routes().step(), startsFast);
     }
@@ -92,7 +94,7 @@ public class EscalationController {
             boolean enabled,
             ModelRouter.ModelPlan routes,
             long contextTokens,
-            boolean contextHasScreenshots) {
+            boolean contextHasVisibleScreenshots) {
 
         public TurnStart(
                 UUID userId,

@@ -21,12 +21,12 @@ public class AttachmentService {
 
     static final int MAX_IMAGE_BYTES = 5 * 1024 * 1024;
     private static final Set<String> IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/gif", "image/webp");
-    private static final long DATA_URL_CACHE_CHARS = 24L * 1024 * 1024;
+    private static final long INLINE_IMAGE_CACHE_CHARS = 24L * 1024 * 1024;
 
     private final AttachmentRepository attachments;
     private final SessionService sessions;
     private final Clock clock;
-    private final DataUrlCache dataUrls = new DataUrlCache(DATA_URL_CACHE_CHARS);
+    private final InlineImageCache inlineImages = new InlineImageCache(INLINE_IMAGE_CACHE_CHARS);
 
     @Transactional
     public AttachmentResponse upload(UUID userId, UUID sessionId, String mediaType, byte[] data) {
@@ -72,17 +72,20 @@ public class AttachmentService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<String> dataUrl(UUID attachmentId) {
-        var cached = dataUrls.get(attachmentId);
+    public Optional<InlineImage> inlineImage(UUID attachmentId) {
+        var cached = inlineImages.get(attachmentId);
         if (cached != null) {
             return Optional.of(cached);
         }
-        var url = attachments
+        var image = attachments
                 .findById(attachmentId)
-                .map(attachment -> "data:" + attachment.getMediaType() + ";base64,"
-                        + Base64.getEncoder().encodeToString(attachment.getData()));
-        url.ifPresent(found -> dataUrls.put(attachmentId, found));
-        return url;
+                .map(attachment -> new InlineImage(
+                        "data:" + attachment.getMediaType() + ";base64,"
+                                + Base64.getEncoder().encodeToString(attachment.getData()),
+                        attachment.getWidth(),
+                        attachment.getHeight()));
+        image.ifPresent(found -> inlineImages.put(attachmentId, found));
+        return image;
     }
 
     private static int[] dimensions(byte[] data) {
@@ -103,33 +106,35 @@ public class AttachmentService {
         }
     }
 
-    private static final class DataUrlCache {
+    private static final class InlineImageCache {
 
         private final long maxChars;
-        private final Map<UUID, String> entries = new LinkedHashMap<>(16, 0.75f, true);
+        private final Map<UUID, InlineImage> entries = new LinkedHashMap<>(16, 0.75f, true);
         private long chars;
 
-        DataUrlCache(long maxChars) {
+        InlineImageCache(long maxChars) {
             this.maxChars = maxChars;
         }
 
-        synchronized String get(UUID id) {
+        synchronized InlineImage get(UUID id) {
             return entries.get(id);
         }
 
-        synchronized void put(UUID id, String url) {
-            if (url.length() > maxChars || entries.containsKey(id)) {
+        synchronized void put(UUID id, InlineImage image) {
+            if (image.dataUrl().length() > maxChars || entries.containsKey(id)) {
                 return;
             }
-            entries.put(id, url);
-            chars += url.length();
+            entries.put(id, image);
+            chars += image.dataUrl().length();
             var iterator = entries.entrySet().iterator();
             while (chars > maxChars && iterator.hasNext()) {
-                chars -= iterator.next().getValue().length();
+                chars -= iterator.next().getValue().dataUrl().length();
                 iterator.remove();
             }
         }
     }
 
     public record AttachmentResponse(UUID id, String mediaType, int sizeBytes) {}
+
+    public record InlineImage(String dataUrl, Integer width, Integer height) {}
 }

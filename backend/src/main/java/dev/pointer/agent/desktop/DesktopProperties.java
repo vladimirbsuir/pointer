@@ -10,4 +10,7 @@ public record DesktopProperties(
         int maxImageWidth,
         int maxImageHeight,
         DataSize maxImageBytes,
-        long settleMs) {}
+        long settleMs,
+        int keepImages,
+        int imageMaskBlock,
+        int pixelsPerToken) {}

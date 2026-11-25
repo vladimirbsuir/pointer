@@ -67,6 +67,8 @@ As implemented in phase 1.2: `DesktopCoordinatesTests` (identity, grid, scaled d
 - Masking applies under all three context strategies; originals remain; compaction input and cache-safe compaction render as specified in [agent-and-context.md](agent-and-context.md).
 - Token estimate: an image of known size counts from its dimensions, one of unknown size counts the old constant.
 
+As implemented in phase 1.3: `ContextAssemblerTests` runs the append-only property test and the cache-safe compaction prefix test over generated conversations whose steps mix text results with desktop calls of one or two screenshots, under five pairs of result and screenshot policies (none, `3/4`, `1/1`, `0/2` for screenshots), and accepts a difference only at a newly masked result or screenshot message; `DesktopContextTests` checks the boundary of the screenshot counter at 1, 3, 6, 7, 10 and 11 screenshots with `keep 3, block 4`, per-step masking with `block 1`, a boundary inside a step with several screenshots, masked screenshots not being read from the database, the same masking under `summary`, `masking` and `hybrid`, the legacy and cache-safe compaction inputs, the visibility check of the escalation pre-check and the token estimate of known and unknown image sizes. The live effect on a real model is in [desktop.md](../../benchmarks/desktop.md).
+
 ### 1.4 Live view
 
 - In the image: after `desktop_start`, `x11vnc` and `websockify` are listening and the stream shows the display (a test RFB client reads the framebuffer and sees the fixture window); before `desktop_start` nothing listens; the password file has the expected structure and both passwords are 8 characters.

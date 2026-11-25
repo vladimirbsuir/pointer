@@ -46,10 +46,11 @@ A 1280x800 screenshot costs on the order of a thousand input tokens on most visi
 - It applies under every context strategy (`summary`, `masking`, `hybrid`). The result masking of F5 replaces only text results over 200 characters; images are not text and would never be masked by it.
 - The assistant's own messages and tool calls are never masked, so the model keeps its notes about what it saw.
 - Original images stay in the attachments table and in the client.
+- A masked screenshot keeps its line in the message under the same header and is not read from the database; the escalation pre-check at turn start counts only screenshots that are not masked.
 - Token accounting: `TokenEstimate` has one estimate for all images. An image whose dimensions are known (every screenshot, and user uploads from this phase on) counts `ceil(width × height / pointer.desktop.pixels-per-token)` tokens, default 750 pixels per token, which gives about 1,365 for 1280x800; an image of unknown size keeps today's 1,000. The divisor is calibrated against the providers' reported usage in phase 1.6. Compaction thresholds, the soft trigger and the context meter use it.
 - Property test: over generated conversations with images and several mask policies, the request at every call is a strict extension of the previous one except at the first newly masked image when the boundary moved, the same allowance as for result masking.
 
-[ADR 0028](../../adr/0028-gui-sandbox-in-the-session-container.md) records stage 1 design decisions; the masking amendment of ADR 0024 is a separate ADR written in phase 1.3.
+[ADR 0028](../../adr/0028-gui-sandbox-in-the-session-container.md) records stage 1 design decisions; the masking amendment of ADR 0024 is [ADR 0029](../../adr/0029-image-masking.md).
 
 ## Guidance in the tool descriptions
 

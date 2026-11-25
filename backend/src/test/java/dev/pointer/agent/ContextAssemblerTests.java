@@ -1,18 +1,20 @@
 package dev.pointer.agent;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import dev.pointer.provider.llm.ChatMessage;
+import dev.pointer.session.AttachmentService;
 import dev.pointer.session.Item;
-import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.SequencedMap;
 import java.util.UUID;
@@ -28,8 +30,14 @@ class ContextAssemblerTests {
                     "demo", "main", "AGENTS.md", "Rules.", "Windows", "PowerShell")
             .withMemory("Memory:\nIndex:\n- note");
 
-    private final ContextAssembler assembler =
-            new ContextAssembler(Clock.fixed(Instant.parse("2026-11-18T10:00:00Z"), ZoneOffset.UTC), null);
+    private final AttachmentService attachments = mock(AttachmentService.class);
+    private final ContextAssembler assembler = assembler(MaskPolicy.NONE);
+
+    ContextAssemblerTests() {
+        when(attachments.inlineImage(any()))
+                .thenAnswer(invocation -> Optional.of(new AttachmentService.InlineImage(
+                        "data:image/png;base64," + invocation.getArgument(0, UUID.class), 1280, 800)));
+    }
 
     @Test
     void theSystemPromptHoldsOnlyWhatTheUserEdits() {
@@ -99,25 +107,37 @@ class ContextAssemblerTests {
 
     @ParameterizedTest
     @MethodSource("policies")
-    void buildsAreAppendOnlyBetweenCompactionsAndMaskBoundaryMoves(MaskPolicy policy) {
+    void buildsAreAppendOnlyBetweenCompactionsAndMaskBoundaryMoves(Policies policies) {
+        var assembler = assembler(policies.images());
         var random = new Random(20261118);
-        var masked = 0;
+        var maskedResults = 0;
+        var maskedImages = 0;
         for (var run = 0; run < 300; run++) {
             var session = GeneratedSession.generate(random);
             List<ChatMessage> previous = null;
-            var previousBoundary = 0;
+            Boundaries previousBoundaries = null;
             for (var boundary : session.boundaries) {
-                var messages = build(boundary.items(), boundary.snapshots(), policy);
-                var maskBoundary =
-                        policy.boundary(ContextAssembler.countResults(ContextAssembler.activeItems(boundary.items())));
+                var messages = build(assembler, boundary.items(), boundary.snapshots(), policies.results());
+                var active = ContextAssembler.activeItems(boundary.items());
+                var boundaries = new Boundaries(
+                        policies.results().boundary(ContextAssembler.countResults(active)),
+                        policies.images().boundary(ContextAssembler.countScreenshots(active)));
                 if (previous != null && !boundary.afterCompaction()) {
                     var first = firstDifference(previous, messages);
                     assertThat(messages.size()).isGreaterThan(previous.size());
-                    if (maskBoundary == previousBoundary) {
+                    if (boundaries.equals(previousBoundaries)) {
                         assertThat(first).as("run %d", run).isEqualTo(previous.size());
                     } else if (first < previous.size()) {
-                        assertThat(messages.get(first).role()).isEqualTo(ChatMessage.Role.TOOL);
-                        assertThat(messages.get(first).content()).startsWith(PLACEHOLDER);
+                        var changed = messages.get(first);
+                        if (boundaries.results() == previousBoundaries.results()) {
+                            assertThat(isMaskedScreenshots(changed))
+                                    .as("run %d", run)
+                                    .isTrue();
+                        } else {
+                            assertThat(isMaskedResult(changed) || isMaskedScreenshots(changed))
+                                    .as("run %d", run)
+                                    .isTrue();
+                        }
                     }
                 }
                 if (boundary.afterCompaction() && !boundary.snapshots().isEmpty()) {
@@ -125,25 +145,35 @@ class ContextAssemblerTests {
                                     .filter(message -> message.content().contains(CONTEXT_BLOCK)))
                             .isNotEmpty();
                 }
-                assertThat(build(boundary.items(), boundary.snapshots(), policy))
+                assertThat(build(assembler, boundary.items(), boundary.snapshots(), policies.results()))
                         .isEqualTo(messages);
-                masked += (int) messages.stream()
-                        .filter(message -> message.content().startsWith(PLACEHOLDER))
+                maskedResults += (int) messages.stream()
+                        .filter(ContextAssemblerTests::isMaskedResult)
+                        .count();
+                maskedImages += (int) messages.stream()
+                        .filter(ContextAssemblerTests::isMaskedScreenshots)
                         .count();
                 previous = messages;
-                previousBoundary = maskBoundary;
+                previousBoundaries = boundaries;
             }
         }
-        if (policy == MaskPolicy.NONE) {
-            assertThat(masked).isZero();
+        if (policies.results() == MaskPolicy.NONE) {
+            assertThat(maskedResults).isZero();
         } else {
-            assertThat(masked).isPositive();
+            assertThat(maskedResults).isPositive();
+        }
+        if (policies.images() == MaskPolicy.NONE) {
+            assertThat(maskedImages).isZero();
+        } else {
+            assertThat(maskedImages).isPositive();
         }
     }
 
     @ParameterizedTest
     @MethodSource("policies")
-    void theCacheSafeCompactionRequestExtendsAPrefixOfTheStepRequest(MaskPolicy policy) {
+    void theCacheSafeCompactionRequestExtendsAPrefixOfTheStepRequest(Policies policies) {
+        var assembler = assembler(policies.images());
+        var policy = policies.results();
         var random = new Random(20261119);
         var checked = 0;
         for (var run = 0; run < 300; run++) {
@@ -152,7 +182,7 @@ class ContextAssemblerTests {
                 if (ContextAssembler.compactable(boundary.items(), currentTurn).isEmpty()) {
                     continue;
                 }
-                var step = build(boundary.items(), boundary.snapshots(), policy);
+                var step = build(assembler, boundary.items(), boundary.snapshots(), policy);
                 var continues = ContextAssembler.carriedSummary(
                                 ContextAssembler.compactable(boundary.items(), currentTurn), 10_000)
                         != null;
@@ -163,7 +193,7 @@ class ContextAssemblerTests {
                         boundary.items(),
                         boundary.snapshots(),
                         policy,
-                        false,
+                        true,
                         currentTurn,
                         continues);
                 var prefix = compaction.subList(0, compaction.size() - 1);
@@ -281,8 +311,27 @@ class ContextAssemblerTests {
                 .isFalse();
     }
 
-    static List<MaskPolicy> policies() {
-        return List.of(MaskPolicy.NONE, new MaskPolicy(3, 3), new MaskPolicy(3, 1), new MaskPolicy(0, 2));
+    static List<Policies> policies() {
+        return List.of(
+                new Policies(MaskPolicy.NONE, MaskPolicy.NONE),
+                new Policies(MaskPolicy.NONE, new MaskPolicy(3, 4)),
+                new Policies(new MaskPolicy(3, 3), new MaskPolicy(1, 1)),
+                new Policies(new MaskPolicy(3, 1), new MaskPolicy(0, 2)),
+                new Policies(new MaskPolicy(0, 2), MaskPolicy.NONE));
+    }
+
+    private static boolean isMaskedResult(ChatMessage message) {
+        return message.role() == ChatMessage.Role.TOOL && message.content().startsWith(PLACEHOLDER);
+    }
+
+    private static boolean isMaskedScreenshots(ChatMessage message) {
+        return message.role() == ChatMessage.Role.USER
+                && message.content().startsWith(ContextAssembler.SCREENSHOTS_HEADER)
+                && message.content().contains(ContextAssembler.SCREENSHOT_OMITTED);
+    }
+
+    private ContextAssembler assembler(MaskPolicy images) {
+        return TestAssemblers.assembler("2026-11-18T10:00:00Z", attachments, images);
     }
 
     private static int firstDifference(List<ChatMessage> previous, List<ChatMessage> current) {
@@ -303,6 +352,18 @@ class ContextAssemblerTests {
             List<Map<String, Object>> items, SequencedMap<UUID, String> snapshots, MaskPolicy policy) {
         return assembler.build("agent", "Be brief.", PROJECT, items, snapshots, policy, false);
     }
+
+    private static List<ChatMessage> build(
+            ContextAssembler assembler,
+            List<Map<String, Object>> items,
+            SequencedMap<UUID, String> snapshots,
+            MaskPolicy policy) {
+        return assembler.build("agent", "Be brief.", PROJECT, items, snapshots, policy, true);
+    }
+
+    record Policies(MaskPolicy results, MaskPolicy images) {}
+
+    private record Boundaries(int results, int images) {}
 
     private record Boundary(
             List<Map<String, Object>> items, SequencedMap<UUID, String> snapshots, boolean afterCompaction) {}
@@ -377,10 +438,44 @@ class ContextAssemblerTests {
             var count = 1 + random.nextInt(3);
             for (var index = 0; index < count; index++) {
                 var callId = "call_" + calls++;
+                if (random.nextInt(3) == 0) {
+                    desktopCall(turnId, step, callId, random.nextInt(4) == 0 ? 2 : 1);
+                    continue;
+                }
                 var result =
                         random.nextInt(5) < 3 ? ("contents of " + callId + "\n").repeat(20) : "contents of " + callId;
                 call(turnId, step, callId, "{\"path\":\"" + callId + "\"}", result);
             }
+        }
+
+        void desktopCall(UUID turnId, int step, String callId, int screenshots) {
+            var images = new ArrayList<Map<String, Object>>();
+            for (var index = 0; index < screenshots; index++) {
+                images.add(Map.of(
+                        "attachmentId",
+                        UUID.randomUUID().toString(),
+                        "mediaType",
+                        "image/png",
+                        "width",
+                        1280,
+                        "height",
+                        800));
+            }
+            items.add(item(
+                    turnId,
+                    Item.TOOL_CALL,
+                    step,
+                    Map.of(
+                            "providerCallId",
+                            callId,
+                            "toolName",
+                            "desktop_click",
+                            "argumentsJson",
+                            "{\"x\":" + calls + ",\"y\":1}",
+                            "resultText",
+                            "{}\nScreenshot attached.",
+                            "images",
+                            List.copyOf(images))));
         }
 
         void call(UUID turnId, int step, String callId, String arguments, String result) {

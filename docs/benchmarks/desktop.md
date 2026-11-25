@@ -89,3 +89,28 @@ The rows hold 7,619 characters of names, descriptions and schemas, plus the conv
 
 - **The default image stays `full`.** The schemas are sent only to sessions whose runner reports `desktop`, so the default image decides nothing about their cost; what it decides is 1.24 GB more image per host, which the shared production host does not need. Operators who want the tools pick `--runner gui`, which also sets `POINTER_RUNNER_DESKTOP=true`.
 - **Eleven separate tools stay for now.** About 1.4–1.6k tokens per request is a fixed prefix that providers cache (above), so it costs about a tenth of its uncached price after the first step; the single-tool form remains an option for the comparison in phase 1.6.
+
+## Phase 1.3: image masking
+
+Measured on 2026-11-25 with `infra/bench/desktop/live_check.py --task clicks` against a local backend, the bench device inside the `gui` image as the executor and TokenHarbor `deepseek-v4.1-flash:free` as the model (Experiential Labs' free plan allows 10 requests per minute, fewer than the task needs). The task: start the display, launch `tk-counter`, click Increment six times with one call per click and look at the count after each, type `hello` and report the count. It produces 9–11 screenshots in 13–15 requests. The backend was restarted with each screenshot policy (`POINTER_DESKTOP_KEEP_IMAGES`, `POINTER_DESKTOP_IMAGE_MASK_BLOCK`); the result masking of F5 was off (`summary` strategy) in all runs, and every run passed.
+
+| Screenshots kept | Run | Requests | Screenshots | Prompt tokens | Cached | Uncached | Last request | Time |
+|---|---|---|---|---|---|---|---|---|
+| all | 1 | 14 | 9 | 133.0k | 123.5k | 9.5k | 13.2k | 96 s |
+| all | 2 | 14 | 9 | 132.2k | 123.3k | 9.0k | 13.2k | 100 s |
+| keep 3, block 4 (default) | 1 | 13 | 9 | 108.9k | 92.3k | 16.7k | 10.5k | 88 s |
+| keep 3, block 4 (default) | 2 | 14 | 9 | 119.4k | 108.5k | 10.8k | 10.6k | 86 s |
+| keep 1, block 1 | 1 | 14 | 9 | 98.1k | 86.5k | 11.6k | 8.1k | 71 s |
+| keep 1, block 1 | 2 | 14 | 11 | 98.7k | 86.3k | 12.4k | 8.2k | 89 s |
+
+Observations:
+
+- **Masking shrinks the prompt by 10–26 %** on a task of nine screenshots: the default policy sent 109–119k prompt tokens instead of 132–133k, `keep 1, block 1` 98k. The saving grows with the length of the task, since without masking every screenshot stays in every later request.
+- **The default policy moved its boundary once.** At the seventh screenshot four screenshots were masked, and the request fell from 10.7k to 8.9k tokens; that request was the only one with a large uncached part (2.7k against about 0.8k at other steps); the first of the two runs also started on a cold cache (4.9k), hence its larger uncached total.
+- **With a cache discount the saving is small on a task this short.** At a cached price of a tenth, the runs cost the equivalent of 21–22k uncached tokens without masking, 22–26k with the default policy and 20–21k with `keep 1, block 1`. Most of what masking removes was served from the cache anyway; the gain is the smaller context, which matters for long tasks, small context windows and providers without a cache.
+- **Per-step masking is cheap for screenshots with `keep 1`.** The newly masked screenshot is always the one of the previous step, so each move invalidates only the last step's messages; this differs from text results, where the masked result lies `keep` results back. Phase 1.6 compares the policies on longer tasks and counts repeated actions, which would show the model missing an older screenshot; in these runs every configuration clicked seven times (six increments and the text field), and one run with `keep 1` took two extra screenshots before its answer, the only extra observation seen.
+- **The image estimate is about twice the provider's count.** Each step with a screenshot added about 760 reported prompt tokens, including its call, result and line, while the estimate counts 1,366 for the 1280x800 image alone; this provider counts roughly 1,400 pixels per token. The estimate errs on the safe side for compaction thresholds; `pixels-per-token` stays 750 until phase 1.6 calibrates it against all test providers.
+
+### Storage of screenshots
+
+The 94 screenshots stored by the live checks of phases 1.2 and 1.3 are 1280x800 PNG files of 26.7–30.7 KB, 29.7 KB on average; a screen with a browser page or a photo holds more detail and is limited to 2 MB per image (`pointer.desktop.max-image-bytes`). A GUI session of a hundred steps therefore stores about 3 MB of screenshots of a simple application. Screenshots are removed with their session and no count or age limit is added in stage 1; the question is reopened if the benchmark of phase 1.6 finds sessions with much larger screens.

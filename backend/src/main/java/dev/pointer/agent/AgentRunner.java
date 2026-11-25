@@ -216,7 +216,8 @@ public class AgentRunner implements LiveItemSnapshots {
                     smart && session.isEscalating(),
                     routes,
                     contextTokens,
-                    ContextAssembler.hasScreenshots(ContextAssembler.activeItems(writer.conversation(sessionId)))));
+                    contextAssembler.hasVisibleScreenshots(
+                            ContextAssembler.activeItems(writer.conversation(sessionId)))));
             String reason = null;
             Map<String, Object> error = null;
             for (var step = 0; reason == null; step++) {

@@ -17,11 +17,25 @@ Api = routing.Api
 
 PROJECT_NAME = "desktop-fixture"
 STATE_PATH = "/tmp/tk-state.json"
-PROMPT = (
+LAUNCH = (
     "Test the Tk application in app.py with the desktop tools. Start the display, launch it with "
-    f"`python3 app.py {STATE_PATH}`, wait for its window, click the Increment button twice, type hello into "
-    "the text field, and then tell me the count shown in the window."
+    f"`python3 app.py {STATE_PATH}`, wait for its window, "
 )
+TASKS = {
+    "counter": {
+        "prompt": LAUNCH + "click the Increment button twice, type hello into the text field, and then tell me "
+                           "the count shown in the window.",
+        "count": 2,
+        "followUp": True,
+    },
+    "clicks": {
+        "prompt": LAUNCH + "then click the Increment button six times with one desktop_click call per click (do not "
+                           "use the clicks argument) and check the count in the screenshot after every click. Then "
+                           "type hello into the text field and tell me the final count shown in the window.",
+        "count": 6,
+        "followUp": False,
+    },
+}
 FOLLOW_UP = "Also tell me the title of the window."
 SCHEMA_PROMPT = "Reply with the single word OK."
 
@@ -39,6 +53,10 @@ def parse_args():
                         help="Docker volume with the bench device built inside the image (see README)")
     parser.add_argument("--backend-host", default="http://host.docker.internal:8080")
     parser.add_argument("--timeout", type=int, default=600)
+    parser.add_argument("--task", choices=sorted(TASKS), default="counter",
+                        help="counter: the message-order check; clicks: one screenshot per click, for image masking")
+    parser.add_argument("--runs", type=int, default=1, help="runs of the task per model")
+    parser.add_argument("--label", help="saved with the runs, e.g. the backend's image masking setting")
     parser.add_argument("--schema-cost", action="store_true",
                         help="also compare the prompt tokens of a one-step turn with and without the desktop tools")
     parser.add_argument("--schema-only", action="store_true", help="measure the schema cost without the GUI task")
@@ -157,12 +175,13 @@ def run_gui_task(api, project, model, args, device):
     session_id = session["id"]
     api.call("PATCH", f"/sessions/{session_id}", {"autoApprove": True})
     started = time.time()
-    api.call("POST", f"/sessions/{session_id}/messages", {"text": PROMPT, "mode": "agent"})
+    task = TASKS[args.task]
+    api.call("POST", f"/sessions/{session_id}/messages", {"text": task["prompt"], "mode": "agent"})
     follow_up_sent = False
     try:
         wait_for(api, session_id, args.timeout,
                  lambda current, items: has_screenshot(items) or current["status"] in ("idle", "error"))
-        if api.call("GET", f"/sessions/{session_id}")["status"] not in ("idle", "error"):
+        if task["followUp"] and api.call("GET", f"/sessions/{session_id}")["status"] not in ("idle", "error"):
             api.call("POST", f"/sessions/{session_id}/messages", {"text": FOLLOW_UP, "mode": "agent"})
             follow_up_sent = True
         state, items = wait_for(api, session_id, args.timeout,
@@ -181,6 +200,8 @@ def run_gui_task(api, project, model, args, device):
     errors = [item.get("error") for item in items if item["type"] == "tool_call" and item.get("error")]
     return {
         "model": model["modelKey"],
+        "task": args.task,
+        "label": args.label,
         "sessionId": session_id,
         "status": state["status"],
         "seconds": round(seconds, 1),
@@ -195,7 +216,8 @@ def run_gui_task(api, project, model, args, device):
         "acceptedToolUserAssistant": tool_user_assistant,
         "acceptedToolUserUser": tool_user_user if follow_up_sent else None,
         "check": {key: check.get(key) for key in ("count", "text")} if check else None,
-        "success": bool(check and check.get("count") == 2 and check.get("text") == "hello"),
+        "screenshots": sum(len(call.get("images") or []) for call in calls),
+        "success": bool(check and check.get("count") == task["count"] and check.get("text") == "hello"),
         "answer": answer[:600],
         "toolErrors": errors,
         "usage": usage["entries"],
@@ -246,12 +268,15 @@ def main():
     runs, costs = [], []
     try:
         for provider, model in models:
-            if not args.schema_only:
+            for _ in range(0 if args.schema_only else args.runs):
                 run = run_gui_task(api, project, model, args, device)
                 run["provider"] = provider["name"]
                 runs.append(run)
+                step = next((entry for entry in run["usage"] if entry["purpose"] == "step"), {})
                 print(f"{provider['name']}/{model['modelKey']}: {run['status']} success={run['success']} "
-                      f"calls={len(run['toolCalls'])} tool>user>assistant={run['acceptedToolUserAssistant']} "
+                      f"calls={len(run['toolCalls'])} screenshots={run['screenshots']} "
+                      f"prompt={step.get('promptTokens')} cached={step.get('cachedPromptTokens')} "
+                      f"tool>user>assistant={run['acceptedToolUserAssistant']} "
                       f"tool>user>user={run['acceptedToolUserUser']} {run['seconds']}s", flush=True)
             if args.schema_cost or args.schema_only:
                 cost = schema_cost(api, project, provider, model)

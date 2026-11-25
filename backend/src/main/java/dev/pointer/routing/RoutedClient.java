@@ -153,7 +153,7 @@ public class RoutedClient {
                 ModelRouter.RoutedModel routed, ModelRouter.RoutedModel failed, ChatRequest request) {
             var needsTools = !request.tools().isEmpty();
             var needsVision = request.messages().stream()
-                    .anyMatch(message -> !message.imageUrls().isEmpty());
+                    .anyMatch(message -> !message.images().isEmpty());
             var alternatives = new ArrayList<ModelRouter.RoutedModel>();
             if (failed != routed) {
                 alternatives.add(routed);

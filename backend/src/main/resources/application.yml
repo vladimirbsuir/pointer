@@ -70,6 +70,9 @@ pointer:
     max-image-height: 800
     max-image-bytes: 2MB
     settle-ms: 300
+    keep-images: ${POINTER_DESKTOP_KEEP_IMAGES:3}
+    image-mask-block: ${POINTER_DESKTOP_IMAGE_MASK_BLOCK:4}
+    pixels-per-token: 750
   memory:
     curation-enabled: ${POINTER_MEMORY_CURATION_ENABLED:true}
     curation-idle: ${POINTER_MEMORY_CURATION_IDLE:15m}

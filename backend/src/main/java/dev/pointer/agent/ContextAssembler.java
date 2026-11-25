@@ -1,5 +1,6 @@
 package dev.pointer.agent;
 
+import dev.pointer.agent.desktop.DesktopProperties;
 import dev.pointer.provider.llm.ChatMessage;
 import dev.pointer.provider.llm.TokenEstimate;
 import dev.pointer.session.AttachmentService;
@@ -96,9 +97,11 @@ class ContextAssembler {
     static final String SCREENSHOTS_HEADER = "Screenshots from this step, in call order:";
     static final String SCREENSHOTS_UNSUPPORTED_HEADER =
             "Screenshots from this step, not shown because the current model does not accept images:";
+    static final String SCREENSHOT_OMITTED = "[Screenshot omitted: ";
 
     private final Clock clock;
     private final AttachmentService attachments;
+    private final DesktopProperties desktop;
 
     List<ChatMessage> build(
             String mode,
@@ -114,7 +117,7 @@ class ContextAssembler {
                 active,
                 carriedSnapshot(active, snapshots),
                 snapshots,
-                mask.boundary(countResults(active)),
+                boundaries(active, mask),
                 supportsVision);
     }
 
@@ -137,7 +140,7 @@ class ContextAssembler {
                 covered,
                 carriedSnapshot(active, snapshots),
                 snapshots,
-                mask.boundary(countResults(active)),
+                boundaries(active, mask),
                 supportsVision);
         messages.add(ChatMessage.user(CACHE_SAFE_PREAMBLE + compactionRequest(continuesSummary)));
         return messages;
@@ -148,12 +151,14 @@ class ContextAssembler {
             List<Map<String, Object>> items,
             String carried,
             SequencedMap<UUID, String> snapshots,
-            int maskBoundary,
+            MaskBoundaries boundaries,
             boolean supportsVision) {
         var messages = new ArrayList<ChatMessage>();
         messages.add(ChatMessage.system(systemPrompt));
         var pending = new LinkedHashMap<>(snapshots);
-        var group = new StepGroup(new ResultMask(maskBoundary), calls -> screenshots(calls, supportsVision));
+        var images = new ImageMask(boundaries.images());
+        var group = new StepGroup(
+                new ResultMask(boundaries.results()), calls -> screenshots(calls, supportsVision, images));
         for (var item : items) {
             var type = String.valueOf(item.get("type"));
             switch (type) {
@@ -188,7 +193,8 @@ class ContextAssembler {
         }
         messages.add(ChatMessage.system(prompt.toString()));
         messages.add(ChatMessage.user(request));
-        var group = new StepGroup(new ResultMask(0), calls -> screenshots(calls, false));
+        var images = new ImageMask(0);
+        var group = new StepGroup(new ResultMask(0), calls -> screenshots(calls, false, images));
         nestedItems.forEach(item -> group.add(item, messages));
         group.flushInto(messages);
         return messages;
@@ -252,32 +258,54 @@ class ContextAssembler {
                 .orElse(null);
     }
 
-    static boolean hasScreenshots(List<Map<String, Object>> items) {
-        return items.stream()
-                .filter(item -> Item.TOOL_CALL.equals(item.get("type")))
-                .anyMatch(item -> !screenshotIds(item).isEmpty());
+    boolean hasVisibleScreenshots(List<Map<String, Object>> active) {
+        var screenshots = countScreenshots(active);
+        return screenshots > imageMask().boundary(screenshots);
     }
 
-    private Optional<ChatMessage> screenshots(List<Map<String, Object>> calls, boolean supportsVision) {
+    MaskPolicy imageMask() {
+        return new MaskPolicy(desktop.keepImages(), desktop.imageMaskBlock());
+    }
+
+    private MaskBoundaries boundaries(List<Map<String, Object>> active, MaskPolicy results) {
+        return new MaskBoundaries(
+                results.boundary(countResults(active)), imageMask().boundary(countScreenshots(active)));
+    }
+
+    static int countScreenshots(List<Map<String, Object>> items) {
+        return items.stream()
+                .filter(item -> Item.TOOL_CALL.equals(item.get("type")) && item.get("providerCallId") != null)
+                .mapToInt(item -> screenshotIds(item).size())
+                .sum();
+    }
+
+    private Optional<ChatMessage> screenshots(List<Map<String, Object>> calls, boolean supportsVision, ImageMask mask) {
         var lines = new ArrayList<String>();
-        var urls = new ArrayList<String>();
+        var images = new ArrayList<ChatMessage.Image>();
         for (var call : calls) {
             for (var id : screenshotIds(call)) {
-                var url = supportsVision ? attachments.dataUrl(id) : Optional.<String>empty();
-                if (url.isPresent()) {
-                    urls.add(url.get());
-                    lines.add((urls.size()) + ". " + callLabel(call));
+                var image = mask.shows() && supportsVision ? image(id) : Optional.<ChatMessage.Image>empty();
+                if (image.isPresent()) {
+                    images.add(image.get());
+                    lines.add(images.size() + ". " + callLabel(call));
                 } else {
-                    lines.add("[Screenshot omitted: " + callLabel(call) + "]");
+                    lines.add(SCREENSHOT_OMITTED + callLabel(call) + "]");
                 }
             }
         }
         if (lines.isEmpty()) {
             return Optional.empty();
         }
-        var header = urls.isEmpty() ? SCREENSHOTS_UNSUPPORTED_HEADER : SCREENSHOTS_HEADER;
+        var header = supportsVision ? SCREENSHOTS_HEADER : SCREENSHOTS_UNSUPPORTED_HEADER;
         var text = header + "\n" + String.join("\n", lines);
-        return Optional.of(urls.isEmpty() ? ChatMessage.user(text) : ChatMessage.user(text, List.copyOf(urls)));
+        return Optional.of(images.isEmpty() ? ChatMessage.user(text) : ChatMessage.user(text, List.copyOf(images)));
+    }
+
+    private Optional<ChatMessage.Image> image(UUID attachmentId) {
+        return attachments
+                .inlineImage(attachmentId)
+                .map(image -> new ChatMessage.Image(
+                        image.dataUrl(), TokenEstimate.image(image.width(), image.height(), desktop.pixelsPerToken())));
     }
 
     private static List<UUID> screenshotIds(Map<String, Object> call) {
@@ -376,11 +404,9 @@ class ContextAssembler {
         if (!supportsVision) {
             return ChatMessage.user(text + "\n\n" + IMAGE_UNSUPPORTED);
         }
-        var urls = imageIds.stream()
-                .map(attachments::dataUrl)
-                .flatMap(Optional::stream)
-                .toList();
-        return ChatMessage.user(text, urls);
+        var images =
+                imageIds.stream().map(this::image).flatMap(Optional::stream).toList();
+        return ChatMessage.user(text, images);
     }
 
     private static List<UUID> imageIds(Object attachments) {
@@ -427,6 +453,22 @@ class ContextAssembler {
             return placeholder(call, result);
         }
     }
+
+    private static final class ImageMask {
+
+        private final int boundary;
+        private int next;
+
+        ImageMask(int boundary) {
+            this.boundary = boundary;
+        }
+
+        boolean shows() {
+            return next++ >= boundary;
+        }
+    }
+
+    private record MaskBoundaries(int results, int images) {}
 
     private static final class StepGroup {
 
