@@ -16,6 +16,7 @@ public final class DesktopTools {
     public static final String TYPE = "desktop_type";
     public static final String KEY = "desktop_key";
     public static final String WAIT = "desktop_wait";
+    public static final String TREE = "desktop_tree";
     public static final String STATUS = "pointer.desktop_status";
 
     static final String PIXELS_NOTE =
@@ -24,7 +25,7 @@ public final class DesktopTools {
             + " screenshot, whatever its size: (0, 0) is its top left corner and (1000, 1000) its bottom right"
             + " corner.";
 
-    private static final Set<String> WITH_COORDINATES = Set.of(START, SCREENSHOT, MOVE, CLICK, DRAG, SCROLL);
+    private static final Set<String> WITH_COORDINATES = Set.of(START, SCREENSHOT, MOVE, CLICK, DRAG, SCROLL, TREE);
     private static final Set<String> INPUTS = Set.of(MOVE, CLICK, DRAG, SCROLL, TYPE, KEY);
 
     private DesktopTools() {}

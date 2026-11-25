@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use super::{Desktop, Screen, keys, processes, system};
+use super::{Desktop, Screen, keymap, keys, processes, system};
 use crate::{ExecError, Request};
 
 const MAX_TEXT_CHARS: usize = 2_000;
@@ -30,7 +30,22 @@ impl Desktop {
 
     pub(super) fn click(&self, request: &Request) -> Result<Value, ExecError> {
         let screen = self.screen()?;
-        let (x, y) = point(request, &screen, "x", "y")?;
+        let element = match request.str_arg("elementId") {
+            Some(id) => {
+                if has_coordinates(request) {
+                    return Err(ExecError::rejected(
+                        "invalid_arguments",
+                        "Give either x and y or elementId, not both",
+                    ));
+                }
+                Some(self.element(&screen, id)?)
+            }
+            None => None,
+        };
+        let (x, y) = match &element {
+            Some(element) => (element.x, element.y),
+            None => point(request, &screen, "x", "y")?,
+        };
         let button = button(request)?;
         let clicks = request.u64_arg("clicks").unwrap_or(1);
         if !(1..=3).contains(&clicks) {
@@ -56,7 +71,13 @@ impl Desktop {
             arguments.extend(["keyup".to_string(), modifier.clone()]);
         }
         xdotool(&screen, &arguments)?;
-        self.observe(request, &screen, json!({ "x": x, "y": y }))
+        let mut result = json!({ "x": x, "y": y });
+        if let Some(element) = element {
+            result["elementId"] = json!(element.id);
+            result["role"] = json!(element.role);
+            result["name"] = json!(element.name);
+        }
+        self.observe(request, &screen, result)
     }
 
     pub(super) fn drag(&self, request: &Request) -> Result<Value, ExecError> {
@@ -155,6 +176,7 @@ impl Desktop {
         if method == "paste" {
             paste(&screen, text)?;
         } else {
+            keymap::bind_missing(&screen.display, text);
             xdotool(
                 &screen,
                 &[
@@ -309,6 +331,15 @@ pub fn case_insensitive_pattern(text: &str) -> String {
         }
     }
     pattern
+}
+
+fn has_coordinates(request: &Request) -> bool {
+    ["x", "y"].iter().any(|name| {
+        request
+            .args
+            .get(*name)
+            .is_some_and(|value| !value.is_null())
+    })
 }
 
 fn point(

@@ -744,7 +744,14 @@
     "zoom": "Увеличение",
     "start": "Запуск дисплея",
     "startSized": "Запуск дисплея {{width}}×{{height}}",
-    "openScreenshot": "Открыть скриншот"
+    "openScreenshot": "Открыть скриншот",
+    "tree": "Чтение дерева доступности",
+    "treeAll": "Чтение дерева доступности всех окон",
+    "treeElements_one": "{{count}} элемент",
+    "treeElements_few": "{{count}} элемента",
+    "treeElements_many": "{{count}} элементов",
+    "treeElements_other": "{{count}} элемента",
+    "treeEmpty": "дерева нет"
   },
   "desktopView": {
     "title": "Рабочий стол",

@@ -238,6 +238,8 @@ The tool registry (TOOL-8).
 
 Unique: (`name`, `owner_user_id`, `project_id`) with `NULLS NOT DISTINCT`.
 
+The desktop tools of F7 are built-in rows whose `operation` starts with `desktop_`: V35 seeds eleven of them, V37 adds `desktop_tree` and gives `desktop_click` the `elementId` argument.
+
 ### `permission_policies`
 
 Overrides of a tool's default policy (PERM-1, PERM-5).

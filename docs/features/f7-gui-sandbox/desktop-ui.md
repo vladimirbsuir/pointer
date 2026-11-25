@@ -27,6 +27,8 @@ Summaries show coordinates as the model wrote them, in its convention; the marke
 
 Tool-call rows for desktop tools are folded by default in long turns like other tool calls, but the thumbnail of the last screenshot of a turn stays visible so a finished turn shows the final state of the application.
 
+As implemented in phase 1.5: a click by `elementId` reads `Click "Add note"` from the element name in the click's result, or `Click e5` before the result arrives; `desktop_tree` reads `Read the accessibility tree` (`… of all windows` for `scope: all`) with the element count, or `no tree`, next to it.
+
 As implemented in phase 1.2: the summaries, the thumbnail with the marks and the full-size viewer (arrow keys and buttons move through the screenshots of the same turn) are in `features/sessions` (`desktop-calls.ts`, `DesktopScreenshot.tsx`). Every call with a screenshot shows its thumbnail; folding long turns is not implemented for any tool call yet, so the rule about the last screenshot of a folded turn waits for that. The `model_escalated` notice with the reason `vision` reads `{{from}} cannot see the screen, continuing on {{to}}`.
 
 ## Desktop panel (phase 1.4)

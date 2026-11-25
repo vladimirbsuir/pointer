@@ -1,10 +1,12 @@
 mod capture;
 mod display;
 mod input;
+mod keymap;
 mod keys;
 mod processes;
 mod stream;
 mod system;
+mod tree;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -44,6 +46,7 @@ struct State {
     display: Option<display::Display>,
     processes: HashMap<String, processes::Process>,
     next_process: u64,
+    elements: tree::Elements,
 }
 
 #[derive(Clone)]
@@ -128,6 +131,7 @@ impl Desktop {
             "desktop_type" => self.type_text(request),
             "desktop_key" => self.press_keys(request),
             "desktop_wait" => self.wait(request),
+            "desktop_tree" => self.tree(request),
             other => Err(ExecError::rejected(
                 "unknown_operation",
                 format!("Unknown operation {other}"),

@@ -64,9 +64,19 @@ function shortened(value: string) {
   return value.length > MAX_TYPED_CHARS ? `${value.slice(0, MAX_TYPED_CHARS)}…` : value;
 }
 
+function clickTarget(args: Record<string, unknown>, result: Record<string, unknown>) {
+  const elementId = text(args.elementId);
+  if (!elementId) {
+    return point(args);
+  }
+  const name = text(result.name);
+  return name ? `"${shortened(name)}"` : elementId;
+}
+
 export function desktopSummary(t: TFunction, item: Item) {
   const toolName = text(item.toolName);
   const args = (item.arguments ?? {}) as Record<string, unknown>;
+  const result = (item.result ?? {}) as Record<string, unknown>;
   switch (toolName) {
     case "desktop_click": {
       const button = text(args.button) || "left";
@@ -83,7 +93,7 @@ export function desktopSummary(t: TFunction, item: Item) {
               : button === "middle"
                 ? "desktop.middleClick"
                 : "desktop.click";
-      return prefix + t(variant, { point: point(args) });
+      return prefix + t(variant, { point: clickTarget(args, result) });
     }
     case "desktop_move":
       return t("desktop.move", { point: point(args) });
@@ -118,6 +128,8 @@ export function desktopSummary(t: TFunction, item: Item) {
     }
     case "desktop_screenshot":
       return args.zoom ? t("desktop.zoom") : t("desktop.screenshot");
+    case "desktop_tree":
+      return args.scope === "all" ? t("desktop.treeAll") : t("desktop.tree");
     case "desktop_start": {
       const width = args.width ? number(args.width) : null;
       const height = args.height ? number(args.height) : null;
@@ -146,6 +158,10 @@ export function desktopDetail(t: TFunction, item: Item) {
       return result.width && result.height
         ? `${number(result.width)}×${number(result.height)}`
         : null;
+    case "desktop_tree": {
+      const count = Array.isArray(result.nodes) ? result.nodes.length : 0;
+      return count > 0 ? t("desktop.treeElements", { count }) : t("desktop.treeEmpty");
+    }
     default:
       return null;
   }

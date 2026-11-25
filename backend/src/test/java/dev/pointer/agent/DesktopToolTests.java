@@ -142,6 +142,64 @@ class DesktopToolTests extends AgentIntegrationTest {
     }
 
     @Test
+    void theTreeComesInModelSpaceAndAnElementIsClickedByItsId() throws Exception {
+        var setup = setUp(false);
+        configureModel(setup, "fake-model", Map.of("supportsVision", true, "coordinateSystem", "normalized"));
+        session(setup, Map.of("autoApprove", true));
+        llm.enqueueToolCall("call_1", "desktop_start", "{\"width\":1920,\"height\":1200}");
+        llm.enqueueToolCall("call_2", "desktop_tree", "{}");
+        llm.enqueueToolCall("call_3", "desktop_click", "{\"elementId\":\"e2\"}");
+        llm.enqueueToolCall("call_4", "desktop_click", "{\"elementId\":\"e2\",\"x\":5,\"y\":5}");
+        llm.enqueueText("Saved.");
+        llm.enqueueText("Title");
+        var requests = new CopyOnWriteArrayList<JsonNode>();
+
+        try (var runner = runner(setup, requests, new Display(1920, 1200, 1280, 800), request -> image(64))) {
+            send(setup, "Press Save", null);
+            runner.awaitEvent("turn.completed", TIMEOUT);
+        }
+
+        var firstRequest = JSON.readTree(llm.requests().getFirst());
+        assertThat(tool(firstRequest, "desktop_tree")
+                        .path("function")
+                        .path("description")
+                        .asString())
+                .contains("0 to 1000 grid");
+        assertThat(tool(firstRequest, "desktop_click")
+                        .path("function")
+                        .path("parameters")
+                        .path("properties")
+                        .has("elementId"))
+                .isTrue();
+
+        var tree = toolItem(setup, "desktop_tree");
+        assertThat(tree.path("toolStatus").asString()).isEqualTo("succeeded");
+        var save = tree.path("result").path("nodes").get(1);
+        assertThat(save.path("x").asInt()).isEqualTo(500);
+        assertThat(save.path("y").asInt()).isEqualTo(500);
+        assertThat(save.path("width").asInt()).isEqualTo(100);
+        assertThat(tree.path("resultText").asString())
+                .contains("e1 frame \"Notes\" [0, 0, 1000, 1000]")
+                .contains("\n  e2 button \"Save\" [500, 500, 100, 100]")
+                .doesNotContain("Screenshot attached.");
+        assertThat(tree.has("images")).isFalse();
+
+        var clicks = executed(requests, "desktop_click");
+        assertThat(clicks).hasSize(1);
+        var clickArguments = clicks.getFirst().path("arguments");
+        assertThat(clickArguments.path("elementId").asString()).isEqualTo("e2");
+        assertThat(clickArguments.has("x")).isFalse();
+        var items = toolItems(setup, "desktop_click");
+        var clicked = items.getFirst();
+        assertThat(clicked.path("result").path("x").asInt()).isEqualTo(550);
+        assertThat(clicked.path("result").path("y").asInt()).isEqualTo(550);
+        assertThat(clicked.path("result").path("name").asString()).isEqualTo("Save");
+        assertThat(clicked.path("marks").get(0).path("x").asInt()).isEqualTo(704);
+        assertThat(clicked.path("marks").get(0).path("y").asInt()).isEqualTo(440);
+        assertThat(items.getLast().path("error").path("code").asString()).isEqualTo("invalid_arguments");
+    }
+
+    @Test
     void desktopToolsNeedAVisionModelAndADesktopDevice() throws Exception {
         var blind = setUp(false);
         llm.enqueueText("Answer.");
@@ -278,9 +336,27 @@ class DesktopToolTests extends AgentIntegrationTest {
                 result.put("alreadyRunning", false);
             }
             case "desktop_click" -> {
-                result.put("x", arguments.path("x").asInt());
-                result.put("y", arguments.path("y").asInt());
+                if (arguments.has("elementId")) {
+                    result.put("x", 1056);
+                    result.put("y", 660);
+                    result.put("elementId", arguments.path("elementId").asString());
+                    result.put("role", "button");
+                    result.put("name", "Save");
+                } else {
+                    result.put("x", arguments.path("x").asInt());
+                    result.put("y", arguments.path("y").asInt());
+                }
                 result.put("images", List.of(screenshot(display, screenshots.apply(request))));
+            }
+            case "desktop_tree" -> {
+                result.put("scope", "focused");
+                result.put("applications", List.of(Map.of("name", "notes", "toolkit", "gtk")));
+                result.put(
+                        "nodes",
+                        List.of(
+                                treeNode("e1", 0, "frame", "Notes", 0, 0, 1920, 1200),
+                                treeNode("e2", 1, "button", "Save", 960, 600, 192, 120)));
+                result.put("truncated", false);
             }
             case "desktop_screenshot" -> {
                 result.put("width", display.imageWidth());
@@ -292,6 +368,20 @@ class DesktopToolTests extends AgentIntegrationTest {
             default -> {}
         }
         return Map.of("status", "succeeded", "result", result);
+    }
+
+    private static Map<String, Object> treeNode(
+            String id, int depth, String role, String name, int x, int y, int width, int height) {
+        var node = new LinkedHashMap<String, Object>();
+        node.put("id", id);
+        node.put("depth", depth);
+        node.put("role", role);
+        node.put("name", name);
+        node.put("x", x);
+        node.put("y", y);
+        node.put("width", width);
+        node.put("height", height);
+        return node;
     }
 
     private static Map<String, Object> screenshot(Display display, byte[] data) {

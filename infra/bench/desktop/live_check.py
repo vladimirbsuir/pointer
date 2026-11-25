@@ -17,22 +17,47 @@ Api = routing.Api
 
 PROJECT_NAME = "desktop-fixture"
 STATE_PATH = "/tmp/tk-state.json"
+NOTES_STATE_PATH = "/tmp/gtk-notes-state.json"
 LAUNCH = (
     "Test the Tk application in app.py with the desktop tools. Start the display, launch it with "
     f"`python3 app.py {STATE_PATH}`, wait for its window, "
 )
+
+
+def counted(count):
+    return lambda check: bool(check and check.get("count") == count and check.get("text") == "hello")
+
+
 TASKS = {
     "counter": {
+        "app": "tk-counter",
+        "state": STATE_PATH,
         "prompt": LAUNCH + "click the Increment button twice, type hello into the text field, and then tell me "
                            "the count shown in the window.",
-        "count": 2,
+        "success": counted(2),
+        "checkKeys": ("count", "text"),
         "followUp": True,
     },
     "clicks": {
+        "app": "tk-counter",
+        "state": STATE_PATH,
         "prompt": LAUNCH + "then click the Increment button six times with one desktop_click call per click (do not "
                            "use the clicks argument) and check the count in the screenshot after every click. Then "
                            "type hello into the text field and tell me the final count shown in the window.",
-        "count": 6,
+        "success": counted(6),
+        "checkKeys": ("count", "text"),
+        "followUp": False,
+    },
+    "notes": {
+        "app": "gtk-notes",
+        "state": NOTES_STATE_PATH,
+        "prompt": "Test the GTK application in app.py with the desktop tools. Start the display, launch it with "
+                  f"`python3 app.py {NOTES_STATE_PATH}`, wait for its window, then add two notes, milk and bread, "
+                  "check the Pinned box, open File > Export… and cancel the dialog. Tell me which notes the list "
+                  "shows at the end.",
+        "success": lambda check: bool(check and check.get("notes") == ["milk", "bread"] and check.get("pinned")
+                                      and check.get("dialog") is False and check.get("exported") == 0),
+        "checkKeys": ("notes", "pinned", "dialog", "exported"),
         "followUp": False,
     },
 }
@@ -54,7 +79,8 @@ def parse_args():
     parser.add_argument("--backend-host", default="http://host.docker.internal:8080")
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--task", choices=sorted(TASKS), default="counter",
-                        help="counter: the message-order check; clicks: one screenshot per click, for image masking")
+                        help="counter: the message-order check; clicks: one screenshot per click, for image masking; "
+                             "notes: a GTK task where the accessibility tree is available")
     parser.add_argument("--runs", type=int, default=1, help="runs of the task per model")
     parser.add_argument("--label", help="saved with the runs, e.g. the backend's image masking setting")
     parser.add_argument("--schema-cost", action="store_true",
@@ -88,12 +114,12 @@ def fixture_project(api):
     return api.call("POST", "/projects", {"name": PROJECT_NAME})
 
 
-def prepare_workspace(out):
+def prepare_workspace(out, app):
     workspace = out / "workspace"
     if workspace.exists():
         shutil.rmtree(workspace)
     workspace.mkdir(parents=True)
-    shutil.copy(HERE / "apps" / "tk-counter" / "app.py", workspace / "app.py")
+    shutil.copy(HERE / "apps" / app / "app.py", workspace / "app.py")
     return workspace
 
 
@@ -168,14 +194,14 @@ def sequences(items):
 
 
 def run_gui_task(api, project, model, args, device):
-    subprocess.run(["docker", "exec", device, "rm", "-f", STATE_PATH], capture_output=True)
+    task = TASKS[args.task]
+    subprocess.run(["docker", "exec", device, "rm", "-f", task["state"]], capture_output=True)
     session = api.call("POST", f"/projects/{project['id']}/sessions",
                        {"title": f"Desktop live check {model['modelKey']}", "mode": "agent",
                         "modelId": model["id"], "routing": "off", "escalation": "off"})
     session_id = session["id"]
     api.call("PATCH", f"/sessions/{session_id}", {"autoApprove": True})
     started = time.time()
-    task = TASKS[args.task]
     api.call("POST", f"/sessions/{session_id}/messages", {"text": task["prompt"], "mode": "agent"})
     follow_up_sent = False
     try:
@@ -194,7 +220,7 @@ def run_gui_task(api, project, model, args, device):
     calls = [item for item in items if item["type"] == "tool_call" and not item.get("parentItemId")]
     answer = next((item.get("text") or "" for item in reversed(items)
                    if item["type"] == "assistant_message"), "")
-    check = container_file(device, STATE_PATH)
+    check = container_file(device, task["state"])
     screenshot_step, tool_user_assistant, tool_user_user = sequences(items)
     usage = api.call("GET", f"/sessions/{session_id}/usage")
     errors = [item.get("error") for item in items if item["type"] == "tool_call" and item.get("error")]
@@ -215,9 +241,12 @@ def run_gui_task(api, project, model, args, device):
         "screenshotStep": screenshot_step,
         "acceptedToolUserAssistant": tool_user_assistant,
         "acceptedToolUserUser": tool_user_user if follow_up_sent else None,
-        "check": {key: check.get(key) for key in ("count", "text")} if check else None,
+        "check": {key: check.get(key) for key in task["checkKeys"]} if check else None,
         "screenshots": sum(len(call.get("images") or []) for call in calls),
-        "success": bool(check and check.get("count") == task["count"] and check.get("text") == "hello"),
+        "success": task["success"](check),
+        "elementClicks": sum(1 for call in calls if call["toolName"] == "desktop_click"
+                             and (call.get("arguments") or {}).get("elementId")),
+        "treeCalls": sum(1 for call in calls if call["toolName"] == "desktop_tree"),
         "answer": answer[:600],
         "toolErrors": errors,
         "usage": usage["entries"],
@@ -254,7 +283,7 @@ def main():
     device_id = str(uuid.uuid4())
     api = Api(args.api, args.email, args.password, device_id)
     project = fixture_project(api)
-    workspace = prepare_workspace(out)
+    workspace = prepare_workspace(out, TASKS[args.task]["app"])
     models, originals = [], []
     for spec in args.model:
         provider, model = find_model(api, spec)
@@ -275,6 +304,7 @@ def main():
                 step = next((entry for entry in run["usage"] if entry["purpose"] == "step"), {})
                 print(f"{provider['name']}/{model['modelKey']}: {run['status']} success={run['success']} "
                       f"calls={len(run['toolCalls'])} screenshots={run['screenshots']} "
+                      f"trees={run['treeCalls']} elementClicks={run['elementClicks']} "
                       f"prompt={step.get('promptTokens')} cached={step.get('cachedPromptTokens')} "
                       f"tool>user>assistant={run['acceptedToolUserAssistant']} "
                       f"tool>user>user={run['acceptedToolUserUser']} {run['seconds']}s", flush=True)

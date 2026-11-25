@@ -1,6 +1,6 @@
 # GUI testing sandbox
 
-Measurements for [F7](../features/f7-gui-sandbox/README.md). Phase 1.1 (resources of the display stack) and the live check of phase 1.2 (providers, schema cost) are below; the benchmark of phase 1.6 (success, grounding, cost and masking per model) will be added here.
+Measurements for [F7](../features/f7-gui-sandbox/README.md). Phase 1.1 (resources of the display stack), the live check of phase 1.2 (providers, schema cost), image masking (1.3), the live view (1.4) and the accessibility tree (1.5) are below; the benchmark of phase 1.6 (success, grounding, cost and masking per model) will be added here.
 
 ## Phase 1.1: resources of the `gui` image
 
@@ -135,3 +135,43 @@ Observations:
 - **The view is cheap enough to leave on.** Without a viewer `x11vnc` does not poll the screen; with one, the stream of an ordinary GUI task stays near 1 KB/s because noVNC negotiates compressed encodings and only changed regions are sent.
 - **The worst case is bounded by the content, not by the relay.** Random colours defeat compression; at 567 KB/s the backend spent about 5 % of a core relaying. The per-viewer queue limit of 8 MB holds about 14 seconds of this stream before the viewer is dropped as too slow.
 - **The runner's display restarts nothing for the view.** The password file, the two processes and the published port add no measurable start-up time to `desktop_start`; the image is unchanged, as `x11vnc` and `websockify` were installed in phase 1.1.
+
+## Phase 1.5: accessibility tree
+
+### Coverage per toolkit
+
+Measured on 2026-11-25 by the runner tests in `desktop/src-tauri/crates/pointer-executor/src/desktop/tests/tree.rs`, run inside the `gui` image with `POINTER_DESKTOP_TREE_REPORT` set (commands in `infra/bench/desktop/README.md`). Each fixture lists the controls a user would act on; a control counts as found when the focused tree has an element with its role and name. The time is one `desktop_tree` call with the default limits, run serially, including the start of the reader process.
+
+| Fixture | Toolkit (as AT-SPI reports it) | Controls found | Elements listed | Time | Click by id |
+|---|---|---|---|---|---|
+| `gtk-notes` | GTK 3 (`gtk`) | 6 of 6 | 7 | 81 ms | works |
+| `qt-settings` | Qt 6 through PySide 6 (`Qt`) | 5 of 5 | 8 | 122 ms | works |
+| `form-web` | Chromium 156 through `pointer-chromium` (`Chromium`) | 3 of 3 | 12 | 183 ms | works |
+| `electron-todo` | Electron 39 with `--force-renderer-accessibility` (`Chromium`) | 3 of 3 | 5 | 102 ms | works |
+| `electron-todo` | Electron 39 without the flag | 0 of 3 (frame only) | 1 | | the result names the flag |
+| `webkit-counter` | WebKitGTK through `wry`, the Tauri case (`gtk`) | 2 of 2 | 3 | 81 ms | works |
+| `swing-calc` | Java Swing through the ATK wrapper (`J2SE-access-bridge`) | 4 of 5, the frame has no extents | 4 | 101 ms | works |
+| `tk-counter` | Tk | 0 of 2, no tree | 0 | 101 ms | not possible; the result says to use coordinates |
+
+Observations:
+
+- **Every toolkit with a bridge is usable.** Names, roles and bounds matched the controls, and a click by id landed inside the element in every case. Swing's frame reports extents of -1, so its controls appear at the top level of the result; this does not affect clicking.
+- **Electron needs the renderer flag.** Without `--force-renderer-accessibility` only the window frame exists; `ACCESSIBILITY_ENABLED`, `org.a11y.Status.IsEnabled` and `ScreenReaderEnabled` do not change that, so the result names the flag instead.
+- **Pruning matters.** The raw AT-SPI tree of the `form-web` window has about 200 objects, mostly unnamed panels and hidden parts of the browser frame; the result has 12. A GTK file chooser dialog, the largest tree in the live check, had 40 elements.
+- **The text form halves the size.** The rendered tree of `gtk-notes` is 411 characters against 904 for the same nodes as JSON, the file chooser 2,128 against 4,750, so a typical tree costs 100–600 tokens, less than half a screenshot.
+- **The image grew by `python3-gi` and two Qt libraries** (`libxcb-icccm4`, `libxcb-keysyms1`, without which Qt 6 cannot load its `xcb` plugin), a few megabytes.
+
+### Live check
+
+`infra/bench/desktop/live_check.py --task notes` with the GTK fixture: add two notes, check Pinned, open File > Export… and cancel the dialog. The prompt does not mention the tree.
+
+| Model | Runs | Passed | `desktop_tree` calls | Clicks by id / all clicks | Prompt tokens (cached) | Time |
+|---|---|---|---|---|---|---|
+| `deepseek-v4.1-flash:free` (TokenHarbor) | 3 | 3 | 2–3 | 19 / 23 | 169–188k (156–165k) | 53–67 s |
+| `mimo-v2.6-flash:free` (TokenHarbor) | 1 | 1 | 0 | 0 / 8 | 182k (137k) | 118 s |
+
+DeepSeek read the tree after the window appeared, clicked the entry, the button and the check box by id, opened the File menu by id, clicked the menu item by coordinates (the menu was not in the tree it had read) and read the tree again to find Cancel in the dialog. MiMo never called the tool and solved the task from screenshots. Whether the tree saves steps or tokens is the ablation of phase 1.6.
+
+### Typing with the rebuilt image
+
+The image rebuilt for this phase came with Chromium 156, and the runner test that types `Привет 😀 café` into Chromium failed in five of eight runs: characters came out as the first remapped one (`ППивет`, `cafП`). `xdotool type` binds each character missing from the keyboard map to one spare key code in turn, and this Chromium kept the first mapping. It failed the same way with the accessibility bridge disabled, so it is not caused by the tree. `desktop_type` now binds all missing characters of the text to free key codes in one change and waits 150 ms before typing; the test then passed eight runs of eight.

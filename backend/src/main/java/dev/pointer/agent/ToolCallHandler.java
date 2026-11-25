@@ -333,7 +333,7 @@ class ToolCallHandler {
         if (!finished.marks().isEmpty()) {
             extras.put("marks", finished.marks());
         }
-        complete(scope, itemId, finished.result(), null, extras);
+        complete(scope, itemId, finished.result(), null, extras, finished.text());
     }
 
     private void execute(TurnScope scope, UUID itemId, ToolDefinition tool, Map<String, Object> arguments) {
@@ -371,11 +371,16 @@ class ToolCallHandler {
     }
 
     private void complete(TurnScope scope, UUID itemId, ExecutionResult result, String output) {
-        complete(scope, itemId, result, output, Map.of());
+        complete(scope, itemId, result, output, Map.of(), null);
     }
 
     private void complete(
-            TurnScope scope, UUID itemId, ExecutionResult result, String output, Map<String, Object> extras) {
+            TurnScope scope,
+            UUID itemId,
+            ExecutionResult result,
+            String output,
+            Map<String, Object> extras,
+            String renderedText) {
         var updates = new LinkedHashMap<String, Object>();
         var toolStatus = switch (result.status()) {
             case ExecutionResult.SUCCEEDED -> "succeeded";
@@ -399,7 +404,9 @@ class ToolCallHandler {
                                 "linesAdded", change.getOrDefault("linesAdded", 0),
                                 "linesRemoved", change.getOrDefault("linesRemoved", 0)))
                         .toList());
-        var text = resultText(result);
+        var text = result.succeeded() && renderedText != null && !renderedText.isBlank()
+                ? truncate(renderedText, MAX_RESULT_CHARS)
+                : resultText(result);
         updates.put("resultText", extras.containsKey("images") ? text + "\n" + DesktopCalls.SCREENSHOT_NOTE : text);
         updates.putAll(extras);
         var itemStatus = switch (toolStatus) {

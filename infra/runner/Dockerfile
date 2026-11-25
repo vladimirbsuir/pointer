@@ -33,9 +33,10 @@ FROM full AS gui
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         xvfb xauth openbox xdotool scrot xclip x11-utils dbus dbus-x11 at-spi2-core libatk-adaptor x11vnc websockify \
+        python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 \
         fonts-dejavu-core fonts-noto-core fonts-noto-color-emoji \
         chromium libgtk-3-0t64 libwebkit2gtk-4.1-0 libxss1 libnss3 libasound2t64 \
-        libxcb-cursor0 libxkbcommon-x11-0 python3-tk openjdk-21-jre libatk-wrapper-java libatk-wrapper-java-jni \
+        libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxkbcommon-x11-0 python3-tk openjdk-21-jre libatk-wrapper-java libatk-wrapper-java-jni \
         libgtk-3-dev libwebkit2gtk-4.1-dev libssl-dev librsvg2-dev libayatana-appindicator3-dev libxdo-dev \
     && rm -rf /var/lib/apt/lists/*
 COPY --chmod=755 <<'SCRIPT' /usr/local/bin/pointer-chromium

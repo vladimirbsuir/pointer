@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>electron-todo</title>
+<style>
+  body { margin: 24px; font: 18px "DejaVu Sans", sans-serif; }
+  input { font-size: 18px; width: 320px; }
+  button { font-size: 18px; }
+  li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<form id="form">
+  <input id="text" type="text" placeholder="New todo" aria-label="New todo" autocomplete="off">
+  <button id="add" type="submit">Add</button>
+</form>
+<label><input id="done" type="checkbox"> Hide done</label>
+<ul id="items" aria-label="Todos"></ul>
+<script>
+  const form = document.getElementById("form");
+  const text = document.getElementById("text");
+  const items = document.getElementById("items");
+  const done = document.getElementById("done");
+
+  function report() {
+    const todos = [...items.children].map((item) => item.textContent);
+    document.title = "electron-todo " + JSON.stringify({ todos, hideDone: done.checked });
+  }
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const value = text.value.trim();
+    if (!value) {
+      return;
+    }
+    const item = document.createElement("li");
+    item.textContent = value;
+    items.appendChild(item);
+    text.value = "";
+    report();
+  });
+  done.addEventListener("change", report);
+  report();
+</script>
+</body>
+</html>

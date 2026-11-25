@@ -27,6 +27,7 @@ public class DesktopCalls {
     static final String DISPLAY_NOT_STARTED = "display_not_started";
     static final String IMAGE_TOO_LARGE = "image_too_large";
     static final String INVALID_IMAGE = "invalid_image";
+    static final String ELEMENT_ID = "elementId";
 
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration STATUS_TIMEOUT = Duration.ofSeconds(10);
@@ -61,7 +62,28 @@ public class DesktopCalls {
                     prepared.put("maxImageHeight", properties.maxImageHeight());
                     prepared.put("maxImageBytes", properties.maxImageBytes().toBytes());
                 }
-                case DesktopTools.MOVE, DesktopTools.CLICK, DesktopTools.SCROLL -> {
+                case DesktopTools.CLICK -> {
+                    geometry = geometry(context).orElse(null);
+                    if (geometry == null) {
+                        return Prepared.failure(notStarted());
+                    }
+                    if (arguments.get(ELEMENT_ID) != null) {
+                        if (arguments.get("x") != null || arguments.get("y") != null) {
+                            return Prepared.failure(ExecutionResult.failure(
+                                    ExecutionResult.REJECTED,
+                                    "invalid_arguments",
+                                    "Give either x and y or elementId, not both"));
+                        }
+                    } else {
+                        var coordinates = coordinates(context, geometry);
+                        var x = coordinates.screenX("x", arguments.get("x"));
+                        var y = coordinates.screenY("y", arguments.get("y"));
+                        prepared.put("x", x);
+                        prepared.put("y", y);
+                        points.add(new int[] {x, y});
+                    }
+                }
+                case DesktopTools.MOVE, DesktopTools.SCROLL -> {
                     geometry = geometry(context).orElse(null);
                     if (geometry == null) {
                         return Prepared.failure(notStarted());
@@ -90,6 +112,12 @@ public class DesktopCalls {
                     points.add(new int[] {fromX, fromY});
                     points.add(new int[] {toX, toY});
                 }
+                case DesktopTools.TREE -> {
+                    geometry = geometry(context).orElse(null);
+                    if (geometry == null) {
+                        return Prepared.failure(notStarted());
+                    }
+                }
                 case DesktopTools.SCREENSHOT -> {
                     if (arguments.get("zoom") != null) {
                         geometry = geometry(context).orElse(null);
@@ -113,11 +141,18 @@ public class DesktopCalls {
 
     public Finished finish(CallContext context, String operation, Prepared prepared, ExecutionResult result) {
         if (!result.succeeded()) {
-            return new Finished(result, List.of(), List.of());
+            return new Finished(result, List.of(), List.of(), null);
         }
         var model = new LinkedHashMap<>(result.result());
         var images = imagesOf(model.remove("images"));
         var geometry = prepared.geometry();
+        var points = new ArrayList<>(prepared.points());
+        if (DesktopTools.CLICK.equals(operation)
+                && points.isEmpty()
+                && model.get("x") instanceof Number x
+                && model.get("y") instanceof Number y) {
+            points.add(new int[] {x.intValue(), y.intValue()});
+        }
         if (DesktopTools.START.equals(operation)) {
             geometry = DesktopGeometry.fromStatus(result.result()).orElse(geometry);
         }
@@ -131,11 +166,16 @@ public class DesktopCalls {
             geometries.put(context.sessionId(), geometry);
             toModelSpace(operation, model, coordinates(context, geometry), context.coordinateSystem());
         }
+        String text = null;
+        if (DesktopTools.TREE.equals(operation) && geometry != null) {
+            DesktopTree.toModelSpace(model, coordinates(context, geometry));
+            text = DesktopTree.render(model, String.valueOf(prepared.arguments().getOrDefault("scope", "focused")));
+        }
         var stored = new ArrayList<Map<String, Object>>();
         for (var image : images) {
             var outcome = store(context.sessionId(), image);
             if (outcome.failure() != null) {
-                return new Finished(outcome.failure(), List.of(), List.of());
+                return new Finished(outcome.failure(), List.of(), List.of(), null);
             }
             stored.add(outcome.reference());
         }
@@ -143,12 +183,13 @@ public class DesktopCalls {
         var hasFullImage = stored.stream().anyMatch(image -> !Boolean.TRUE.equals(image.get("zoom")));
         if (hasFullImage && geometry != null) {
             var coordinates = coordinates(context, geometry);
-            prepared.points().forEach(point -> marks.add(coordinates.mark(point[0], point[1])));
+            points.forEach(point -> marks.add(coordinates.mark(point[0], point[1])));
         }
         return new Finished(
                 new ExecutionResult(result.status(), model, result.error(), result.fileChanges()),
                 List.copyOf(stored),
-                List.copyOf(marks));
+                List.copyOf(marks),
+                text);
     }
 
     public Duration timeout(String operation, Map<String, Object> arguments) {
@@ -341,5 +382,6 @@ public class DesktopCalls {
         }
     }
 
-    public record Finished(ExecutionResult result, List<Map<String, Object>> images, List<Map<String, Object>> marks) {}
+    public record Finished(
+            ExecutionResult result, List<Map<String, Object>> images, List<Map<String, Object>> marks, String text) {}
 }

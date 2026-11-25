@@ -137,11 +137,12 @@ impl Desktop {
             stream: None,
         };
         wait_until_ready(&mut display, &self.display, &self.runtime_dir)?;
-        if let Some((address, pid)) = start_bus() {
+        if let Some((address, pid)) = start_bus(&self.display, &self.runtime_dir) {
             display.bus_address = Some(address);
             display.bus_pid = pid;
         }
         let screen = display.screen(&self.display);
+        enable_accessibility(&screen);
         display.window_manager = start_window_manager(&screen, &self.runtime_dir);
         display.stream = self
             .stream
@@ -149,6 +150,7 @@ impl Desktop {
             .and_then(|settings| stream::start(settings, &screen, &self.runtime_dir));
         let result = started(&screen, false, display.window_manager.is_some());
         state.display = Some(display);
+        state.elements.forget();
         Ok(result)
     }
 }
@@ -266,8 +268,10 @@ fn wait_until_ready(
     }
 }
 
-fn start_bus() -> Option<(String, Option<u32>)> {
+fn start_bus(display: &str, runtime_dir: &Path) -> Option<(String, Option<u32>)> {
     let output = Command::new("dbus-daemon")
+        .env("DISPLAY", display)
+        .env("XDG_RUNTIME_DIR", runtime_dir)
         .args([
             "--session",
             "--fork",
@@ -285,6 +289,24 @@ fn start_bus() -> Option<(String, Option<u32>)> {
     let address = lines.next()?.to_string();
     let pid = lines.next().and_then(|line| line.parse().ok());
     Some((address, pid))
+}
+
+fn enable_accessibility(screen: &Screen) {
+    if screen.bus_address.is_none() || !system::on_path("dbus-send") {
+        return;
+    }
+    let mut command = system::tool(screen, "dbus-send");
+    command.args([
+        "--session",
+        "--print-reply",
+        "--dest=org.a11y.Bus",
+        "/org/a11y/bus",
+        "org.freedesktop.DBus.Properties.Set",
+        "string:org.a11y.Status",
+        "string:IsEnabled",
+        "variant:boolean:true",
+    ]);
+    system::succeeds(command);
 }
 
 fn start_window_manager(screen: &Screen, runtime_dir: &Path) -> Option<Child> {

@@ -17,6 +17,8 @@ const STOP_TIMEOUT: Duration = Duration::from_secs(3);
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 const LOG_TAIL_BYTES: usize = 4_000;
 const LOG_SEARCH_BYTES: usize = 1024 * 1024;
+const JAVA_OPTIONS: &str = "JDK_JAVA_OPTIONS";
+const JAVA_ATK_WRAPPER: &str = "/usr/share/java/java-atk-wrapper.jar";
 
 pub struct Process {
     id: String,
@@ -74,6 +76,20 @@ pub fn log_tail_contains(path: &Path, text: &str) -> bool {
     tail(path, LOG_SEARCH_BYTES).contains(text)
 }
 
+fn java_accessibility() -> Vec<(String, String)> {
+    if !Path::new(JAVA_ATK_WRAPPER).is_file() {
+        return Vec::new();
+    }
+    let bridge = format!(
+        "-Xbootclasspath/a:{JAVA_ATK_WRAPPER}          -Djavax.accessibility.assistive_technologies=org.GNOME.Accessibility.AtkWrapper"
+    );
+    let options = match std::env::var(JAVA_OPTIONS) {
+        Ok(existing) if !existing.trim().is_empty() => format!("{existing} {bridge}"),
+        _ => bridge,
+    };
+    vec![(JAVA_OPTIONS.to_string(), options)]
+}
+
 fn tail(path: &Path, bytes: usize) -> String {
     let content = fs::read(path).unwrap_or_default();
     let start = content.len().saturating_sub(bytes);
@@ -114,6 +130,7 @@ impl Desktop {
                 .arg(&command)
                 .current_dir(&directory)
                 .envs(screen.environment())
+                .envs(java_accessibility())
                 .stdin(Stdio::null())
                 .stdout(log)
                 .stderr(errors);

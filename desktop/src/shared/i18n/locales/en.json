@@ -740,7 +740,12 @@
     "zoom": "Zoom",
     "start": "Start the display",
     "startSized": "Start the display {{width}}×{{height}}",
-    "openScreenshot": "Open the screenshot"
+    "openScreenshot": "Open the screenshot",
+    "tree": "Read the accessibility tree",
+    "treeAll": "Read the accessibility tree of all windows",
+    "treeElements_one": "{{count}} element",
+    "treeElements_other": "{{count}} elements",
+    "treeEmpty": "no tree"
   },
   "desktopView": {
     "title": "Desktop",

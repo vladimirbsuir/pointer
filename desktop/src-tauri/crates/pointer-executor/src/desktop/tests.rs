@@ -11,6 +11,7 @@ use tempfile::TempDir;
 use super::*;
 
 mod rfb;
+mod tree;
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
