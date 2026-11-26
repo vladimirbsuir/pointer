@@ -1,8 +1,9 @@
 mod relay;
+mod sent_results;
 mod subscriptions;
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
 use serde::Serialize;
@@ -22,6 +23,7 @@ use crate::mcp::McpHub;
 use crate::projects::ProjectMap;
 use pointer_executor::{Emit, Executor, McpCaller, Workspace, Worktree};
 use relay::Relay;
+use sent_results::SentResults;
 use subscriptions::{EventRoute, Subscriptions};
 
 const PROTOCOL_VERSION: u32 = 1;
@@ -29,6 +31,7 @@ const MESSAGE_EVENT: &str = "realtime://message";
 const STATUS_EVENT: &str = "realtime://status";
 const TOKEN_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
 const READ_TIMEOUT: Duration = Duration::from_secs(60);
+const EXEC_RESULT: &str = "exec.result";
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
 const FINAL_CLOSE_CODES: [u16; 3] = [4403, 4409, 4426];
 
@@ -76,6 +79,7 @@ pub struct Realtime {
     relay: Arc<Relay>,
     executor: Arc<Executor>,
     undelivered: Mutex<Vec<Value>>,
+    sent: Mutex<SentResults>,
 }
 
 impl Default for Realtime {
@@ -88,6 +92,7 @@ impl Default for Realtime {
             relay: Arc::default(),
             executor: Arc::new(Executor::default().with_api_url(API_URL)),
             undelivered: Mutex::default(),
+            sent: Mutex::new(SentResults::new(READ_TIMEOUT * 2)),
         }
     }
 }
@@ -157,23 +162,56 @@ impl Realtime {
             .lock()
             .ok()
             .and_then(|outgoing| outgoing.clone());
+        let is_result = message_type == EXEC_RESULT;
+        let copy = is_result.then(|| payload.clone());
         let unsent = match outgoing {
             Some(outgoing) => outgoing.try_send(message_type, payload).err(),
             None => Some(payload),
         };
-        if let Some(payload) = unsent
-            && message_type == "exec.result"
-            && let Ok(mut undelivered) = self.undelivered.lock()
-        {
-            undelivered.push(payload);
+        match (unsent, copy) {
+            (Some(payload), _) if is_result => {
+                if let Ok(mut undelivered) = self.undelivered.lock() {
+                    undelivered.push(payload);
+                }
+            }
+            (None, Some(payload)) => self.record_sent(vec![payload]),
+            _ => {}
         }
     }
 
-    fn take_undelivered(&self) -> Vec<Value> {
-        self.undelivered
+    fn take_undelivered_for_sending(&self) -> Vec<Value> {
+        let results = self
+            .undelivered
             .lock()
             .map(|mut undelivered| std::mem::take(&mut *undelivered))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        self.record_sent(results.clone());
+        results
+    }
+
+    fn record_sent(&self, results: Vec<Value>) {
+        if let Ok(mut sent) = self.sent.lock() {
+            let now = Instant::now();
+            for payload in results {
+                sent.record(now, payload);
+            }
+        }
+    }
+
+    fn requeue_recent_results(&self) {
+        let recent = self
+            .sent
+            .lock()
+            .map(|mut sent| sent.take_recent(Instant::now()))
+            .unwrap_or_default();
+        if recent.is_empty() {
+            return;
+        }
+        if let Ok(mut undelivered) = self.undelivered.lock() {
+            let newer = std::mem::take(&mut *undelivered);
+            undelivered.extend(recent);
+            undelivered.extend(newer);
+        }
     }
 
     fn send(&self, message_type: &str, payload: Value) {
@@ -234,6 +272,7 @@ async fn run(app: AppHandle) {
         let outcome = connect_once(&app).await;
         let realtime = app.state::<Realtime>();
         realtime.set_outgoing(None);
+        realtime.requeue_recent_results();
         let close_code = match outcome {
             Ok(Disconnect::Final { close_code }) => Some(close_code),
             Ok(Disconnect::Lost { was_stable: true }) => {
@@ -307,7 +346,7 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
             "capabilities": ["viewer", "relay", "executor"],
             "interpreters": realtime.executor.interpreters().await.names(),
             "projects": projects.project_ids(),
-            "undeliveredResults": realtime.take_undelivered(),
+            "undeliveredResults": realtime.take_undelivered_for_sending(),
         }),
     );
 
@@ -365,8 +404,8 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
                         close_code: None,
                     },
                 );
-                for payload in realtime.take_undelivered() {
-                    outgoing.send("exec.result", payload);
+                for payload in realtime.take_undelivered_for_sending() {
+                    outgoing.send(EXEC_RESULT, payload);
                 }
                 outgoing.send(
                     "device.tools",

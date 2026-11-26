@@ -7,10 +7,10 @@
     element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
     element.click();
   };
-  const buttons = [...document.querySelectorAll('button')];
-  const account = buttons.reverse().find((button) => button.querySelector('[data-slot=avatar], span') && button.closest('aside, nav, div'));
-  const trigger = [...document.querySelectorAll('button')].filter((b) => b.getAttribute('aria-haspopup') === 'menu').pop();
-  press(trigger || account);
+  const trigger = [...document.querySelectorAll('button[aria-haspopup=menu]')]
+    .find((button) => button.querySelector('[data-slot=avatar]'));
+  if (!trigger) return { error: 'account menu not found' };
+  press(trigger);
   await sleep(500);
   const items = [...document.querySelectorAll('[role=menuitem]')];
   const labels = items.map((item) => item.innerText);

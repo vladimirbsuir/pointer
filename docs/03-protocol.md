@@ -411,7 +411,7 @@ The client stops the operation (killing the process tree for commands) and answe
 
 ### 6.5 Disconnects during execution
 
-- Operations keep running on the client while it reconnects. Their results are buffered and sent in `hello.undeliveredResults`.
+- Operations keep running on the client while it reconnects. Their results are buffered and sent in `hello.undeliveredResults`. A connection can also die silently, after the client has written a result into it, so the client keeps every result it sent during the last two read timeouts (120 seconds) and sends those again in `undeliveredResults` after a lost connection. The backend ignores a result whose call is already finished, so a repeat is harmless.
 - The backend waits for a running call for its remaining timeout plus a 30 second grace period. Then the call fails with code `executor_disconnected`, and the model is told the outcome is unknown.
 - The backend never retries a non-read-only operation automatically.
 

@@ -2,10 +2,6 @@
 
 What is left after the roadmap and the approved features ([features/README.md](features/README.md)), as of 2026-11-26. Each item says where it is and what done looks like. Remove an item when it is done, or move it to the relevant spec.
 
-## Bugs
-
-- **A result written into a silently dead connection is lost.** The core buffers an `exec.result` only when it cannot hand it to the socket ([realtime/mod.rs](../desktop/src-tauri/src/realtime/mod.rs), `undelivered`). When the network goes away without a close, the write succeeds locally, the result never arrives, and after the reconnect `hello.undeliveredResults` is empty. Found in the live check with `infra/bench/live/result_delivery.py stall`: the command succeeded, and two minutes later (its timeout plus the grace period) the backend told the model `timeout: The device did not respond in time`. A hard disconnect works: the result is buffered and arrives in the next `hello`. Done: the core keeps the results it sent during the last two read timeouts and adds them to `undeliveredResults` after a lost connection (the backend ignores results of calls that are already finished, so a repeat is harmless); a test in the core and the `stall` run of the script.
-
 ## Measurements and runs still open
 
 - **F5 phase 4** ([f5-cache-aware-context.md](features/f5-cache-aware-context.md), phase 4 items 1–6): the remaining Kilo matrix runs (summary with the soft trigger on and off with carried summaries, hybrid without the soft trigger, hybrid per step), then choose the soft-trigger default and set F5 to Implemented. Blocked: the Kilo key is invalid (`provider_unauthorized` since 2026-11-26); needs a new key or another long-context provider.
