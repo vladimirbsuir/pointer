@@ -56,3 +56,7 @@ The agent benchmarks drive real sessions through the REST API, so they need the 
 - Free provider plans have request and token limits per minute or day; a run that hits one shows failed turns with the provider's message in `turns.error`. The scripts report failed turns instead of retrying them.
 - Memory benchmarks need an embedding model in the account settings (`--embedding-model <key>` in the cache script sets it); the backend calls it directly, so it must not be marked as a local provider.
 - The benchmark account is a normal account: its sessions appear in the desktop app when you sign in with it, which is the quickest way to look at a run.
+
+## Live check of the desktop app
+
+Checks of the real Tauri app that tests cannot cover (reconnects, close codes, dropped events, command execution on Windows) use the proxy, fake model and WebView driver in [`infra/bench/live/`](../../infra/bench/live/README.md).
