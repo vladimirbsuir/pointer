@@ -55,6 +55,19 @@ export type RemoteWorkspace = {
   lastActiveAt: string;
 };
 
+export type SandboxState = "none" | "queued" | "starting" | "ready" | "stopped" | "failed";
+
+export type SandboxStatus = {
+  offered: boolean;
+  status: SandboxState;
+  error: string | null;
+  workspace: string | null;
+  syncedAt: string | null;
+  syncedFiles: number | null;
+  syncedBytes: number | null;
+  lastActiveAt: string | null;
+};
+
 export type AutomationWebhook = "created" | "missing" | "no_public_url";
 
 export type Automation = {

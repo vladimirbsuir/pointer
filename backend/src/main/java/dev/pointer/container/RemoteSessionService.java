@@ -7,6 +7,7 @@ import dev.pointer.execution.ExecutionListener;
 import dev.pointer.execution.ExecutionRequest;
 import dev.pointer.execution.ExecutionResult;
 import dev.pointer.execution.ExecutionService;
+import dev.pointer.execution.SandboxSyncRecord;
 import dev.pointer.project.ProjectService;
 import dev.pointer.provider.llm.Cancellation;
 import dev.pointer.session.SessionDtos;
@@ -339,6 +340,50 @@ public class RemoteSessionService {
             log.info("Created the sandbox of session {}", sessionId);
             return Optional.of(runner.id());
         }
+    }
+
+    RemoteDtos.SandboxStatus sandboxStatus(UUID userId, UUID sessionId) {
+        var session = sessions.get(userId, sessionId);
+        var offered = session.executorDeviceId() != null
+                && !devices.isRunner(session.executorDeviceId())
+                && serverWorkspace(sessionId).isEmpty()
+                && offersSandbox(userId, session.projectId());
+        var sandbox = workspaces
+                .findBySessionIdAndKind(sessionId, RemoteWorkspace.SANDBOX)
+                .filter(workspace -> workspace.getUserId().equals(userId))
+                .orElse(null);
+        if (sandbox == null) {
+            return new RemoteDtos.SandboxStatus(
+                    offered, RemoteDtos.SandboxStatus.NONE, null, null, null, null, null, null);
+        }
+        return new RemoteDtos.SandboxStatus(
+                offered,
+                sandbox.getStatus(),
+                sandbox.getError(),
+                SANDBOX_WORKSPACE,
+                sandbox.getSyncedAt(),
+                sandbox.getSyncedFiles(),
+                sandbox.getSyncedBytes(),
+                sandbox.getLastActiveAt());
+    }
+
+    Optional<SandboxSyncRecord> lastSandboxSync(UUID sessionId) {
+        return workspaces
+                .findBySessionIdAndKind(sessionId, RemoteWorkspace.SANDBOX)
+                .filter(workspace -> workspace.getSyncedAt() != null)
+                .map(workspace -> new SandboxSyncRecord(
+                        workspace.getSyncedAt(),
+                        workspace.getSyncedFiles() == null ? 0 : workspace.getSyncedFiles(),
+                        workspace.getSyncedBytes() == null ? 0 : workspace.getSyncedBytes()));
+    }
+
+    void recordSandboxSync(UUID sessionId, long files, long bytes) {
+        workspaces
+                .findBySessionIdAndKind(sessionId, RemoteWorkspace.SANDBOX)
+                .ifPresent(workspace -> update(workspace.getId(), current -> {
+                    current.synced(files, bytes, clock.instant());
+                    return current;
+                }));
     }
 
     void touch(UUID sessionId) {

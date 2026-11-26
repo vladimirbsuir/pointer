@@ -13,6 +13,7 @@ import type {
   Provider,
   RemoteStatus,
   RemoteWorkspace,
+  SandboxStatus,
   Session,
   SlashCommand,
 } from "./types";
@@ -35,6 +36,7 @@ export const queryKeys = {
   remote: ["remote"] as const,
   remoteSessions: (projectId: string) => ["remoteSessions", projectId] as const,
   remoteWorkspace: (sessionId: string) => ["remoteWorkspace", sessionId] as const,
+  sandbox: (sessionId: string) => ["sandbox", sessionId] as const,
   automation: (projectId: string) => ["automation", projectId] as const,
   automationRuns: (projectId: string) => ["automationRuns", projectId] as const,
   memories: (projectId: string | null, status: string) =>
@@ -74,6 +76,23 @@ export function useRemoteWorkspace(sessionId: string, enabled: boolean, sessionB
       )) as RemoteWorkspace,
     refetchInterval: (query) =>
       sessionBusy || TRANSITIONAL_REMOTE_STATUSES.has(query.state.data?.status ?? "")
+        ? REMOTE_POLL_MS
+        : false,
+  });
+}
+
+const TRANSITIONAL_SANDBOX_STATUSES = new Set(["queued", "starting"]);
+
+export function useSandboxStatus(sessionId: string, enabled: boolean, sessionBusy: boolean) {
+  return useQuery({
+    queryKey: queryKeys.sandbox(sessionId),
+    enabled,
+    queryFn: async () =>
+      (await unwrap(
+        api().GET("/api/v1/sessions/{sessionId}/sandbox", { params: { path: { sessionId } } }),
+      )) as SandboxStatus,
+    refetchInterval: (query) =>
+      sessionBusy || TRANSITIONAL_SANDBOX_STATUSES.has(query.state.data?.status ?? "")
         ? REMOTE_POLL_MS
         : false,
   });

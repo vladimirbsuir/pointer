@@ -7,6 +7,7 @@ import { errorMessage } from "@/shared/i18n/errors";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { DiffView } from "./DiffView";
+import { SandboxSyncPreview } from "./SandboxSyncPreview";
 import { ToolProposalPanel, type ToolProposalPreview } from "./ToolProposalPanel";
 
 type ApprovalPanelProps = {
@@ -56,7 +57,7 @@ export function ApprovalPanel({ sessionId, approvalId, preview }: ApprovalPanelP
             : t("approval.title")}
       </p>
       {preview.kind === "sandbox_sync" ? (
-        <p className="text-xs text-muted-foreground">{t("approval.sandboxSync")}</p>
+        <SandboxSyncPreview preview={preview} />
       ) : preview.kind === "diff" ? (
         <DiffView diff={String(preview.unifiedDiff ?? "")} />
       ) : preview.kind === "fetch" ? (

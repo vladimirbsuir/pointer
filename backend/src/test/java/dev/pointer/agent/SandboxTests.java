@@ -1,5 +1,6 @@
 package dev.pointer.agent;
 
+import static dev.pointer.testing.GatewayTestClient.eventKind;
 import static dev.pointer.testing.GatewayTestClient.type;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -196,6 +197,121 @@ class SandboxTests extends RemoteSessionIntegrationTest {
     }
 
     @Test
+    void sandboxSyncAsksWithTheDryRunCountsAndTheSandboxRecordsTheSync() throws Exception {
+        var setup = setUp(false);
+        enableSandbox(setup, true);
+        llm.enqueueToolCall("call_1", "sandbox_sync", "{}");
+        llm.enqueueToolCall("call_2", "sandbox_sync", "{}");
+        llm.enqueueText("Synced twice.");
+        llm.enqueueText("Title");
+        var archive = "gzip archive of the project".getBytes(StandardCharsets.UTF_8);
+        var local = new CopyOnWriteArrayList<JsonNode>();
+        var sandbox = new CopyOnWriteArrayList<JsonNode>();
+
+        assertThat(sandboxStatus(setup).path("offered").asBoolean()).isTrue();
+        assertThat(sandboxStatus(setup).path("status").asString()).isEqualTo("none");
+        try (var device = localDevice(setup, local, request -> upload(request, archive))) {
+            send(setup, "Sync the project twice", null);
+            var first = device.awaitEvent("approval.requested", TIMEOUT)
+                    .path("payload")
+                    .path("event");
+            var preview = first.path("preview");
+            assertThat(preview.path("kind").asString()).isEqualTo("sandbox_sync");
+            assertThat(preview.path("target").asString()).isEqualTo("sandbox");
+            assertThat(preview.path("files").asInt()).isEqualTo(3);
+            assertThat(preview.path("bytes").asLong()).isEqualTo(2048);
+            assertThat(preview.path("excluded").get(0).asString()).isEqualTo(".env");
+            assertThat(preview.path("excludedCount").asInt()).isEqualTo(1);
+            assertThat(preview.path("firstSync").asBoolean()).isTrue();
+            assertThat(fakeRuntime().createdNamed("pointer-sandbox-" + setup.sessionId()))
+                    .isEmpty();
+            approve(setup, first.path("approvalId").asString());
+            try (var runner = startRunnerAnswering(
+                    setup,
+                    sandbox,
+                    List.of("executor", "desktop"),
+                    request -> download(request, new AtomicReference<>()))) {
+                var second = device.await(
+                                message -> eventKind(message).equals("approval.requested")
+                                        && !message.path("payload")
+                                                .path("event")
+                                                .path("approvalId")
+                                                .asString()
+                                                .equals(first.path("approvalId").asString()),
+                                TIMEOUT)
+                        .path("payload")
+                        .path("event");
+                assertThat(second.path("preview").path("firstSync").asBoolean()).isFalse();
+                assertThat(second.path("preview").path("lastSyncAt").asString()).isNotBlank();
+                approve(setup, second.path("approvalId").asString());
+                device.awaitEvent("turn.completed", TIMEOUT);
+            }
+        }
+
+        var dryRuns = executed(local, "pointer.workspace_snapshot").stream()
+                .filter(request -> request.path("dryRun").asBoolean())
+                .toList();
+        assertThat(dryRuns).hasSize(2);
+        assertThat(dryRuns.getFirst().path("arguments").has("uploadPath")).isFalse();
+        var status = sandboxStatus(setup);
+        assertThat(status.path("offered").asBoolean()).isTrue();
+        assertThat(status.path("status").asString()).isEqualTo("ready");
+        assertThat(status.path("workspace").asString()).isEqualTo("/workspace/project");
+        assertThat(status.path("syncedFiles").asInt()).isEqualTo(3);
+        assertThat(status.path("syncedBytes").asLong()).isEqualTo(2048);
+        assertThat(status.path("syncedAt").asString()).isNotBlank();
+    }
+
+    @Test
+    void aSnapshotThatIsTooLargeFailsBeforeAsking() throws Exception {
+        var setup = setUp(false);
+        enableSandbox(setup, true);
+        llm.enqueueToolCall("call_1", "sandbox_sync", "{}");
+        llm.enqueueText("Too large.");
+        llm.enqueueText("Title");
+
+        try (var device = GatewayTestClient.connect(
+                port,
+                setup.auth().accessToken(),
+                setup.deviceId(),
+                List.of("viewer", "executor"),
+                List.of(setup.projectId().toString()))) {
+            device.onMessage(message -> {
+                if (!type(message).equals("exec.request")) {
+                    return;
+                }
+                device.send(
+                        "exec.result",
+                        Map.of(
+                                "callId",
+                                message.path("payload").path("callId").asString(),
+                                "status",
+                                "failed",
+                                "error",
+                                Map.of("code", "snapshot_too_large", "message", "The project has 20000 files")));
+            });
+            device.subscribe(setup.sessionId(), 0);
+            send(setup, "Sync the project", null);
+            device.awaitEvent("turn.completed", TIMEOUT);
+            assertThat(device.events().stream().map(GatewayTestClient::eventKind))
+                    .doesNotContain("approval.requested");
+        }
+
+        var item = toolItem(setup, "sandbox_sync");
+        assertThat(item.path("toolStatus").asString()).isEqualTo("failed");
+        assertThat(item.path("error").path("code").asString()).isEqualTo("snapshot_too_large");
+        assertThat(sandboxStatus(setup).path("status").asString()).isEqualTo("none");
+    }
+
+    @Test
+    void aProjectWithoutTheSandboxIsNotOfferedOne() throws Exception {
+        var setup = setUp(false);
+        enableSandbox(setup, false);
+
+        assertThat(sandboxStatus(setup).path("offered").asBoolean()).isFalse();
+    }
+
+    @Test
     void aFailedSnapshotDoesNotStartTheSandbox() throws Exception {
         var setup = setUp(false);
         enableSandbox(setup, true);
@@ -219,6 +335,9 @@ class SandboxTests extends RemoteSessionIntegrationTest {
     private Map<String, Object> upload(JsonNode request, byte[] archive) {
         if (!request.path("operation").asString().equals("pointer.workspace_snapshot")) {
             return result(request.path("operation").asString());
+        }
+        if (request.path("dryRun").asBoolean()) {
+            return Map.of("files", 3, "bytes", 2048, "excluded", List.of(".env"), "excludedCount", 1);
         }
         var response = http(HttpRequest.newBuilder(
                         uri(request.path("arguments").path("uploadPath").asString()))
@@ -322,6 +441,28 @@ class SandboxTests extends RemoteSessionIntegrationTest {
                 .expectBody()
                 .jsonPath("$.sandboxEnabled")
                 .isEqualTo(enabled);
+    }
+
+    private JsonNode sandboxStatus(Setup setup) {
+        return client.get()
+                .uri("/api/v1/sessions/{id}/sandbox", setup.sessionId())
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
+    }
+
+    private void approve(Setup setup, String approvalId) {
+        client.post()
+                .uri("/api/v1/sessions/{id}/approvals/{approvalId}", setup.sessionId(), approvalId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(setup.auth()))
+                .body(Map.of("decision", "approved", "scope", "once"))
+                .exchange()
+                .expectStatus()
+                .isNoContent();
     }
 
     private void autoApprove(Setup setup) {

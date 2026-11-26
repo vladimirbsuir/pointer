@@ -13,6 +13,7 @@ import {
   useProjects,
   useProviders,
   useRemoteSessions,
+  useSandboxStatus,
   useSettings,
 } from "@/shared/api/queries";
 import {
@@ -35,6 +36,7 @@ import { MessageList } from "./MessageList";
 import { ModelPicker } from "./ModelPicker";
 import { useConversation, type Usage } from "./use-conversation";
 import { RemoteControl } from "./RemoteControl";
+import { SandboxControl } from "./SandboxControl";
 import { WorktreeControl } from "./WorktreeControl";
 
 const BUSY_STATUSES = ["running", "waiting_for_approval", "waiting_for_executor"];
@@ -56,10 +58,12 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
   const { data: remoteSessions } = useRemoteSessions(session?.projectId ?? "", Boolean(session));
   const remote = remoteSessions?.some((workspace) => workspace.sessionId === sessionId) ?? false;
   const { data: projects } = useProjects();
-  const sandboxed =
+  const sandboxEnabled =
     !remote &&
     (projects?.some((project) => project.id === session?.projectId && project.sandboxEnabled) ??
       false);
+  const { data: sandbox } = useSandboxStatus(sessionId, sandboxEnabled, running);
+  const sandboxed = sandboxEnabled && (sandbox?.offered ?? false);
   const displayStarts = displayStartsOf(state.items);
   const { data: desktopStatus } = useDesktopStatus(sessionId, remote || sandboxed, displayStarts);
   const desktopAvailable = (remote || sandboxed) && (desktopStatus?.available ?? false);
@@ -174,6 +178,14 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
             {remote && <RemoteControl sessionId={sessionId} busy={running} />}
             {remote && (
               <AutomationBadge projectId={session.projectId} sessionId={sessionId} busy={running} />
+            )}
+            {sandboxed && sandbox && (
+              <SandboxControl
+                sessionId={sessionId}
+                sandbox={sandbox}
+                busy={running}
+                compact={pane !== null}
+              />
             )}
           </div>
           <div className="flex items-center gap-2">

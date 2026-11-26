@@ -432,3 +432,17 @@ Live check of `sandbox_sync` ([ADR 0032](../adr/0032-project-snapshots-through-t
 The sandbox's project folder, listed with `docker exec` after the turn, held exactly the sent files and the new `version.txt`; the second sync reported `firstSync: false`. A first run of the small task with its workspace inside this repository passed as well but sent no `.env` and named none, because the repository's own `.gitignore` already ignores `.env` and applies to a folder inside it; the run outside the repository is the one that exercises the secret filter. From the desktop client preview the browser executor packed its mock project with `CompressionStream`, the real sandbox runner unpacked it, and the agent ran `python3 src/main.py` there and got `5`; the approval panel asked before the sync and before the command, and the sync card shows the result text.
 
 A sync uploads the whole project every time: about 1.6 MB for this 700-file repository, as much as some 50 screenshots of about 30 KB. A warm sync takes well under a second, so the agent can sync before every build without a delta transfer.
+
+## Stage 2, phase 2.3: consent and UI
+
+Live check on 2026-11-26 from the desktop client preview, whose browser executor is the local device with a mock project of four files, model `deepseek-v4.1-flash:free` (TokenHarbor), every call approved by hand.
+
+| Step | What the client showed | Backend and sandbox |
+|---|---|---|
+| New session, before any call | Header: sandbox not started | `GET /sessions/{id}/sandbox`: `offered: true`, `status: none` |
+| First `sandbox_sync` | Approval: 4 files, 0.0 MB, the first-sync warning; after approval the first-sync notice under the card and the header turning ready | One dry-run snapshot before the question and no container until the approval; then the usual snapshot, upload and extract |
+| `sandbox_run python3 src/main.py` | Approval for the sandbox; output `5` | |
+| Second `sandbox_sync` after adding `.env`, `.env.example` and `certs/server.key` locally | Approval: 5 files, left out `.env` and `certs/server.key`, no first-sync warning; no notice under the card | `find` in the container: `.env.example` present, neither left-out file |
+| Header dialog | Running, `/workspace/project`, last sync 5 files with its time | `syncedFiles: 5` |
+
+The dry run costs one extra round trip to the user's device per sync that asks, the same file walk as the sync itself without packing; an auto-approved sync skips it. The check also found that the preview's mock file system stripped the leading dot of paths such as `.env`, which hid the file from the secret filter; the mock now keeps it.

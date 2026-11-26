@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/v1/transfers/{ticket}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["download"];
+        put: operations["upload"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/permissions": {
         parameters: {
             query?: never;
@@ -349,7 +365,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["upload"];
+        post: operations["upload_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -980,6 +996,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/sandbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["sandbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/remote": {
         parameters: {
             query?: never;
@@ -1115,7 +1147,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["download"];
+        get: operations["download_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1908,6 +1940,20 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
         };
+        SandboxStatus: {
+            offered?: boolean;
+            status?: string;
+            error?: string;
+            workspace?: string;
+            /** Format: date-time */
+            syncedAt?: string;
+            /** Format: int32 */
+            syncedFiles?: number;
+            /** Format: int64 */
+            syncedBytes?: number;
+            /** Format: date-time */
+            lastActiveAt?: string;
+        };
         RemoteFileSuggestions: {
             paths?: string[];
         };
@@ -1978,6 +2024,48 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticket: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+        };
+    };
+    upload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticket: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     project: {
         parameters: {
             query?: never;
@@ -2674,7 +2762,7 @@ export interface operations {
             };
         };
     };
-    upload: {
+    upload_1: {
         parameters: {
             query?: never;
             header: {
@@ -3992,6 +4080,28 @@ export interface operations {
             };
         };
     };
+    sandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxStatus"];
+                };
+            };
+        };
+    };
     forSession: {
         parameters: {
             query?: never;
@@ -4178,7 +4288,7 @@ export interface operations {
             };
         };
     };
-    download: {
+    download_1: {
         parameters: {
             query?: never;
             header?: never;

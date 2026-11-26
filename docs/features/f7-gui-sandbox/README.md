@@ -1,6 +1,6 @@
 # F7. GUI testing sandbox
 
-Status: Stage 1 implemented (phases 1.1 to 1.6); stage 2 in progress (phases 2.1 and 2.2 done) · Requirement ids: GUI-1 to GUI-13 · Depends on: remote execution in containers ([ADR 0016](../../adr/0016-remote-execution-in-containers.md)), image attachments, the vision flag of models ([F3](../f3-model-routing.md)), result masking ([F5](../f5-cache-aware-context.md)), the tiers and pre-checks of escalation ([F6](../f6-trajectory-escalation.md)).
+Status: Stage 1 implemented (phases 1.1 to 1.6); stage 2 in progress (phases 2.1 to 2.3 done) · Requirement ids: GUI-1 to GUI-13 · Depends on: remote execution in containers ([ADR 0016](../../adr/0016-remote-execution-in-containers.md)), image attachments, the vision flag of models ([F3](../f3-model-routing.md)), result masking ([F5](../f5-cache-aware-context.md)), the tiers and pre-checks of escalation ([F6](../f6-trajectory-escalation.md)).
 
 The spec is split into several files, each one readable on its own:
 

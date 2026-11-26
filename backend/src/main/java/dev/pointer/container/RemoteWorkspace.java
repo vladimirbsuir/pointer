@@ -36,6 +36,9 @@ public class RemoteWorkspace extends BaseEntity {
     private String pushedCommit;
     private String pullRequestUrl;
     private byte[] desktopViewSecret;
+    private Instant syncedAt;
+    private Integer syncedFiles;
+    private Long syncedBytes;
     private Instant lastActiveAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -105,6 +108,13 @@ public class RemoteWorkspace extends BaseEntity {
 
     void desktopViewSecretIssued(byte[] secret, Instant now) {
         this.desktopViewSecret = secret;
+        this.updatedAt = now;
+    }
+
+    void synced(long files, long bytes, Instant now) {
+        this.syncedAt = now;
+        this.syncedFiles = Math.toIntExact(files);
+        this.syncedBytes = bytes;
         this.updatedAt = now;
     }
 

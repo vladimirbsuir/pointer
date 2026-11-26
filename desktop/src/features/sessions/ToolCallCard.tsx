@@ -24,6 +24,7 @@ import {
   Undo2Icon,
   WrenchIcon,
   XIcon,
+  ShieldAlertIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { undoMemory } from "@/features/memory/memory-api";
@@ -34,6 +35,7 @@ import { cn } from "@/shared/lib/utils";
 import { ApprovalPanel } from "./ApprovalPanel";
 import { DiffView } from "./DiffView";
 import { DesktopThumbnail } from "./DesktopScreenshot";
+import { formatMegabytes } from "./sandbox-format";
 import {
   desktopDetail,
   desktopSummary,
@@ -125,7 +127,7 @@ function argument(call: ToolCall, name: string) {
 }
 
 export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const call = item as ToolCall;
   const [open, setOpen] = useState(false);
   const [undone, setUndone] = useState(false);
@@ -266,6 +268,8 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
       toast.error(errorMessage(t, toAppError(error)));
     }
   };
+  const firstSync =
+    toolName === "sandbox_sync" && status === "succeeded" && call.result?.firstSync === true;
   const hasDetails = Boolean(output || diff || call.error?.message || call.arguments);
 
   return (
@@ -309,6 +313,15 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
             preview={call.approvalPreview!}
           />
         </div>
+      )}
+      {firstSync && (
+        <p className="flex gap-2 border-t bg-amber-500/10 px-3 py-2 text-xs">
+          <ShieldAlertIcon className="mt-px size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          {t("tools.sandboxFirstSync", {
+            files: Number(call.result?.files ?? 0),
+            size: formatMegabytes(Number(call.result?.bytes ?? 0), i18n.language),
+          })}
+        </p>
       )}
       {open && !awaitingApproval && (
         <div className="flex flex-col gap-2 border-t px-3 py-2">

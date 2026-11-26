@@ -3,6 +3,7 @@ package dev.pointer.container;
 import dev.pointer.execution.ExecutionRequest;
 import dev.pointer.execution.ExecutorReadiness;
 import dev.pointer.execution.SandboxProvider;
+import dev.pointer.execution.SandboxSyncRecord;
 import dev.pointer.session.SessionEventListener;
 import dev.pointer.session.SessionEventRecord;
 import dev.pointer.session.SessionService;
@@ -55,6 +56,16 @@ class RemoteSessionHooks implements ExecutorReadiness, SandboxProvider, SessionE
     @Override
     public Optional<UUID> sandboxFor(UUID userId, UUID sessionId, UUID projectId) {
         return service.sandboxFor(userId, sessionId, projectId);
+    }
+
+    @Override
+    public Optional<SandboxSyncRecord> lastSync(UUID sessionId) {
+        return service.lastSandboxSync(sessionId);
+    }
+
+    @Override
+    public void recordSync(UUID sessionId, long files, long bytes) {
+        service.recordSandboxSync(sessionId, files, bytes);
     }
 
     @Override

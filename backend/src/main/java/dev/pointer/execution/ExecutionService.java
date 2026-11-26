@@ -106,6 +106,17 @@ public class ExecutionService {
                 .findFirst();
     }
 
+    public Optional<SandboxSyncRecord> lastSandboxSync(UUID sessionId) {
+        return sandboxes.stream()
+                .map(provider -> provider.lastSync(sessionId))
+                .flatMap(Optional::stream)
+                .findFirst();
+    }
+
+    public void recordSandboxSync(UUID sessionId, long files, long bytes) {
+        sandboxes.forEach(provider -> provider.recordSync(sessionId, files, bytes));
+    }
+
     public boolean isOperationAvailable(String operation, UUID projectId) {
         return serverOperation(operation)
                 .map(server -> projectId == null || server.isAvailable(projectId))

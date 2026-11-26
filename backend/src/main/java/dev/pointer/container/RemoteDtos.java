@@ -34,6 +34,19 @@ public final class RemoteDtos {
             String pullRequestUrl,
             Instant lastActiveAt) {}
 
+    public record SandboxStatus(
+            boolean offered,
+            String status,
+            String error,
+            String workspace,
+            Instant syncedAt,
+            Integer syncedFiles,
+            Long syncedBytes,
+            Instant lastActiveAt) {
+
+        static final String NONE = "none";
+    }
+
     public record PullRequestResponse(String url) {}
 
     public record RepositoryResponse(String fullName, String defaultBranch, boolean isPrivate) {}

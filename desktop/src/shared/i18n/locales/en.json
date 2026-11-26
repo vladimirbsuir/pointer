@@ -319,6 +319,10 @@
     "titleSandbox": "Allow this command in the Linux sandbox on the server?",
     "titleSandboxSync": "Send the project files to the Linux sandbox on the server?",
     "sandboxSync": "The sandbox gets a copy of the project folder. Files ignored by .gitignore, the .git folder and secret-looking files (.env, keys, certificates) stay on this computer.",
+    "sandboxSyncSize": "{{files}} files, {{size}} will be sent to the sandbox",
+    "sandboxSyncExcluded": "Secret-looking files that stay on this computer ({{count}}):",
+    "sandboxSyncMore": "and {{count}} more",
+    "sandboxSyncFirst": "This is the first sync of the session: the project files will have a copy in a container on the Pointer server until the session is deleted.",
     "allowOnce": "Allow",
     "allowSession": "Allow for this session",
     "deny": "Deny",
@@ -334,6 +338,7 @@
     "run_command": "Run {{target}}",
     "sandbox_run": "Run in the sandbox {{target}}",
     "sandbox_sync": "Sync the project to the sandbox",
+    "sandboxFirstSync": "First sync of this session: {{files}} files ({{size}}) now have a copy in the sandbox on the Pointer server. The copy is removed with the session.",
     "web_fetch": "Fetch {{target}}",
     "other": "Use {{name}}",
     "lines": "{{count}} lines",
@@ -530,7 +535,34 @@
     "title": "Linux sandbox of {{project}}",
     "description": "Local sessions of this project can run and look at GUI applications in a Linux container on the Pointer server, with its own virtual display, while you keep working.",
     "enabled": "Allow the sandbox",
-    "enabledHint": "The agent gets the desktop tools, sandbox_run and sandbox_sync. The container starts on its first use and is removed with the session. Files of this computer reach it only through sandbox_sync, which asks you first unless you allow it."
+    "enabledHint": "The agent gets the desktop tools, sandbox_run and sandbox_sync. The container starts on its first use and is removed with the session. Files of this computer reach it only through sandbox_sync, which asks you first unless you allow it.",
+    "session": {
+      "title": "Linux sandbox of this session",
+      "hint": "Linux sandbox: {{state}}",
+      "description": "A Linux container on the Pointer server with its own display. The agent drives it with the desktop tools and sandbox_run, while file and command tools keep working on this computer.",
+      "stateLabel": "Container",
+      "workspace": "Project folder",
+      "lastSync": "Last sync",
+      "notSynced": "Not synced yet",
+      "syncSummary": "{{files}} files, {{size}}, {{time}}",
+      "privacy": "Files of this computer reach the sandbox only through sandbox_sync, which shows what it sends. The container, its display and the synced copy are removed with the session."
+    },
+    "state": {
+      "none": "Not started yet, starts on the agent's first sandbox call",
+      "queued": "Waiting for a free container slot on the server",
+      "starting": "Starting",
+      "ready": "Running",
+      "stopped": "Stopped while idle, starts again on the next sandbox call",
+      "failed": "Failed to start"
+    },
+    "badge": {
+      "none": "not started",
+      "queued": "starting",
+      "starting": "starting",
+      "ready": "ready",
+      "stopped": "stopped",
+      "failed": "failed"
+    }
   },
   "repository": {
     "menu": "GitHub repository…",

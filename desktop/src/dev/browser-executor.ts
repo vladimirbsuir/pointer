@@ -29,7 +29,7 @@ function failed(code: string, message: string): Result {
 function normalize(path: unknown) {
   return String(path ?? ".")
     .replace(/\\/g, "/")
-    .replace(/^\.\/?/, "")
+    .replace(/^\.(\/|$)/, "")
     .replace(/\/$/, "");
 }
 
@@ -125,13 +125,31 @@ function tarHeader(name: string, size: number, mtime: number) {
   return header;
 }
 
+const publicEnvSuffixes = ["example", "sample", "template", "dist"];
+const secretExtensions = ["pem", "key", "p12", "pfx", "crt"];
+
+function isSecret(path: string) {
+  const name = (path.split("/").pop() ?? path).toLowerCase();
+  if (name === ".env") {
+    return true;
+  }
+  if (name.startsWith(".env.")) {
+    return !publicEnvSuffixes.includes(name.slice(".env.".length));
+  }
+  return secretExtensions.includes(name.split(".").pop() ?? "");
+}
+
+function snapshotEntries() {
+  return [...files.entries()]
+    .filter(([name]) => !isSecret(name))
+    .sort(([left], [right]) => left.localeCompare(right));
+}
+
 async function projectArchive() {
   const encoder = new TextEncoder();
   const mtime = Math.floor(Date.now() / 1000);
   const parts: Uint8Array[] = [];
-  for (const [name, content] of [...files.entries()].sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
+  for (const [name, content] of snapshotEntries()) {
     const data = encoder.encode(content);
     parts.push(tarHeader(name, data.length, mtime), data);
     const padding = (tarBlock - (data.length % tarBlock)) % tarBlock;
@@ -147,8 +165,10 @@ export async function snapshotInBrowser(
   dryRun: boolean,
   apiUrl: string,
 ): Promise<Result> {
-  const bytes = [...files.values()].reduce((sum, content) => sum + content.length, 0);
-  const summary = { files: files.size, bytes, excluded: [], excludedCount: 0 };
+  const entries = snapshotEntries();
+  const bytes = entries.reduce((sum, [, content]) => sum + content.length, 0);
+  const excluded = [...files.keys()].filter(isSecret).sort();
+  const summary = { files: entries.length, bytes, excluded, excludedCount: excluded.length };
   if (dryRun) {
     return ok(summary);
   }

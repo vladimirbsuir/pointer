@@ -58,6 +58,11 @@ class RemoteSessionController {
                         () -> ApiException.notFound("remote_session_not_found", "The session is not on the server"));
     }
 
+    @GetMapping("/sessions/{sessionId}/sandbox")
+    RemoteDtos.SandboxStatus sandbox(AuthPrincipal principal, @PathVariable UUID sessionId) {
+        return service.sandboxStatus(principal.userId(), sessionId);
+    }
+
     @PostMapping("/sessions/{sessionId}/remote/pull-request")
     RemoteDtos.PullRequestResponse pullRequest(AuthPrincipal principal, @PathVariable UUID sessionId) {
         return service.openPullRequest(principal.userId(), sessionId);

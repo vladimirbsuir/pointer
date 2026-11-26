@@ -256,9 +256,18 @@ class ToolCallHandler {
             preview.put("tool", tool.getName());
             preview.put("arguments", arguments);
         } else if (ToolDefinition.SANDBOX_SYNC.equals(tool.getOperation())) {
-            preview = new LinkedHashMap<>();
-            preview.put("kind", "sandbox_sync");
-            preview.put("target", "sandbox");
+            var prepared = sandboxSync.preview(new SandboxSync.Source(
+                    scope.sessionId(),
+                    scope.projectId(),
+                    scope.deviceId(),
+                    scope.worktree(),
+                    statusListener(scope),
+                    scope.cancellation()));
+            if (prepared.failure() != null) {
+                complete(scope, itemId, prepared.failure(), null);
+                return false;
+            }
+            preview = prepared.preview();
         } else if (WEB_FETCH.equals(tool.getOperation())) {
             preview = new LinkedHashMap<>();
             preview.put("kind", "fetch");

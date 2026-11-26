@@ -30,6 +30,39 @@ class SandboxSync {
     private final TransferService transfers;
     private final SandboxSyncProperties properties;
 
+    Preview preview(Source source) {
+        var dryRun = execution.execute(
+                new ExecutionRequest(
+                        source.sessionId(),
+                        source.projectId(),
+                        source.localDeviceId(),
+                        SNAPSHOT,
+                        Map.of(
+                                "maxFiles",
+                                properties.maxFiles(),
+                                "maxBytes",
+                                properties.maxBytes().toBytes()),
+                        true,
+                        properties.timeout(),
+                        source.worktree()),
+                source.listener(),
+                source.cancellation());
+        if (!dryRun.succeeded()) {
+            return new Preview(dryRun, null);
+        }
+        var preview = new LinkedHashMap<String, Object>();
+        preview.put("kind", "sandbox_sync");
+        preview.put("target", "sandbox");
+        preview.put("files", dryRun.result().getOrDefault("files", 0));
+        preview.put("bytes", dryRun.result().getOrDefault("bytes", 0));
+        preview.put("excluded", dryRun.result().getOrDefault("excluded", List.of()));
+        preview.put("excludedCount", dryRun.result().getOrDefault("excludedCount", 0));
+        var lastSync = execution.lastSandboxSync(source.sessionId());
+        preview.put("firstSync", lastSync.isEmpty());
+        lastSync.ifPresent(sync -> preview.put("lastSyncAt", sync.syncedAt().toString()));
+        return new Preview(null, preview);
+    }
+
     Outcome run(Call call) {
         try (var transfer = transfers.open(maxArchiveBytes())) {
             var snapshot = execution.execute(
@@ -77,6 +110,7 @@ class SandboxSync {
                 return new Outcome(extract, null);
             }
             var result = combine(snapshot.result(), extract.result(), transfer.uploadedBytes());
+            execution.recordSandboxSync(call.sessionId(), number(result.get("files")), number(result.get("bytes")));
             return new Outcome(
                     new ExecutionResult(ExecutionResult.SUCCEEDED, result, null, List.of()), describe(result));
         }
@@ -152,6 +186,16 @@ class SandboxSync {
     private static String megabytes(Object bytes) {
         return String.format(Locale.ROOT, "%.1f MB", number(bytes) / (1024.0 * 1024.0));
     }
+
+    record Source(
+            UUID sessionId,
+            UUID projectId,
+            UUID localDeviceId,
+            String worktree,
+            ExecutionListener listener,
+            Cancellation cancellation) {}
+
+    record Preview(ExecutionResult failure, Map<String, Object> preview) {}
 
     record Call(
             UUID sessionId,

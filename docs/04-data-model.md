@@ -503,6 +503,7 @@ Server sessions on a per-session container (REM-3, [ADR 0016](adr/0016-remote-ex
 | `pushed_commit` | text | Nullable; last commit pushed to the branch |
 | `pull_request_url` | text | Nullable |
 | `desktop_view_secret` | bytea | Nullable; the view-only VNC password of the container, AES-GCM encrypted like provider keys; set when the container is created ([F7](features/f7-gui-sandbox/README.md) live view, V36). The full VNC password is never stored |
+| `synced_at`, `synced_files`, `synced_bytes` | timestamptz, integer, bigint | Nullable; time, file count and content size of the last successful `sandbox_sync` of a sandbox (V40); null before the first sync and for server sessions |
 | `last_active_at` | timestamptz | Drives the idle stop |
 | `created_at`, `updated_at` | timestamptz | |
 

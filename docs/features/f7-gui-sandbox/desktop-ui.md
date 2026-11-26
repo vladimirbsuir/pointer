@@ -46,6 +46,16 @@ As implemented in phase 1.4: the panel is `DesktopPanel` with the hook `use-desk
 
 The frontend opens the stream WebSocket itself, which is an exception to the rule that the Rust core owns the connection ([ADR 0007](../../adr/0007-communication-model.md)); see [tools-and-protocol.md](tools-and-protocol.md#client-connection). noVNC (MPL 2.0) is an npm dependency of the frontend. Nothing from the stream is stored.
 
+## Sandbox of a local session (phase 2.3)
+
+A local session in a project with the sandbox enabled ([stage 2](stage-2-local-sessions.md)) shows the sandbox in its header and asks before the project leaves the user's computer.
+
+- **Header.** A button with a box icon and the state word: not started, starting (with a spinner, also while waiting for a container slot), ready (green), stopped (idle stop; the next sandbox call starts it again) or failed (a warning icon). It polls `GET /sessions/{id}/sandbox` while the session is busy or the sandbox is starting, and once more after a turn. The state word gives way to the session title when the header is crowded and is hidden while a side pane is open. The button opens a dialog with the state, the sandbox's project folder, the last sync (file count, size, time), the start error if any and a note that files reach the sandbox only through `sandbox_sync` and that the container, its display and the copy are removed with the session. The Desktop panel's monitor button appears next to it once the display is available, as for server sessions.
+- **Sync approval.** The approval of `sandbox_sync` shows the number of files and their size, the list of secret-looking files that stay on the computer (`and N more` past the first 50) and the standing note about `.gitignore`, `.git` and secrets; on the first sync of the session an amber note says the files will have a copy on the server until the session is deleted.
+- **First-sync notice.** A succeeded first sync gets an amber line under its tool card, outside the folded details, with the file count and size and that the copy is removed with the session, so it is visible when the sync was auto-approved.
+
+As implemented in phase 2.3: `SandboxControl`, `SandboxSyncPreview` and `sandbox-format.ts` in `features/sessions`, the query `useSandboxStatus` in `shared/api/queries.ts`. The browser executor of the preview leaves out the same kind of files (`.env`, `.env.*` except examples, key and certificate files) in its dry run and archive.
+
 ## Settings
 
 One new model option: **Coordinates** (`Pixels` or `0–1000 grid`) in the model options editor (`ModelOptionsEditor`), shown next to the vision switch and enabled only when vision is on. It sets `models.coordinate_system` ([tools-and-protocol.md](tools-and-protocol.md#coordinate-spaces)); the hint under it says to pick the grid for models documented to answer that way, such as Qwen3-VL and Gemini.
