@@ -408,7 +408,7 @@ Every fixture fits in the runner's limits (4 GB, 512 processes) with room for a 
 
 ### What a pass proves (metric 10)
 
-Not measured in stage 1. Running the same `tauri-counter` task against the Windows build needs the desktop tools on the user's machine, which is stage 2 ([stage-2-local-sessions.md](../features/f7-gui-sandbox/stage-2-local-sessions.md)); a pass here shows that the logic and the layout of the Linux build work, as the scope of stage 1 says.
+Measured in stage 2, phase 2.4; see [Stage 2, phase 2.4](#stage-2-phase-24-limits-and-metric-10). In stage 1 a pass showed only that the logic and the layout of the Linux build work.
 
 ## Stage 2, phase 2.1: sandbox of a local session
 
@@ -446,3 +446,24 @@ Live check on 2026-11-26 from the desktop client preview, whose browser executor
 | Header dialog | Running, `/workspace/project`, last sync 5 files with its time | `syncedFiles: 5` |
 
 The dry run costs one extra round trip to the user's device per sync that asks, the same file walk as the sync itself without packing; an auto-approved sync skips it. The check also found that the preview's mock file system stripped the leading dot of paths such as `.env`, which hid the file from the secret filter; the mock now keeps it.
+
+## Stage 2, phase 2.4: limits and metric 10
+
+### What a pass proves (metric 10)
+
+Measured on 2026-11-26 with `infra/bench/desktop/transfer_check.py`. The project is a copy of `tauri-counter` in a folder on the Windows 11 machine, with a `.gitignore` for `target/` and `gen/`; the bench device ran natively on Windows as the local executor of a project with the sandbox on. On the Linux side `deepseek-v4.1-flash:free` (TokenHarbor, auto-approve on) worked in one session: the first turn synced the project and built it in the sandbox, then each of the three Tauri tasks of the phase 1.6 benchmark was a turn of its own, with the application stopped and the state folder cleared between turns. On the Windows side the project was built natively (`cargo build --release`, MSVC, WebView2) and the same tasks' reference solutions were replayed against the Windows window through UI Automation, finding the controls by accessible name and role as the Linux reference does with AT-SPI. Both sides apply the task's check to the state file the application writes.
+
+| Task | Linux sandbox, agent | Calls | Screenshots | Turn | Windows build, reference replay | Replay |
+|---|---|---|---|---|---|---|
+| Build | Pass: one sync of 9 files (114 KB, 34 KB archive) in 0.9 s, `cargo build --release` in 165 s with a cold dependency cache | 4 | 0 | 180 s | Pass: native build | 33 s with a warm cache |
+| `tauri-single` | Pass: count 1 | 6 | 2 | 18 s | Pass: count 1 | 2.7 s |
+| `tauri-sequence` | Pass: name Release, count 2 | 14 | 6 | 47 s | Pass: name Release, count 2 | 3.4 s |
+| `tauri-trap` (lock at 3) | Pass: count 5 after Unlock | 12 | 7 | 46 s | Pass: the lock dialog appeared at 3, Unlock, count 5 | 4.1 s |
+
+All three Linux passes held on the Windows build: 3 of 3. The agent's four turns took 37 model requests, 426k prompt tokens of which 402k (94 %) were cached, and 4.3k completion tokens. Without being asked, the agent read the project's source on the Windows machine with the local file tools before the sequence task and read the accessibility tree (`desktop_tree`), which WebKitGTK exposes for the Tauri page, before clicking in every task.
+
+What this shows and what it does not. The application's logic, its accessible names and roles and its in-page dialog behave the same in WebKitGTK and WebView2, so a task that an agent solves on the Linux build by acting on named controls also succeeds on the Windows build. It does not show pixel-level transfer: fonts, sizes and positions differ between the two engines (the page asks for DejaVu Sans, which Windows replaces), so the agent's own coordinates were not replayed, and the Windows side was driven by the reference solution, not by a model. Platform-specific code (native menus, file dialogs, Windows APIs behind Tauri commands) is outside what the sandbox can test; this fixture has none. The sample is three tasks of one small application, run once, and is reported as such.
+
+### Limits
+
+`pointer.container.sandbox-max-running-per-user` (2) and `pointer.container.sandbox-remove-after` (7 days) were checked by `SandboxLimitsTests` rather than live: a new sandbox stops the user's idle one at the limit, fails with a message naming the limit when the other sandbox's session is busy, and a sandbox unused for longer than the retention is removed with its volume and runner device. A sandbox keeps the project copy, the build output and the installed packages in its volume while it is stopped; the retention period bounds how long that disk stays in use.

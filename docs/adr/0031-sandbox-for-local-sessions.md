@@ -20,6 +20,6 @@ The design sketch left five questions open. The user answered them on 2026-11-26
 ## Consequences
 
 - An agent in a local Windows session can install packages, build and test a GUI application on Linux and look at it, while the user keeps working. Until phase 2.2 the project's own files do not reach the sandbox.
-- The server pays for sandboxes like for server sessions: they take container slots and memory, and the same idle stop applies. Limits per user come in phase 2.4.
+- The server pays for sandboxes like for server sessions: they take container slots and memory, and the same idle stop applies. Phase 2.4 added a cap on running sandboxes per user (2; a new one stops the user's least recently active idle sandbox) and removes a sandbox with its volume after 7 days without a turn in its session, so stopped sandboxes do not keep project copies and disk forever.
 - A sandbox cannot reach services on the user's computer; a project that needs a database starts it in the sandbox. The user's local Docker remains a possible second kind of sandbox device behind the same `SandboxProvider`.
 - Project files sent to the sandbox (phase 2.2) are a second copy on the server, which is why the project opts in and every sync is approved.

@@ -65,6 +65,8 @@ pointer:
     github-git-url: ${POINTER_GITHUB_GIT_URL:https://github.com}
     desktop: ${POINTER_RUNNER_DESKTOP:false}
     desktop-access: ${POINTER_RUNNER_DESKTOP_ACCESS:published}
+    sandbox-max-running-per-user: ${POINTER_SANDBOX_MAX_RUNNING_PER_USER:2}
+    sandbox-remove-after: ${POINTER_SANDBOX_REMOVE_AFTER:7d}
   desktop:
     default-width: 1280
     default-height: 800

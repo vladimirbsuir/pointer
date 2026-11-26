@@ -51,6 +51,8 @@ public class RemoteSessionService {
     private static final Duration SLOT_POLL_INTERVAL = Duration.ofSeconds(2);
     private static final List<String> RUNNING_STATUSES =
             List.of(RemoteWorkspace.STARTING, RemoteWorkspace.PREPARING, RemoteWorkspace.READY);
+    private static final List<String> SANDBOX_COUNTED_STATUSES =
+            List.of(RemoteWorkspace.QUEUED, RemoteWorkspace.STARTING, RemoteWorkspace.READY);
 
     private final ContainerProperties properties;
     private final ContainerRuntime runtime;
@@ -463,6 +465,10 @@ public class RemoteSessionService {
     }
 
     private void start(UUID workspaceId) {
+        var candidate = workspaces.findById(workspaceId).orElseThrow();
+        if (candidate.isSandbox() && !makeRoomForSandbox(candidate)) {
+            return;
+        }
         if (!acquireSlot(workspaceId)) {
             return;
         }
@@ -518,6 +524,72 @@ public class RemoteSessionService {
             current.touch(clock.instant());
             return current;
         });
+    }
+
+    private boolean makeRoomForSandbox(RemoteWorkspace sandbox) {
+        synchronized (slots) {
+            var others = workspaces
+                    .findByUserIdAndKindAndStatusInOrderByLastActiveAtAsc(
+                            sandbox.getUserId(), RemoteWorkspace.SANDBOX, SANDBOX_COUNTED_STATUSES)
+                    .stream()
+                    .filter(other -> !other.getId().equals(sandbox.getId()))
+                    .filter(other ->
+                            !RemoteWorkspace.QUEUED.equals(other.getStatus()) || starting.contains(other.getId()))
+                    .toList();
+            var limit = properties.sandboxMaxRunningPerUser();
+            var excess = others.size() - (limit - 1);
+            for (var other : others) {
+                if (excess <= 0) {
+                    break;
+                }
+                if (isSessionIdle(other) && stopForRoom(other)) {
+                    excess--;
+                }
+            }
+            if (excess <= 0) {
+                return true;
+            }
+            changeStatus(
+                    sandbox.getId(),
+                    RemoteWorkspace.FAILED,
+                    "You already run " + others.size() + " sandboxes in other sessions that are still working;"
+                            + " the limit is " + limit
+                            + " per user. Wait for one of them to finish or delete a session you no longer need.");
+            return false;
+        }
+    }
+
+    private boolean stopForRoom(RemoteWorkspace workspace) {
+        try {
+            runtime.stop(workspace.getContainerName());
+            changeStatus(workspace.getId(), RemoteWorkspace.STOPPED, null);
+            log.info("Stopped sandbox {} to stay within the per-user limit", workspace.getContainerName());
+            return true;
+        } catch (ContainerException exception) {
+            log.warn("Could not stop container {}: {}", workspace.getContainerName(), exception.getMessage());
+            return false;
+        }
+    }
+
+    void removeAbandonedSandboxes() {
+        var cutoff = clock.instant().minus(properties.sandboxRemoveAfter());
+        for (var sandbox : workspaces.findByKindAndLastActiveAtBefore(RemoteWorkspace.SANDBOX, cutoff)) {
+            if (starting.contains(sandbox.getId()) || !isSessionIdle(sandbox)) {
+                continue;
+            }
+            try {
+                runtime.remove(sandbox.getContainerName(), sandbox.getVolumeName());
+            } catch (ContainerException exception) {
+                log.warn("Could not remove sandbox {}: {}", sandbox.getContainerName(), exception.getMessage());
+                continue;
+            }
+            devices.revoke(sandbox.getDeviceId());
+            transactions.executeWithoutResult(status -> workspaces.deleteById(sandbox.getId()));
+            log.info(
+                    "Removed the sandbox of session {}, unused since {}",
+                    sandbox.getSessionId(),
+                    sandbox.getLastActiveAt());
+        }
     }
 
     private boolean acquireSlot(UUID workspaceId) {

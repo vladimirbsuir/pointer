@@ -485,7 +485,7 @@ Remote control through a Telegram bot (REM-1, 2, [ADR 0015](adr/0015-telegram-re
 
 Server sessions on a per-session container (REM-3, [ADR 0016](adr/0016-remote-execution-in-containers.md)).
 
-`remote_workspaces`: one row per session container, either a server session (`kind = 'session'`) or the sandbox of a local session (`kind = 'sandbox'`, [F7 stage 2](features/f7-gui-sandbox/stage-2-local-sessions.md)). A session has at most one.
+`remote_workspaces`: one row per session container, either a server session (`kind = 'session'`) or the sandbox of a local session (`kind = 'sandbox'`, [F7 stage 2](features/f7-gui-sandbox/stage-2-local-sessions.md)). A session has at most one. A sandbox row is deleted, with its container, volume and runner device, when its session has had no turn for `pointer.container.sandbox-remove-after` (7 days).
 
 | Column | Type | Notes |
 |---|---|---|

@@ -1,6 +1,6 @@
 # F7. GUI testing sandbox
 
-Status: Stage 1 implemented (phases 1.1 to 1.6); stage 2 in progress (phases 2.1 to 2.3 done) · Requirement ids: GUI-1 to GUI-13 · Depends on: remote execution in containers ([ADR 0016](../../adr/0016-remote-execution-in-containers.md)), image attachments, the vision flag of models ([F3](../f3-model-routing.md)), result masking ([F5](../f5-cache-aware-context.md)), the tiers and pre-checks of escalation ([F6](../f6-trajectory-escalation.md)).
+Status: Implemented (stage 1, phases 1.1 to 1.6; stage 2, phases 2.1 to 2.4) · Requirement ids: GUI-1 to GUI-13 · Depends on: remote execution in containers ([ADR 0016](../../adr/0016-remote-execution-in-containers.md)), image attachments, the vision flag of models ([F3](../f3-model-routing.md)), result masking ([F5](../f5-cache-aware-context.md)), the tiers and pre-checks of escalation ([F6](../f6-trajectory-escalation.md)).
 
 The spec is split into several files, each one readable on its own:
 
@@ -110,7 +110,7 @@ Each phase ships on its own and leaves the system working. Phases are numbered `
 6. **1.6 Benchmark and defaults (GUI-10).** The harness in `infra/bench/desktop/`, fixture applications and tasks, runs per model, the coordinate convention of each test model, defaults for `keep-images`, the image limit, the display size and the settle delay, results in `docs/benchmarks/desktop.md`.
    **Done (2026-11-26).** `infra/bench/desktop/` has 17 tasks over seven fixtures (single actions, sequences and traps on `tk-counter`, `gtk-notes`, `form-web`, `electron-todo` and the new real Tauri 2 `tauri-counter`, plus sequences on `qt-settings` and `swing-calc`), the click accuracy screens of `grid-targets`, reference solutions that run inside the image without a model (`reference.py`, which also measures settle times and resources), the harness `run.py` (fresh bench device per run, `--no-tree`, `--calibrate`, resuming after provider rate limits) and `report.py`. Results in [desktop.md](../../benchmarks/desktop.md#phase-16-benchmark): `gpt-6-luna`, `deepseek-v4.1-flash:free`, `mimo-v2.6-flash:free` and `nemotron-3.5-super-vl:free` solved every kind of task, traps included, with two model failures in 119 runs (a drag that did not take, a window closed too early); `gpt-6-luna` and MiMo clicked every grid button exactly, DeepSeek missed a sixth of the dense ones; no model was more accurate on the 0–1000 grid, so the test models stay on pixels. The masking ablation moved the defaults to `keep-images` 1 with block 4 (the cheapest policy, 15 % smaller requests, no loss of success), the calibration moved `pixels-per-token` from 750 to 800, and the settle delay (300 ms), the display size and the image limit (1280x800) stay. The tree ablation showed no change in success or cost on these small applications and 62 of 63 clicks by id where a tree exists; the tree stays on for the robustness it gives where grounding fails.
 
-Stage 2 started on 2026-11-26 after phase 1.6; its decisions and phases are in [stage-2-local-sessions.md](stage-2-local-sessions.md).
+Stage 2 started and was implemented on 2026-11-26 after phase 1.6; its decisions, phases and results are in [stage-2-local-sessions.md](stage-2-local-sessions.md).
 
 ## Open questions
 

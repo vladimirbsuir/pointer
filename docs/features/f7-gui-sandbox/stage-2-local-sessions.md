@@ -1,6 +1,6 @@
 # F7. Stage 2: sandbox for local sessions
 
-Part of [F7](README.md). Covers GUI-11 and GUI-12. Started on 2026-11-26 after phase 1.6; the open questions of the design sketch were answered with the user on that day (see [Decisions](#decisions)).
+Part of [F7](README.md). Covers GUI-11 and GUI-12. Implemented on 2026-11-26 (phases 2.1 to 2.4). Started on 2026-11-26 after phase 1.6; the open questions of the design sketch were answered with the user on that day (see [Decisions](#decisions)).
 
 ## Problem
 
@@ -35,6 +35,7 @@ Taken with the user on 2026-11-26, answering the open questions of the sketch:
 - The sandbox's executor is a runner device (`devices.kind = 'runner'`) with its own secret and token, like a server session's. `devices.session_id` links runner devices to their session, so deleting a session revokes the device even though the cascade has already removed the workspace row.
 - The container is `pointer-sandbox-<session id>` with the volume of the same name, started from `pointer.container.sandbox-image` (`POINTER_SANDBOX_IMAGE`, default `pointer-runner:gui`), with the limits of runner containers, the view passwords of phase 1.4 and the workspace `/workspace/project`. It counts against `pointer.container.max-running` together with server sessions. There is no repository step: the sandbox is ready once the container starts and the runner connects.
 - The sandbox exists only when remote execution is enabled and the project has `sandbox_enabled`. It is created on the first call routed to it, so a session that never uses it costs nothing, and it is removed with the session.
+- A user runs at most `pointer.container.sandbox-max-running-per-user` sandboxes at once (2). Starting one more stops the user's least recently active sandbox whose session is idle; when all of them belong to busy sessions, the new one fails to start with a message that names the limit, and its call fails with `executor_unavailable`. A sandbox whose session has had no turn for `pointer.container.sandbox-remove-after` (7 days) is removed by the idle check with its volume and runner device; the session gets a new sandbox on its next sandbox call.
 
 ### Routing
 
@@ -59,6 +60,7 @@ Taken with the user on 2026-11-26, answering the open questions of the sketch:
 3. **2.3 Consent and UI.** The state of the sandbox in the session header (starting, ready, stopped, failed), the sync's approval preview (file count, size, left-out files), the notice of the first sync in the conversation.
    **Done (2026-11-26).** Migration V40 records the last sync on the sandbox row. `GET /sessions/{id}/sandbox` reports whether the session is offered a sandbox, its state (`none` until the first sandbox call) and the last sync; the session header shows a sandbox button with the state (a spinner while starting, green when ready, a warning when the start failed) that opens the details: state, project folder, last sync and what reaches the server. Before asking about a sync the backend runs a dry-run snapshot on the user's device, so the approval names the file count, the content size and the left-out secret-looking files, and on the first sync of the session it warns that a copy stays on the server until the session is deleted; a project over the limits fails before the question and before the sandbox starts. A succeeded first sync shows a notice under its card in the conversation with what was sent, whether it was approved or auto-approved ([desktop-ui.md](desktop-ui.md#sandbox-of-a-local-session-phase-23)). Checked live from the desktop client preview with `deepseek-v4.1-flash:free` ([desktop.md](../../benchmarks/desktop.md#stage-2-phase-23-consent-and-ui)).
 4. **2.4 Lifecycle, limits and the measurement.** A cap on sandboxes per user, removal of sandboxes idle for a long time, and metric 10 of [tests-and-metrics.md](tests-and-metrics.md): a GUI task on a Tauri project of a Windows session, run in the sandbox.
+   **Done (2026-11-26).** A user runs at most 2 sandboxes at once (`pointer.container.sandbox-max-running-per-user`); a new one stops the user's least recently active idle sandbox or fails with a message naming the limit. A sandbox whose session has had no turn for 7 days (`pointer.container.sandbox-remove-after`) is removed with its volume and device. Metric 10: the three Tauri tasks passed in the sandbox of a Windows session, project synced and built there by the agent, and the same tasks passed on the native Windows build through a UI Automation replay of the reference solutions, 3 of 3 ([desktop.md](../../benchmarks/desktop.md#stage-2-phase-24-limits-and-metric-10)). Stage 2 is implemented.
 
 ## Open questions
 

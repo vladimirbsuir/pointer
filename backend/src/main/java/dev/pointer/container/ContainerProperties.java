@@ -22,7 +22,9 @@ record ContainerProperties(
         String githubApiUrl,
         String githubGitUrl,
         boolean desktop,
-        DesktopAccess desktopAccess) {
+        DesktopAccess desktopAccess,
+        int sandboxMaxRunningPerUser,
+        Duration sandboxRemoveAfter) {
 
     enum DesktopAccess {
         NETWORK,

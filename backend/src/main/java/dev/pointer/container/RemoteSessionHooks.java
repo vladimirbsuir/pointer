@@ -97,6 +97,7 @@ class RemoteSessionHooks implements ExecutorReadiness, SandboxProvider, SessionE
     void stopIdle() {
         if (service.isEnabled()) {
             service.stopIdle();
+            service.removeAbandonedSandboxes();
         }
     }
 }
