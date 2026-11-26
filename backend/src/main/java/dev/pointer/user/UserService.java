@@ -63,6 +63,11 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
+    public boolean isActive(UUID userId) {
+        return users.findById(userId).filter(user -> !user.isDisabled()).isPresent();
+    }
+
+    @Transactional(readOnly = true)
     public Optional<UserIdentity> findIdentity(String provider, String providerUserId) {
         return identities.findByProviderAndProviderUserId(provider, providerUserId);
     }

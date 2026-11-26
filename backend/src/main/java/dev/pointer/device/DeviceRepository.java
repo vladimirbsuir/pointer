@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 interface DeviceRepository extends JpaRepository<Device, UUID> {
 
     List<Device> findBySessionIdAndKind(UUID sessionId, String kind);
+
+    List<Device> findByUserIdAndKindAndRevokedAtIsNullOrderByLastSeenAtDesc(UUID userId, String kind);
 }

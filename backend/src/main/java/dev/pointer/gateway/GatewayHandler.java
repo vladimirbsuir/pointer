@@ -7,6 +7,7 @@ import dev.pointer.execution.ExecutionService;
 import dev.pointer.session.LiveItemSnapshots;
 import dev.pointer.session.SessionService;
 import dev.pointer.tool.McpToolCatalog;
+import dev.pointer.user.UserService;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -22,6 +23,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.PongMessage;
 import org.springframework.web.socket.TextMessage;
@@ -37,6 +39,7 @@ class GatewayHandler extends TextWebSocketHandler {
     static final int PROTOCOL_VERSION = 1;
     static final CloseStatus PROTOCOL_ERROR = new CloseStatus(4400, "Protocol error");
     static final CloseStatus UNAUTHORIZED = new CloseStatus(4401, "Unauthorized");
+    static final CloseStatus ACCESS_REVOKED = new CloseStatus(4403, "Account disabled or device revoked");
     static final CloseStatus UNSUPPORTED_VERSION = new CloseStatus(4426, "Unsupported protocol version");
     private static final Duration PONG_TIMEOUT = Duration.ofSeconds(60);
 
@@ -55,6 +58,7 @@ class GatewayHandler extends TextWebSocketHandler {
     private final JsonMapper json;
     private final Clock clock;
     private final DeviceService devices;
+    private final UserService users;
 
     GatewayHandler(
             ConnectionRegistry registry,
@@ -66,7 +70,8 @@ class GatewayHandler extends TextWebSocketHandler {
             JsonMapper json,
             McpToolCatalog mcpTools,
             Clock clock,
-            DeviceService devices) {
+            DeviceService devices,
+            UserService users) {
         this.registry = registry;
         this.mcpTools = mcpTools;
         this.sessionService = sessionService;
@@ -77,6 +82,7 @@ class GatewayHandler extends TextWebSocketHandler {
         this.json = json;
         this.clock = clock;
         this.devices = devices;
+        this.users = users;
     }
 
     @Override
@@ -87,14 +93,32 @@ class GatewayHandler extends TextWebSocketHandler {
         }
         var jwt = token.getToken();
         var deviceClaim = jwt.getClaimAsString(AuthPrincipal.DEVICE_CLAIM);
+        var userId = UUID.fromString(jwt.getSubject());
+        var tokenDeviceId = deviceClaim == null ? null : UUID.fromString(deviceClaim);
+        if (!hasAccess(userId, tokenDeviceId)) {
+            session.close(ACCESS_REVOKED);
+            return;
+        }
         registry.add(new GatewayConnection(
                 session,
                 json,
-                UUID.fromString(jwt.getSubject()),
-                deviceClaim == null ? null : UUID.fromString(deviceClaim),
+                userId,
+                tokenDeviceId,
                 Boolean.TRUE.equals(jwt.getClaimAsBoolean(AuthPrincipal.RUNNER_CLAIM)),
                 jwt.getExpiresAt(),
                 clock.instant()));
+    }
+
+    private boolean hasAccess(UUID userId, UUID deviceId) {
+        return users.isActive(userId) && !devices.isRevoked(deviceId);
+    }
+
+    @TransactionalEventListener
+    void onDeviceRevoked(DeviceService.DeviceRevoked revoked) {
+        registry.all().stream()
+                .filter(connection -> revoked.deviceId().equals(connection.tokenDeviceId())
+                        || revoked.deviceId().equals(connection.deviceId()))
+                .forEach(connection -> connection.close(ACCESS_REVOKED));
     }
 
     @Override
@@ -221,6 +245,10 @@ class GatewayHandler extends TextWebSocketHandler {
             var jwt = jwtDecoder.decode(payload.path("accessToken").asString(""));
             if (!connection.userId().toString().equals(jwt.getSubject())) {
                 connection.close(UNAUTHORIZED);
+                return;
+            }
+            if (!hasAccess(connection.userId(), connection.tokenDeviceId())) {
+                connection.close(ACCESS_REVOKED);
                 return;
             }
             connection.refreshToken(jwt.getExpiresAt());

@@ -2,12 +2,14 @@ package dev.pointer.device;
 
 import dev.pointer.common.Ids;
 import dev.pointer.common.crypto.Tokens;
+import dev.pointer.common.error.ApiException;
 import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +21,7 @@ public class DeviceService {
 
     private final DeviceRepository devices;
     private final Clock clock;
+    private final ApplicationEventPublisher publisher;
 
     @Transactional
     public RunnerDevice createRunner(UUID userId, String name) {
@@ -72,6 +75,37 @@ public class DeviceService {
     }
 
     @Transactional(readOnly = true)
+    public List<Device> desktops(UUID userId) {
+        return devices.findByUserIdAndKindAndRevokedAtIsNullOrderByLastSeenAtDesc(userId, Device.DESKTOP);
+    }
+
+    @Transactional
+    public Device rename(UUID userId, UUID deviceId, String name) {
+        var device = ownedDesktop(userId, deviceId);
+        device.rename(name, clock.instant());
+        return device;
+    }
+
+    @Transactional
+    public void revokeOwned(UUID userId, UUID deviceId) {
+        ownedDesktop(userId, deviceId).revoke(clock.instant());
+        publisher.publishEvent(new DeviceRevoked(userId, deviceId));
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isRevoked(UUID deviceId) {
+        return deviceId != null
+                && devices.findById(deviceId).filter(Device::isRevoked).isPresent();
+    }
+
+    private Device ownedDesktop(UUID userId, UUID deviceId) {
+        return devices.findById(deviceId)
+                .filter(device -> device.getUserId().equals(userId))
+                .filter(device -> !device.isRunner() && !device.isRevoked())
+                .orElseThrow(() -> ApiException.notFound("device_not_found", "Device does not exist"));
+    }
+
+    @Transactional(readOnly = true)
     public boolean isRunner(UUID deviceId) {
         return deviceId != null
                 && devices.findById(deviceId).filter(Device::isRunner).isPresent();
@@ -101,6 +135,8 @@ public class DeviceService {
     }
 
     public record RunnerDevice(UUID id, String secret) {}
+
+    public record DeviceRevoked(UUID userId, UUID deviceId) {}
 
     @Transactional
     public Device register(UUID userId, DeviceInfo info) {

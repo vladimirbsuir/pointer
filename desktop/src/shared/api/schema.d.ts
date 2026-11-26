@@ -916,6 +916,22 @@ export interface paths {
         patch: operations["update_5"];
         trace?: never;
     };
+    "/api/v1/devices/{deviceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["revoke"];
+        options?: never;
+        head?: never;
+        patch: operations["rename"];
+        trace?: never;
+    };
     "/api/v1/custom-tools/{toolId}": {
         parameters: {
             query?: never;
@@ -1204,7 +1220,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/custom-tools": {
+    "/api/v1/devices": {
         parameters: {
             query?: never;
             header?: never;
@@ -1212,6 +1228,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_7"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_8"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1865,6 +1897,24 @@ export interface components {
         UpdateMeRequest: {
             displayName?: string;
             locale?: string;
+        };
+        RenameDeviceRequest: {
+            name: string;
+        };
+        DeviceView: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            platform?: {
+                [key: string]: unknown;
+            };
+            clientVersion?: string;
+            /** Format: date-time */
+            lastSeenAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            online?: boolean;
+            current?: boolean;
         };
         UpdateCustomToolRequest: {
             defaultPolicy?: string;
@@ -3949,6 +3999,52 @@ export interface operations {
             };
         };
     };
+    revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rename: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameDeviceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceView"];
+                };
+            };
+        };
+    };
     delete_7: {
         parameters: {
             query?: never;
@@ -4375,6 +4471,26 @@ export interface operations {
         };
     };
     list_7: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceView"][];
+                };
+            };
+        };
+    };
+    list_8: {
         parameters: {
             query?: never;
             header?: never;

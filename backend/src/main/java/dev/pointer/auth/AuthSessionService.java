@@ -15,6 +15,7 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +49,10 @@ public class AuthSessionService {
         var token = refreshTokens
                 .findByTokenHash(hash(rawToken))
                 .orElseThrow(() -> ApiException.unauthorized("invalid_refresh_token", "Refresh token is invalid"));
+        if (deviceService.isRevoked(token.getDeviceId())) {
+            refreshTokens.revokeFamily(token.getFamilyId(), now);
+            throw ApiException.unauthorized("device_revoked", "This device was signed out");
+        }
         if (token.isUsed()) {
             refreshTokens.revokeFamily(token.getFamilyId(), now);
             throw ApiException.unauthorized("refresh_token_reused", "Refresh token was already used");
@@ -66,6 +71,11 @@ public class AuthSessionService {
         refreshTokens
                 .findByTokenHash(hash(rawToken))
                 .ifPresent(token -> refreshTokens.revokeFamily(token.getFamilyId(), clock.instant()));
+    }
+
+    @EventListener
+    void onDeviceRevoked(DeviceService.DeviceRevoked revoked) {
+        refreshTokens.revokeDevice(revoked.deviceId(), clock.instant());
     }
 
     @Transactional

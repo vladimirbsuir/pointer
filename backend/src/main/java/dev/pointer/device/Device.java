@@ -75,6 +75,11 @@ public class Device extends BaseEntity {
         this.updatedAt = now;
     }
 
+    void rename(String name, Instant now) {
+        this.name = name;
+        this.updatedAt = now;
+    }
+
     void reportCapabilities(Set<String> reported, Instant now) {
         this.capabilities = List.copyOf(new TreeSet<>(reported));
         this.lastSeenAt = now;
@@ -94,7 +99,9 @@ public class Device extends BaseEntity {
 
     void update(UUID userId, DeviceInfo info, Instant now) {
         this.userId = userId;
-        this.name = info.name();
+        if (this.name == null) {
+            this.name = info.name();
+        }
         this.platform = info.platform() == null ? new HashMap<>() : new HashMap<>(info.platform());
         this.clientVersion = info.clientVersion();
         this.lastSeenAt = now;
