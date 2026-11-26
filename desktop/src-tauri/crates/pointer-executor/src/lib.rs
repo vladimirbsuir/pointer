@@ -27,6 +27,7 @@ use serde_json::{Map, Value, json};
 use tokio::sync::{OnceCell, watch};
 
 const MAX_FILE_SUGGESTIONS: usize = 30;
+const CHANGING_OPERATIONS: &[&str] = &["write_file", "edit_file", "pointer.restore_file"];
 
 pub type McpFuture<'a> = Pin<Box<dyn Future<Output = Result<Value, String>> + Send + 'a>>;
 
@@ -292,6 +293,7 @@ async fn execute(
         .await;
     }
     let operation = request.operation.clone();
+    let changes_files = CHANGING_OPERATIONS.contains(&operation.as_str());
     let desktop = context.desktop.clone();
     let task = tokio::task::spawn_blocking(move || match operation.as_str() {
         operation if desktop::is_operation(operation) => desktop.handle(&root, &request),
@@ -318,8 +320,14 @@ async fn execute(
             format!("Unknown operation {other}"),
         )),
     });
+    let joined = |joined: Result<Result<ExecOutcome, ExecError>, tokio::task::JoinError>| {
+        joined.unwrap_or_else(|error| Err(ExecError::failed("internal_error", error.to_string())))
+    };
+    if changes_files {
+        return joined(task.await);
+    }
     tokio::select! {
-        joined = task => joined.unwrap_or_else(|error| Err(ExecError::failed("internal_error", error.to_string()))),
+        result = task => joined(result),
         _ = cancel.wait_for(|cancelled| *cancelled) => Err(ExecError::with_status("cancelled", "cancelled", "Cancelled")),
     }
 }

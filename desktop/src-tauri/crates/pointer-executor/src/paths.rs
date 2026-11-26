@@ -19,12 +19,22 @@ pub fn resolve(root: &Path, requested: &str) -> Result<PathBuf, ExecError> {
     if !normalized.starts_with(&normalized_root) {
         return Err(outside(requested));
     }
-    if let (Ok(real), Ok(real_root)) = (normalized.canonicalize(), normalized_root.canonicalize())
-        && !real.starts_with(&real_root)
+    if let (Some(real), Ok(real_root)) = (
+        deepest_existing(&normalized).and_then(|existing| existing.canonicalize().ok()),
+        normalized_root.canonicalize(),
+    ) && !real.starts_with(&real_root)
     {
         return Err(outside(requested));
     }
     Ok(normalized)
+}
+
+fn deepest_existing(path: &Path) -> Option<&Path> {
+    path.ancestors().find(|ancestor| fs_exists(ancestor))
+}
+
+fn fs_exists(path: &Path) -> bool {
+    path.symlink_metadata().is_ok()
 }
 
 pub fn relative(root: &Path, path: &Path) -> String {
@@ -80,6 +90,18 @@ mod tests {
         assert!(resolve(root.path(), "../secret.txt").is_err());
         assert!(resolve(root.path(), "src/../../secret.txt").is_err());
         assert!(resolve(root.path(), FOREIGN_ABSOLUTE_PATH).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_new_files_under_a_symlink_that_leaves_the_root() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(outside.path(), root.path().join("vendor")).unwrap();
+
+        assert!(resolve(root.path(), "vendor/new.txt").is_err());
+        assert!(resolve(root.path(), "vendor/deeper/new.txt").is_err());
+        assert!(resolve(root.path(), "src/new.txt").is_ok());
     }
 
     #[test]

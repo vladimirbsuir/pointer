@@ -231,13 +231,10 @@ async fn pump(
             break;
         }
         pending.extend_from_slice(&buffer[..read]);
-        let valid_up_to = match std::str::from_utf8(&pending) {
-            Ok(_) => pending.len(),
-            Err(error) => error.valid_up_to(),
-        };
-        if valid_up_to > 0 {
-            let text = String::from_utf8_lossy(&pending[..valid_up_to]).into_owned();
-            pending.drain(..valid_up_to);
+        let ready = decodable_prefix(&pending);
+        if ready > 0 {
+            let text = String::from_utf8_lossy(&pending[..ready]).into_owned();
+            pending.drain(..ready);
             if sender.send((stream, text)).is_err() {
                 break;
             }
@@ -245,6 +242,19 @@ async fn pump(
     }
     if !pending.is_empty() {
         let _ = sender.send((stream, String::from_utf8_lossy(&pending).into_owned()));
+    }
+}
+
+fn decodable_prefix(bytes: &[u8]) -> usize {
+    let mut end = 0;
+    loop {
+        match std::str::from_utf8(&bytes[end..]) {
+            Ok(_) => return bytes.len(),
+            Err(error) => match error.error_len() {
+                Some(invalid) => end += error.valid_up_to() + invalid,
+                None => return end + error.valid_up_to(),
+            },
+        }
     }
 }
 
@@ -280,6 +290,14 @@ async fn kill_tree(pid: Option<u32>) {
 mod tests {
     use super::*;
     use serde_json::{Value, json};
+
+    #[test]
+    fn invalid_bytes_do_not_hold_back_later_output() {
+        assert_eq!(decodable_prefix(b"ok\xffmore"), 7);
+        assert_eq!(decodable_prefix("при".as_bytes()), 6);
+        assert_eq!(decodable_prefix(&"при".as_bytes()[..5]), 4);
+        assert_eq!(decodable_prefix(b"a\xff\xd0"), 2);
+    }
 
     #[cfg(windows)]
     const PRINT_AND_EXIT: &str = "Write-Output 'привет'; exit 3";

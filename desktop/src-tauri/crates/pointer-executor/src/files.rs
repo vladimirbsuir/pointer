@@ -80,6 +80,12 @@ pub fn write_file(root: &Path, request: &Request) -> Result<ExecOutcome, ExecErr
 pub fn edit_file(root: &Path, request: &Request) -> Result<ExecOutcome, ExecError> {
     let path = resolve(root, request.required_str("path")?)?;
     let before = read_text(&path)?;
+    if before.contains(char::REPLACEMENT_CHARACTER) && !is_utf8(&path) {
+        return Err(ExecError::failed(
+            "not_utf8",
+            "The file is not UTF-8 text, so editing it would replace its other characters. Change it with run_command instead.",
+        ));
+    }
     let old_text = request.required_str("oldText")?;
     let new_text = request.required_str("newText")?;
     let replace_all = request.bool_arg("replaceAll").unwrap_or(false);
@@ -289,6 +295,10 @@ fn read_text(path: &Path) -> Result<String, ExecError> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
+fn is_utf8(path: &Path) -> bool {
+    fs::read(path).is_ok_and(|bytes| std::str::from_utf8(&bytes).is_ok())
+}
+
 fn write_text(path: &Path, content: &str) -> Result<(), ExecError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -309,6 +319,25 @@ mod tests {
             dry_run,
             timeout_ms: 30_000,
         }
+    }
+
+    #[test]
+    fn edit_refuses_a_file_that_is_not_utf8() {
+        let root = tempfile::tempdir().unwrap();
+        let original = b"one\n\xcf\xf0\xe8\xe2\xe5\xf2\ntwo\n".to_vec();
+        fs::write(root.path().join("legacy.txt"), &original).unwrap();
+
+        let error = edit_file(
+            root.path(),
+            &request(
+                json!({"path": "legacy.txt", "oldText": "two", "newText": "three"}),
+                false,
+            ),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, "not_utf8");
+        assert_eq!(fs::read(root.path().join("legacy.txt")).unwrap(), original);
     }
 
     #[test]

@@ -27,22 +27,37 @@ use relay::Relay;
 const PROTOCOL_VERSION: u32 = 1;
 const MESSAGE_EVENT: &str = "realtime://message";
 const STATUS_EVENT: &str = "realtime://status";
-const TOKEN_REFRESH_INTERVAL: Duration = Duration::from_secs(300);
+const TOKEN_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
+const READ_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
-const REPLACED_CODE: u16 = 4409;
+const FINAL_CLOSE_CODES: [u16; 3] = [4403, 4409, 4426];
 
 #[derive(Clone)]
 pub struct Outgoing(mpsc::UnboundedSender<String>);
 
 impl Outgoing {
     pub fn send(&self, message_type: &str, payload: Value) {
+        let _ = self.try_send(message_type, payload);
+    }
+
+    fn try_send(&self, message_type: &str, payload: Value) -> Result<(), Value> {
         let envelope = json!({
             "type": message_type,
             "id": Uuid::now_v7().to_string(),
             "replyTo": null,
             "payload": payload,
         });
-        let _ = self.0.send(envelope.to_string());
+        self.0
+            .send(envelope.to_string())
+            .map_err(|_| envelope["payload"].clone())
+    }
+}
+
+struct AbortOnDrop(JoinHandle<()>);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
     }
 }
 
@@ -135,14 +150,15 @@ impl Realtime {
             .lock()
             .ok()
             .and_then(|outgoing| outgoing.clone());
-        match outgoing {
-            Some(outgoing) => outgoing.send(message_type, payload),
-            None if message_type == "exec.result" => {
-                if let Ok(mut undelivered) = self.undelivered.lock() {
-                    undelivered.push(payload);
-                }
-            }
-            None => {}
+        let unsent = match outgoing {
+            Some(outgoing) => outgoing.try_send(message_type, payload).err(),
+            None => Some(payload),
+        };
+        if let Some(payload) = unsent
+            && message_type == "exec.result"
+            && let Ok(mut undelivered) = self.undelivered.lock()
+        {
+            undelivered.push(payload);
         }
     }
 
@@ -206,7 +222,7 @@ async fn run(app: AppHandle) {
     let mut backoff = Duration::from_secs(1);
     loop {
         match connect_once(&app).await {
-            Ok(Disconnect::Replaced) => break,
+            Ok(Disconnect::Final) => break,
             Ok(Disconnect::Lost { was_stable }) if was_stable => backoff = Duration::from_secs(1),
             Ok(Disconnect::Lost { .. }) | Err(_) => {}
         }
@@ -219,7 +235,7 @@ async fn run(app: AppHandle) {
 }
 
 enum Disconnect {
-    Replaced,
+    Final,
     Lost { was_stable: bool },
 }
 
@@ -272,34 +288,42 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
         }),
     );
 
-    let writer = tauri::async_runtime::spawn(async move {
+    let _writer = AbortOnDrop(tauri::async_runtime::spawn(async move {
         while let Some(text) = receiver.recv().await {
             if sink.send(Message::Text(text.into())).await.is_err() {
                 break;
             }
         }
-    });
+    }));
 
     let refresher_outgoing = outgoing.clone();
     let refresher_app = app.clone();
-    let refresher = tauri::async_runtime::spawn(async move {
+    let _refresher = AbortOnDrop(tauri::async_runtime::spawn(async move {
+        let mut sent = token;
         loop {
             tokio::time::sleep(TOKEN_REFRESH_INTERVAL).await;
             let session = refresher_app.state::<AuthSession>();
-            if let Ok(token) = session.access_token().await {
+            if let Ok(token) = session.access_token().await
+                && token != sent
+            {
                 refresher_outgoing.send("auth.refresh", json!({ "accessToken": token }));
+                sent = token;
             }
         }
-    });
+    }));
 
     let started = std::time::Instant::now();
     let mut result = Disconnect::Lost { was_stable: false };
-    while let Some(message) = source.next().await {
+    while let Ok(Some(message)) = tokio::time::timeout(READ_TIMEOUT, source.next()).await {
         let text = match message {
             Ok(Message::Text(text)) => text.to_string(),
             Ok(Message::Close(frame)) => {
-                if frame.is_some_and(|frame| frame.code == CloseCode::from(REPLACED_CODE)) {
-                    result = Disconnect::Replaced;
+                if frame.is_some_and(|frame| {
+                    FINAL_CLOSE_CODES
+                        .iter()
+                        .any(|code| frame.code == CloseCode::from(*code))
+                }) {
+                    result = Disconnect::Final;
                 }
                 break;
             }
@@ -313,6 +337,9 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
             "welcome" => {
                 realtime.set_outgoing(Some(outgoing.clone()));
                 realtime.set_connected(app, true);
+                for payload in realtime.take_undelivered() {
+                    outgoing.send("exec.result", payload);
+                }
                 outgoing.send(
                     "device.tools",
                     json!({ "tools": app.state::<Arc<McpHub>>().reported_tools() }),
@@ -367,8 +394,6 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
         }
     }
 
-    writer.abort();
-    refresher.abort();
     if let Disconnect::Lost { .. } = result {
         result = Disconnect::Lost {
             was_stable: started.elapsed() > Duration::from_secs(60),
