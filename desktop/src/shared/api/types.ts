@@ -170,6 +170,17 @@ export type SlashCommand = {
   updatedAt: string;
 };
 
+export type Device = {
+  id: string;
+  name: string;
+  platform: Record<string, unknown> | null;
+  clientVersion: string | null;
+  lastSeenAt: string | null;
+  createdAt: string;
+  online: boolean;
+  current: boolean;
+};
+
 export type CustomTool = {
   id: string;
   name: string;

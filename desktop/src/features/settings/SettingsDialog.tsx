@@ -24,6 +24,7 @@ import { InstructionsSection } from "./InstructionsSection";
 import { MemoryList } from "@/features/memory/MemoryList";
 import { CommandsSection } from "./CommandsSection";
 import { CustomToolsSection } from "./CustomToolsSection";
+import { DevicesSection } from "./DevicesSection";
 import { McpSection } from "./McpSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { ProvidersSection } from "./ProvidersSection";
@@ -59,8 +60,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <DialogDescription className="sr-only">{t("settings.title")}</DialogDescription>
         </DialogHeader>
         <Tabs defaultValue="account">
-          <TabsList>
+          <TabsList className="flex-wrap justify-start group-data-horizontal/tabs:h-auto [&>[data-slot=tabs-trigger]]:h-7 [&>[data-slot=tabs-trigger]]:flex-none">
             <TabsTrigger value="account">{t("settings.account")}</TabsTrigger>
+            <TabsTrigger value="devices">{t("settings.devices")}</TabsTrigger>
             <TabsTrigger value="providers">{t("settings.providers")}</TabsTrigger>
             <TabsTrigger value="instructions">{t("settings.instructions")}</TabsTrigger>
             <TabsTrigger value="commands">{t("commands.title")}</TabsTrigger>
@@ -78,6 +80,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             <TelegramSection />
             <Separator />
             <PasswordForm user={user} />
+          </TabsContent>
+          <TabsContent value="devices" className="pt-4">
+            <DevicesSection />
           </TabsContent>
           <TabsContent value="providers" className="pt-4">
             <ProvidersSection />

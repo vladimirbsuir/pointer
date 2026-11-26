@@ -90,7 +90,8 @@
     "githubLinkedWithRepositories": "Linked as @{{login}} with repository access",
     "githubRepositoriesHint": "Server sessions need access to your repositories to clone them and push branches.",
     "allowRepositories": "Allow repository access",
-    "githubRepositoriesToast": "Repository access granted"
+    "githubRepositoriesToast": "Repository access granted",
+    "devices": "Devices"
   },
   "themes": {
     "system": "System",
@@ -191,7 +192,8 @@
     "issue_not_found": "The issue does not exist in the repository.",
     "not_an_issue": "This number belongs to a pull request, not an issue.",
     "webhook_forbidden": "Your GitHub account cannot manage webhooks of this repository.",
-    "webhook_rejected": "GitHub rejected the webhook; check the public URL of the server."
+    "webhook_rejected": "GitHub rejected the webhook; check the public URL of the server.",
+    "device_not_found": "This device was already signed out or no longer exists."
   },
   "chat": {
     "empty": "Describe a task or ask a question to get started.",
@@ -819,5 +821,19 @@
       "paused": "The live view paused while the window was hidden",
       "busy": "Too many viewers"
     }
+  },
+  "devices": {
+    "description": "Computers signed in to your account. Signing a device out ends its session at once; it can sign in again with your password or GitHub.",
+    "empty": "No devices are signed in.",
+    "current": "This device",
+    "online": "Online",
+    "lastSeen": "Last seen {{time}}",
+    "never": "Not seen yet",
+    "rename": "Rename",
+    "nameLabel": "Device name",
+    "renamed": "Device renamed",
+    "signOut": "Sign out",
+    "confirmSignOut": "Sign out {{name}}?",
+    "signedOut": "{{name}} was signed out"
   }
 }

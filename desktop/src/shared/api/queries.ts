@@ -7,6 +7,7 @@ import type {
   AutomationRun,
   CustomTool,
   CustomToolVersion,
+  Device,
   Memory,
   ProjectIndex,
   Project,
@@ -28,6 +29,7 @@ export const queryKeys = {
   telegram: ["telegram"] as const,
   commands: ["commands"] as const,
   customTools: ["customTools"] as const,
+  devices: ["devices"] as const,
   customToolVersions: (toolId: string) => ["customTools", toolId, "versions"] as const,
   projects: ["projects"] as const,
   localProjects: ["localProjects"] as const,
@@ -186,6 +188,13 @@ export function useSlashCommands() {
   return useQuery({
     queryKey: queryKeys.commands,
     queryFn: async () => (await unwrap(api().GET("/api/v1/commands"))) as SlashCommand[],
+  });
+}
+
+export function useDevices() {
+  return useQuery({
+    queryKey: queryKeys.devices,
+    queryFn: async () => (await unwrap(api().GET("/api/v1/devices"))) as Device[],
   });
 }
 
