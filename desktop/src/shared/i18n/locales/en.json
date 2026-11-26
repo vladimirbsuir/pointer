@@ -317,6 +317,8 @@
   "approval": {
     "title": "Allow this action?",
     "titleSandbox": "Allow this command in the Linux sandbox on the server?",
+    "titleSandboxSync": "Send the project files to the Linux sandbox on the server?",
+    "sandboxSync": "The sandbox gets a copy of the project folder. Files ignored by .gitignore, the .git folder and secret-looking files (.env, keys, certificates) stay on this computer.",
     "allowOnce": "Allow",
     "allowSession": "Allow for this session",
     "deny": "Deny",
@@ -331,6 +333,7 @@
     "edit_file": "Edit {{target}}",
     "run_command": "Run {{target}}",
     "sandbox_run": "Run in the sandbox {{target}}",
+    "sandbox_sync": "Sync the project to the sandbox",
     "web_fetch": "Fetch {{target}}",
     "other": "Use {{name}}",
     "lines": "{{count}} lines",
@@ -527,7 +530,7 @@
     "title": "Linux sandbox of {{project}}",
     "description": "Local sessions of this project can run and look at GUI applications in a Linux container on the Pointer server, with its own virtual display, while you keep working.",
     "enabled": "Allow the sandbox",
-    "enabledHint": "The agent gets the desktop tools and sandbox_run. The container starts on its first use and is removed with the session. Files of this computer reach it only when the agent sends them."
+    "enabledHint": "The agent gets the desktop tools, sandbox_run and sandbox_sync. The container starts on its first use and is removed with the session. Files of this computer reach it only through sandbox_sync, which asks you first unless you allow it."
   },
   "repository": {
     "menu": "GitHub repository…",

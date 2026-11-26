@@ -79,6 +79,13 @@ pointer:
     ticket-ttl: 60s
     viewer-buffer: 8MB
     viewer-send-timeout: 10s
+  sandbox:
+    sync:
+      max-files: 10000
+      max-bytes: 100MB
+      timeout: 5m
+  transfer:
+    ttl: 10m
   memory:
     curation-enabled: ${POINTER_MEMORY_CURATION_ENABLED:true}
     curation-idle: ${POINTER_MEMORY_CURATION_IDLE:15m}

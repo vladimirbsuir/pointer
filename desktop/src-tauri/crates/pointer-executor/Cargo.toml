@@ -25,9 +25,11 @@ tree-sitter-java = { workspace = true }
 tree-sitter-go = { workspace = true }
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
 base64 = "0.23.1"
+tar = "0.4.46"
+flate2 = "1.1.10"
+tempfile = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 des = "0.8.1"
 
 [lints]

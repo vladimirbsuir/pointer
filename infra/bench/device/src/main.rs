@@ -68,7 +68,7 @@ async fn main() -> ExitCode {
         }
     };
     let http = reqwest::Client::new();
-    let executor = Arc::new(Executor::default());
+    let executor = Arc::new(Executor::default().with_api_url(config.api_url.clone()));
     loop {
         if let Err(error) = connect(&config, &http, &executor).await {
             eprintln!("bench-device: {error}");

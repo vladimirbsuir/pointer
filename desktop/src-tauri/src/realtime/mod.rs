@@ -46,7 +46,6 @@ impl Outgoing {
     }
 }
 
-#[derive(Default)]
 pub struct Realtime {
     task: Mutex<Option<JoinHandle<()>>>,
     outgoing: Mutex<Option<Outgoing>>,
@@ -55,6 +54,20 @@ pub struct Realtime {
     relay: Arc<Relay>,
     executor: Arc<Executor>,
     undelivered: Mutex<Vec<Value>>,
+}
+
+impl Default for Realtime {
+    fn default() -> Self {
+        Self {
+            task: Mutex::default(),
+            outgoing: Mutex::default(),
+            subscriptions: Mutex::default(),
+            connected: AtomicBool::default(),
+            relay: Arc::default(),
+            executor: Arc::new(Executor::default().with_api_url(API_URL)),
+            undelivered: Mutex::default(),
+        }
+    }
 }
 
 impl Realtime {

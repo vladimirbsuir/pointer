@@ -101,6 +101,69 @@ function blockChunks(content: string) {
     .filter((chunk) => chunk.content.length > 0);
 }
 
+const tarBlock = 512;
+
+function tarHeader(name: string, size: number, mtime: number) {
+  const header = new Uint8Array(tarBlock);
+  const encoder = new TextEncoder();
+  const field = (offset: number, length: number, value: string) =>
+    header.set(encoder.encode(value).slice(0, length), offset);
+  const octal = (value: number, length: number) =>
+    value.toString(8).padStart(length - 1, "0") + "\0";
+  field(0, 100, name);
+  field(100, 8, octal(0o644, 8));
+  field(108, 8, octal(0, 8));
+  field(116, 8, octal(0, 8));
+  field(124, 12, octal(size, 12));
+  field(136, 12, octal(mtime, 12));
+  field(148, 8, "        ");
+  field(156, 1, "0");
+  field(257, 6, "ustar\0");
+  field(263, 2, "00");
+  const checksum = header.reduce((sum, byte) => sum + byte, 0);
+  field(148, 8, checksum.toString(8).padStart(6, "0") + "\0 ");
+  return header;
+}
+
+async function projectArchive() {
+  const encoder = new TextEncoder();
+  const mtime = Math.floor(Date.now() / 1000);
+  const parts: Uint8Array[] = [];
+  for (const [name, content] of [...files.entries()].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    const data = encoder.encode(content);
+    parts.push(tarHeader(name, data.length, mtime), data);
+    const padding = (tarBlock - (data.length % tarBlock)) % tarBlock;
+    parts.push(new Uint8Array(padding));
+  }
+  parts.push(new Uint8Array(tarBlock * 2));
+  const gzip = new Blob(parts as BlobPart[]).stream().pipeThrough(new CompressionStream("gzip"));
+  return new Uint8Array(await new Response(gzip).arrayBuffer());
+}
+
+export async function snapshotInBrowser(
+  args: Record<string, unknown>,
+  dryRun: boolean,
+  apiUrl: string,
+): Promise<Result> {
+  const bytes = [...files.values()].reduce((sum, content) => sum + content.length, 0);
+  const summary = { files: files.size, bytes, excluded: [], excludedCount: 0 };
+  if (dryRun) {
+    return ok(summary);
+  }
+  const archive = await projectArchive();
+  const response = await fetch(`${apiUrl}${String(args.uploadPath)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/gzip" },
+    body: archive as BodyInit,
+  });
+  if (!response.ok) {
+    return failed("upload_failed", `The server answered ${response.status} to the upload`);
+  }
+  return ok({ ...summary, archiveBytes: archive.length });
+}
+
 export function suggestFilesInBrowser(query: string) {
   const needle = query.toLowerCase();
   return [...files.keys()].filter((path) => path.toLowerCase().includes(needle)).sort();

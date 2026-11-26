@@ -26,8 +26,8 @@ public final class DesktopTools {
             + " corner.";
 
     static final String SANDBOX_NOTE = "In this session the display runs in a Linux sandbox container on the Pointer"
-            + " server, not on the user's computer: the user's files are not there, sandbox_run runs commands in the"
-            + " sandbox and run_command runs them on the user's computer.";
+            + " server, not on the user's computer: the project files get there only with sandbox_sync, sandbox_run"
+            + " runs commands in the sandbox and run_command runs them on the user's computer.";
 
     private static final String LOCAL_COMMAND_TOOL = "run_command";
     private static final String SANDBOX_COMMAND_TOOL = "sandbox_run";

@@ -55,6 +55,7 @@ class ToolCallHandler {
     private final JsonMapper json;
     private final CustomToolService customTools;
     private final DesktopCalls desktop;
+    private final SandboxSync sandboxSync;
 
     void handle(TurnScope scope, int step, String providerCallId, String toolName, String argumentsJson) {
         handle(scope, null, step, providerCallId, toolName, argumentsJson);
@@ -254,6 +255,10 @@ class ToolCallHandler {
             preview.put("kind", "desktop");
             preview.put("tool", tool.getName());
             preview.put("arguments", arguments);
+        } else if (ToolDefinition.SANDBOX_SYNC.equals(tool.getOperation())) {
+            preview = new LinkedHashMap<>();
+            preview.put("kind", "sandbox_sync");
+            preview.put("target", "sandbox");
         } else if (WEB_FETCH.equals(tool.getOperation())) {
             preview = new LinkedHashMap<>();
             preview.put("kind", "fetch");
@@ -342,6 +347,19 @@ class ToolCallHandler {
         complete(scope, itemId, finished.result(), null, extras, finished.text());
     }
 
+    private void executeSync(TurnScope scope, Target sandbox, UUID itemId) {
+        writer.updateItem(scope.userId(), scope.sessionId(), itemId, Map.of("toolStatus", "running"));
+        var outcome = sandboxSync.run(new SandboxSync.Call(
+                scope.sessionId(),
+                scope.projectId(),
+                scope.deviceId(),
+                scope.worktree(),
+                sandbox.deviceId(),
+                statusListener(scope),
+                scope.cancellation()));
+        complete(scope, itemId, outcome.result(), null, Map.of(), outcome.text());
+    }
+
     private void execute(TurnScope scope, UUID itemId, ToolDefinition tool, Map<String, Object> arguments) {
         var target = target(scope, tool);
         if (target.isEmpty()) {
@@ -350,6 +368,10 @@ class ToolCallHandler {
         }
         if (tool.isDesktop()) {
             executeDesktop(scope, target.get(), itemId, tool, arguments);
+            return;
+        }
+        if (ToolDefinition.SANDBOX_SYNC.equals(tool.getOperation())) {
+            executeSync(scope, target.get(), itemId);
             return;
         }
         writer.updateItem(scope.userId(), scope.sessionId(), itemId, Map.of("toolStatus", "running"));

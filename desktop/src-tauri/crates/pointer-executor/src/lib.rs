@@ -6,6 +6,7 @@ mod files;
 mod index;
 mod paths;
 mod search;
+mod sync;
 mod web;
 mod worktree;
 
@@ -132,9 +133,15 @@ pub struct Executor {
     running: Mutex<HashMap<String, watch::Sender<bool>>>,
     interpreters: OnceCell<Interpreters>,
     desktop: desktop::Desktop,
+    api_url: Option<String>,
 }
 
 impl Executor {
+    pub fn with_api_url(mut self, api_url: impl Into<String>) -> Self {
+        self.api_url = Some(api_url.into());
+        self
+    }
+
     pub async fn interpreters(&self) -> &Interpreters {
         self.interpreters.get_or_init(Interpreters::probe).await
     }
@@ -171,6 +178,7 @@ impl Executor {
                         mcp: mcp.as_deref(),
                         interpreters,
                         desktop: executor.desktop.clone(),
+                        api_url: executor.api_url.as_deref(),
                         emit: emit.clone(),
                     };
                     execute(workspace, request, context, cancel).await
@@ -208,6 +216,7 @@ struct Context<'a> {
     mcp: Option<&'a dyn McpCaller>,
     interpreters: &'a Interpreters,
     desktop: desktop::Desktop,
+    api_url: Option<&'a str>,
     emit: Emit,
 }
 
@@ -257,6 +266,19 @@ async fn execute(
         let environment = context.desktop.environment();
         return command::run_command(&root, &request, &environment, context.output_sink(), cancel)
             .await;
+    }
+    if request.operation == sync::SNAPSHOT || request.operation == sync::EXTRACT {
+        let transfer = async {
+            if request.operation == sync::SNAPSHOT {
+                sync::snapshot(&root, &request, context.api_url).await
+            } else {
+                sync::extract(&root, &request, context.api_url).await
+            }
+        };
+        return tokio::select! {
+            result = transfer => result,
+            _ = cancel.wait_for(|cancelled| *cancelled) => Err(ExecError::with_status("cancelled", "cancelled", "Cancelled")),
+        };
     }
     if request.operation == "custom_tool.run" {
         return custom_tool::run(

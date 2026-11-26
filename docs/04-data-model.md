@@ -240,7 +240,7 @@ The tool registry (TOOL-8).
 
 Unique: (`name`, `owner_user_id`, `project_id`) with `NULLS NOT DISTINCT`.
 
-The desktop tools of F7 are built-in rows whose `operation` starts with `desktop_`: V35 seeds eleven of them, V37 adds `desktop_tree` and gives `desktop_click` the `elementId` argument. V38 adds `sandbox_run`, the first row whose `operation` starts with `sandbox_`: such tools run on the session's sandbox and are offered only when it has one (F7 stage 2).
+The desktop tools of F7 are built-in rows whose `operation` starts with `desktop_`: V35 seeds eleven of them, V37 adds `desktop_tree` and gives `desktop_click` the `elementId` argument. V38 adds `sandbox_run`, the first row whose `operation` starts with `sandbox_`: such tools run on the session's sandbox and are offered only when it has one (F7 stage 2). V39 adds `sandbox_sync`, which the backend performs as two executor calls (a snapshot on the user's device, an extraction in the sandbox), and mentions it in the description of `sandbox_run`.
 
 ### `permission_policies`
 

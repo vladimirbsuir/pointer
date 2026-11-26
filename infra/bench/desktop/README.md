@@ -87,6 +87,8 @@ python infra/bench/desktop/sandbox_check.py --model "TokenHarbor::deepseek-v4.1-
 
 The script turns the sandbox on for the project `sandbox-check`, turns vision on for the model during the run and deletes each session afterwards, which also removes its sandbox; `--keep` keeps them for inspection.
 
+`--task sync` (phase 2.2) writes a small project into the workspace (`check.py`, `version.txt`, a `.gitignore` that ignores `build/`, a `.env` and a file in `build/`) and asks the agent to send it with `sandbox_sync`, run `python3 check.py` in the sandbox, change `version.txt` on the local machine and sync and run again. The run passes when both syncs succeed, the two outputs show the old and the new version with neither `.env` nor `build/` in the sandbox, and a listing of the sandbox's project folder taken with `docker exec` after the turn confirms it. Use a workspace outside this repository (`--workspace`): the repository's own `.gitignore` applies to a folder inside it and already ignores `.env`, so the secret filter would have nothing to do. `--task measure` only syncs twice and counts the files in the sandbox, for timing a real project: point `--workspace` at it (the agent is told to change nothing).
+
 ## Benchmark (phase 1.6)
 
 Build `tauri-counter` into a volume once, next to the Qt and Electron volumes above:

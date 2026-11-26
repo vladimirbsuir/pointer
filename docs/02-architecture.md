@@ -106,12 +106,13 @@ A module exposes a small public API (services, DTOs, domain events) and keeps ev
 | `memory` | Agent memory: typed memories with revisions, the prompt index, the memory tools, suggested memories and session digests from a scheduled curation job, `search_sessions` ([ADR 0019](adr/0019-agent-memory.md)). |
 | `tool` | Tool registry, tool definitions and schemas, permission policies and evaluation. |
 | `execution` | Executor abstraction, dispatching calls, correlating results, timeouts. |
+| `transfer` | Single-use file transfers between two executors over HTTP, used by `sandbox_sync` to move a project snapshot from the user's device to the sandbox ([ADR 0032](adr/0032-project-snapshots-through-transfers.md)). |
 | `review` | File change records, diffs, revert, rewind to a turn. |
 | `worktree` | Session worktrees: creation, status, merge and discard through executor operations ([ADR 0011](adr/0011-session-worktrees.md)). |
 | `command` | User-defined slash commands. |
 | `customtool` | Agent-proposed custom tools: proposal validation, versions, approval outcome, management REST ([ADR 0014](adr/0014-agent-proposed-custom-tools.md)). |
 | `telegram` | Telegram remote control: account linking, long polling of the Bot API, commands, inline approvals, progress and answer notifications ([ADR 0015](adr/0015-telegram-remote-control.md)). |
-| `container` | Remote execution: server sessions on a per-session Docker container running the headless runner, GitHub repository access, commit and push after each turn, pull requests, idle stop ([ADR 0016](adr/0016-remote-execution-in-containers.md)). |
+| `container` | Remote execution: server sessions on a per-session Docker container running the headless runner, GitHub repository access, commit and push after each turn, pull requests, idle stop ([ADR 0016](adr/0016-remote-execution-in-containers.md)). The same lifecycle runs the Linux sandbox of a local session ([ADR 0031](adr/0031-sandbox-for-local-sessions.md)). |
 | `automation` | Issue to pull request automation: per-project settings, the GitHub webhook, runs driven by a `SessionEventListener` through agent turn, check command, retry and pull request ([ADR 0023](adr/0023-issue-to-pull-request-automation.md)). |
 | `rag` | Semantic project index: scanning and chunking through the executor, embeddings through the user's provider with model prefixes, pgvector and full-text storage, hybrid ranking for the server-side `semantic_search` operation ([ADR 0013](adr/0013-semantic-code-index.md), [ADR 0018](adr/0018-hybrid-code-search.md)). |
 | `gateway` | WebSocket endpoint: authentication, protocol parsing, routing to modules. |

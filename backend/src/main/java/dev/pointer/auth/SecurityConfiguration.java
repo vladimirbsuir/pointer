@@ -45,6 +45,7 @@ class SecurityConfiguration {
         "/api/v1/runner/token",
         "/api/v1/webhooks/github/**",
         "/api/v1/sessions/*/desktop/stream",
+        "/api/v1/transfers/*",
         "/actuator/health",
         "/v3/api-docs/**",
         "/swagger-ui/**",

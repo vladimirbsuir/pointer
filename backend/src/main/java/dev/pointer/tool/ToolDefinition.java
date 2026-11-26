@@ -26,6 +26,7 @@ public class ToolDefinition extends BaseEntity {
     public static final String CUSTOM_OPERATION = "custom_tool.run";
     public static final String DESKTOP_CAPABILITY = "desktop";
     public static final String SANDBOX_RUN = "sandbox_run";
+    public static final String SANDBOX_SYNC = "sandbox_sync";
     private static final String DESKTOP_OPERATION_PREFIX = "desktop_";
     private static final String SANDBOX_OPERATION_PREFIX = "sandbox_";
 

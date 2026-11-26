@@ -142,6 +142,19 @@ abstract class RemoteSessionIntegrationTest extends AgentIntegrationTest {
             List<String> capabilities,
             Function<String, Map<String, Object>> results)
             throws Exception {
+        return startRunnerAnswering(
+                setup,
+                requests,
+                capabilities,
+                request -> results.apply(request.path("operation").asString()));
+    }
+
+    GatewayTestClient startRunnerAnswering(
+            Setup setup,
+            List<JsonNode> requests,
+            List<String> capabilities,
+            Function<JsonNode, Map<String, Object>> results)
+            throws Exception {
         var spec = fakeRuntime().awaitCreatedForProject(setup.projectId(), TIMEOUT);
         awaitTrue(() -> fakeRuntime().isRunning(spec.name()));
         var deviceId = UUID.fromString(spec.environment().get("POINTER_DEVICE_ID"));
@@ -159,7 +172,7 @@ abstract class RemoteSessionIntegrationTest extends AgentIntegrationTest {
                     Map.of(
                             "callId", request.path("callId").asString(),
                             "status", "succeeded",
-                            "result", results.apply(request.path("operation").asString())));
+                            "result", results.apply(request)));
         });
         runner.send(
                 "device.projects_changed",

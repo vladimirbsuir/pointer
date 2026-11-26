@@ -38,3 +38,4 @@ File name: `NNNN-short-title.md`. Status: `Proposed`, `Accepted`, `Superseded by
 | [0029](0029-image-masking.md) | Block-aligned masking of screenshots | Accepted |
 | [0030](0030-accessibility-tree.md) | Accessibility tree of the virtual display | Accepted |
 | [0031](0031-sandbox-for-local-sessions.md) | Sandbox container for local sessions | Accepted |
+| [0032](0032-project-snapshots-through-transfers.md) | Project snapshots through single-use transfers | Accepted |

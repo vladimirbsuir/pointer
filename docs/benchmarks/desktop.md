@@ -419,3 +419,16 @@ Live check of [ADR 0031](../adr/0031-sandbox-for-local-sessions.md) on 2026-11-2
 | `deepseek-v4.1-flash:free` (TokenHarbor) | Pass: `391` from `xcalc`, `Microsoft Windows [Version 10.0.26200.9974]` from the local `run_command` | 34 (1 `sandbox_run`, 1 `run_command`, 23 clicks) | 24 | 7.5 s, a cold container start plus `apt-get update` and the install | 182 s |
 
 The routing held in both directions: every desktop call and `sandbox_run` reached the sandbox's runner, `run_command` reached the Windows device and answered from Windows. A second run from the desktop client preview with `mimo-v2.6-flash:free`, the preview's browser executor as the local device, wrote a Tk script with `sandbox_run`, launched and clicked it in 5 calls and answered correctly; the Desktop panel showed the sandbox's display live. Deleting either session removed its container and volume and revoked its runner device. The project's own files do not reach the sandbox until phase 2.2, so the task uses only what the agent installs or writes there.
+
+## Stage 2, phase 2.2: project sync
+
+Live check of `sandbox_sync` ([ADR 0032](../adr/0032-project-snapshots-through-transfers.md)) on 2026-11-26, same setup as phase 2.1 (bench device on Windows 11, backend on the host, `pointer-runner:gui` rebuilt with the new runner), model `deepseek-v4.1-flash:free` (TokenHarbor), auto-approve on.
+
+| Task | Project | Result | Syncs | Files sent | Content / archive | First sync | Second sync | Turn |
+|---|---|---|---|---|---|---|---|---|
+| `--task sync` | 5 files: `check.py`, `version.txt`, `.gitignore` with `build/`, `.env`, `build/output.bin` | Pass: `version=1 env=False ignored=False`, then `version=2 env=False ignored=False` after a local `write_file` and a second sync | 2 | 3 (`.env` left out and named, `build/` ignored) | 173 B / 288 B | 0.8 s, a cold container start included | 0.0 s | 18.2 s |
+| `--task measure` | this repository's working copy, with `node_modules`, `target` and other ignored folders present | Pass | 2 | 688 | 4.1 MB / 1.6 MB | 3.5 s, a cold container start included | 0.3 s | 12.1 s |
+
+The sandbox's project folder, listed with `docker exec` after the turn, held exactly the sent files and the new `version.txt`; the second sync reported `firstSync: false`. A first run of the small task with its workspace inside this repository passed as well but sent no `.env` and named none, because the repository's own `.gitignore` already ignores `.env` and applies to a folder inside it; the run outside the repository is the one that exercises the secret filter. From the desktop client preview the browser executor packed its mock project with `CompressionStream`, the real sandbox runner unpacked it, and the agent ran `python3 src/main.py` there and got `5`; the approval panel asked before the sync and before the command, and the sync card shows the result text.
+
+A sync uploads the whole project every time: about 1.6 MB for this 700-file repository, as much as some 50 screenshots of about 30 KB. A warm sync takes well under a second, so the agent can sync before every build without a delta transfer.

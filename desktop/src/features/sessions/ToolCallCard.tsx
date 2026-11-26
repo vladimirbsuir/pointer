@@ -10,6 +10,7 @@ import {
   FilePenIcon,
   FileTextIcon,
   FolderIcon,
+  FolderUpIcon,
   GlobeIcon,
   HistoryIcon,
   HammerIcon,
@@ -49,6 +50,7 @@ type ToolCall = Item & {
   error?: { code?: string; message?: string };
   output?: string;
   liveOutput?: string;
+  resultText?: string;
   approvalId?: string;
   approvalPreview?: Record<string, unknown>;
   fileChanges?: { path: string; linesAdded: number; linesRemoved: number }[];
@@ -63,6 +65,7 @@ const icons: Record<string, typeof WrenchIcon> = {
   edit_file: FilePenIcon,
   run_command: SquareTerminalIcon,
   sandbox_run: SquareTerminalIcon,
+  sandbox_sync: FolderUpIcon,
   web_fetch: GlobeIcon,
   semantic_search: DatabaseZapIcon,
   propose_tool: HammerIcon,
@@ -151,6 +154,8 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
       case "run_command":
       case "sandbox_run":
         return t(`tools.${toolName}`, { target: argument(call, "command") });
+      case "sandbox_sync":
+        return t("tools.sandbox_sync");
       case "web_fetch":
         return t("tools.web_fetch", { target: argument(call, "url") });
       case "semantic_search":
@@ -201,6 +206,8 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
       case "run_command":
       case "sandbox_run":
         return t("tools.exitCode", { code: String(result.exitCode ?? "?") });
+      case "sandbox_sync":
+        return t("tools.files", { count: Number(result.files ?? 0) });
       case "web_fetch":
         return t("tools.httpStatus", { code: String(result.status ?? "?") });
       case "semantic_search":
@@ -233,6 +240,7 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
   const proposedBody = toolName === "propose_tool" ? argument(call, "body") : "";
   const output =
     (proposedBody || undefined) ??
+    (toolName === "sandbox_sync" && status === "succeeded" ? call.resultText : undefined) ??
     (toolName === "search_sessions"
       ? sessionResultsText(call.result?.results)
       : searchResultsText(call.result?.results)) ??

@@ -5,10 +5,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.pointer.provider.ProviderDtos;
 import dev.pointer.testing.GatewayTestClient;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -145,7 +152,119 @@ class SandboxTests extends RemoteSessionIntegrationTest {
         assertThat(item.path("error").path("message").asString()).contains("The runner image is not available");
     }
 
+    @Test
+    void sandboxSyncSendsTheLocalSnapshotThroughTheServerIntoTheSandbox() throws Exception {
+        var setup = setUp(false);
+        enableSandbox(setup, true);
+        autoApprove(setup);
+        llm.enqueueToolCall("call_1", "sandbox_sync", "{}");
+        llm.enqueueText("Synced.");
+        llm.enqueueText("Title");
+        var archive = "gzip archive of the project".getBytes(StandardCharsets.UTF_8);
+        var downloaded = new AtomicReference<byte[]>();
+        var local = new CopyOnWriteArrayList<JsonNode>();
+        var sandbox = new CopyOnWriteArrayList<JsonNode>();
+
+        try (var device = localDevice(setup, local, request -> upload(request, archive))) {
+            send(setup, "Sync the project", null);
+            try (var runner = startRunnerAnswering(
+                    setup, sandbox, List.of("executor", "desktop"), request -> download(request, downloaded))) {
+                device.awaitEvent("turn.completed", TIMEOUT);
+            }
+        }
+
+        assertThat(downloaded.get()).isEqualTo(archive);
+        var snapshot = executed(local, "pointer.workspace_snapshot").getFirst();
+        assertThat(snapshot.path("arguments").path("maxFiles").asInt()).isEqualTo(10_000);
+        assertThat(snapshot.path("arguments").path("maxBytes").asLong()).isEqualTo(100L * 1024 * 1024);
+        var extract = executed(sandbox, "pointer.sandbox_extract").getFirst();
+        assertThat(extract.has("worktree")).isFalse();
+        assertThat(operations(sandbox)).doesNotContain("pointer.workspace_snapshot");
+        var item = toolItem(setup, "sandbox_sync");
+        assertThat(item.path("toolStatus").asString()).isEqualTo("succeeded");
+        assertThat(item.path("result").path("archiveBytes").asLong()).isEqualTo(archive.length);
+        assertThat(item.path("resultText").asString())
+                .contains("Synced 3 files (0.0 MB) from the user's computer to /workspace/project")
+                .contains("Left out 1 secret-looking file: .env.")
+                .contains("first sync of the session");
+        assertThat(status(get(snapshot.path("arguments").path("uploadPath").asString())))
+                .isEqualTo(404);
+        assertThat(status(get(extract.path("arguments").path("downloadPath").asString())))
+                .isEqualTo(404);
+        assertThat(description(JSON.readTree(llm.requests().getFirst()), "sandbox_sync"))
+                .contains("Edits never flow back");
+    }
+
+    @Test
+    void aFailedSnapshotDoesNotStartTheSandbox() throws Exception {
+        var setup = setUp(false);
+        enableSandbox(setup, true);
+        autoApprove(setup);
+        llm.enqueueToolCall("call_1", "sandbox_sync", "{}");
+        llm.enqueueText("Too large.");
+        llm.enqueueText("Title");
+
+        try (var device = localDevice(setup, new CopyOnWriteArrayList<>(), request -> Map.of())) {
+            send(setup, "Sync the project", null);
+            device.awaitEvent("turn.completed", TIMEOUT);
+        }
+
+        var item = toolItem(setup, "sandbox_sync");
+        assertThat(item.path("toolStatus").asString()).isEqualTo("failed");
+        assertThat(item.path("error").path("code").asString()).isEqualTo("upload_failed");
+        assertThat(fakeRuntime().createdNamed("pointer-sandbox-" + setup.sessionId()))
+                .isEmpty();
+    }
+
+    private Map<String, Object> upload(JsonNode request, byte[] archive) {
+        if (!request.path("operation").asString().equals("pointer.workspace_snapshot")) {
+            return result(request.path("operation").asString());
+        }
+        var response = http(HttpRequest.newBuilder(
+                        uri(request.path("arguments").path("uploadPath").asString()))
+                .PUT(HttpRequest.BodyPublishers.ofByteArray(archive))
+                .build());
+        assertThat(response.statusCode()).isEqualTo(204);
+        return Map.of("files", 3, "bytes", 2048, "excluded", List.of(".env"), "excludedCount", 1);
+    }
+
+    private Map<String, Object> download(JsonNode request, AtomicReference<byte[]> downloaded) {
+        if (!request.path("operation").asString().equals("pointer.sandbox_extract")) {
+            return sandboxResult(request.path("operation").asString());
+        }
+        var response = get(request.path("arguments").path("downloadPath").asString());
+        assertThat(response.statusCode()).isEqualTo(200);
+        downloaded.set(response.body());
+        return Map.of("files", 3, "bytes", 2048, "deleted", 0, "firstSync", true, "workspace", "/workspace/project");
+    }
+
+    private HttpResponse<byte[]> get(String path) {
+        return http(HttpRequest.newBuilder(uri(path)).GET().build());
+    }
+
+    private static int status(HttpResponse<byte[]> response) {
+        return response.statusCode();
+    }
+
+    private URI uri(String path) {
+        return URI.create("http://localhost:" + port + path);
+    }
+
+    private static HttpResponse<byte[]> http(HttpRequest request) {
+        try (var http = HttpClient.newHttpClient()) {
+            return http.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
     private GatewayTestClient localDevice(Setup setup, List<JsonNode> requests) throws Exception {
+        return localDevice(
+                setup, requests, request -> result(request.path("operation").asString()));
+    }
+
+    private GatewayTestClient localDevice(
+            Setup setup, List<JsonNode> requests, Function<JsonNode, Map<String, Object>> results) throws Exception {
         var device = GatewayTestClient.connect(
                 port,
                 setup.auth().accessToken(),
@@ -161,7 +280,7 @@ class SandboxTests extends RemoteSessionIntegrationTest {
             var response = new HashMap<String, Object>();
             response.put("callId", request.path("callId").asString());
             response.put("status", "succeeded");
-            response.put("result", result(request.path("operation").asString()));
+            response.put("result", results.apply(request));
             device.send("exec.result", response);
         });
         device.subscribe(setup.sessionId(), 0);

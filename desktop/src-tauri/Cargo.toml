@@ -8,7 +8,7 @@ tokio = { version = "1.54.1", features = ["net", "io-util", "sync", "time", "mac
 uuid = { version = "1.29.0", features = ["v7", "serde"] }
 sha2 = "0.11.1"
 url = "2.5.8"
-reqwest = { version = "0.13.5", default-features = false, features = ["json", "query", "rustls"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "query", "rustls", "stream"] }
 ignore = "0.4.34"
 globset = "0.4.21"
 regex = "1.13.1"

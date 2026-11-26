@@ -74,7 +74,7 @@ impl Outbox {
 pub async fn run(config: Config) {
     let config = Arc::new(config);
     let http = reqwest::Client::new();
-    let executor = Arc::new(Executor::default());
+    let executor = Arc::new(Executor::default().with_api_url(config.api_url.clone()));
     let outbox = Arc::new(Outbox::default());
     let git_auth = Arc::new(GitAuth::new(&config.api_url, config.git_auth_file.clone()));
     let mut backoff = MIN_BACKOFF;

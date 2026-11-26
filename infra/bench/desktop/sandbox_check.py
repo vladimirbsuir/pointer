@@ -18,11 +18,36 @@ Api = routing.Api
 PROJECT_NAME = "sandbox-check"
 DEVICE = BENCH / "device" / "target" / "release" / "pointer-bench-device.exe"
 EXPECTED = "391"
-PROMPT = (
-    "Use the Linux sandbox of this session. Install the x11-apps package there with sandbox_run (run apt-get update "
-    "first), start the display, launch xcalc, compute 17 * 23 by clicking xcalc's buttons and tell me the result "
-    "xcalc shows. Then run `cmd /c ver` on my computer with run_command and tell me what it prints."
-)
+PROMPTS = {
+    "xcalc": (
+        "Use the Linux sandbox of this session. Install the x11-apps package there with sandbox_run (run apt-get "
+        "update first), start the display, launch xcalc, compute 17 * 23 by clicking xcalc's buttons and tell me the "
+        "result xcalc shows. Then run `cmd /c ver` on my computer with run_command and tell me what it prints."
+    ),
+    "sync": (
+        "This project is on my computer. Send it to the Linux sandbox of this session with sandbox_sync, run "
+        "`python3 check.py` there with sandbox_run and tell me what it prints. Then change the content of version.txt "
+        "on my computer to 2 with the file tools, sync again, run `python3 check.py` in the sandbox again and tell me "
+        "the new output."
+    ),
+    "measure": (
+        "Call sandbox_sync, then run `find . -type f | wc -l && du -sh .` in the sandbox with sandbox_run, then call "
+        "sandbox_sync once more and tell me the outputs. Do not do anything else."
+    ),
+}
+SYNC_FILES = {
+    "check.py": (
+        "from pathlib import Path\n"
+        "version = Path('version.txt').read_text().strip()\n"
+        "print(f\"version={version} env={Path('.env').exists()} ignored={Path('build').exists()}\")\n"
+    ),
+    "version.txt": "1\n",
+    ".gitignore": "build/\n",
+    ".env": "API_TOKEN=local-secret\n",
+    "build/output.bin": "generated locally\n",
+}
+SYNC_FIRST = "version=1 env=False ignored=False"
+SYNC_SECOND = "version=2 env=False ignored=False"
 
 
 def parse_args():
@@ -32,6 +57,7 @@ def parse_args():
     parser.add_argument("--email", default=os.environ.get("POINTER_EMAIL"))
     parser.add_argument("--password", default=os.environ.get("POINTER_PASSWORD"))
     parser.add_argument("--model", action="append", required=True, help="model key, or provider::key")
+    parser.add_argument("--task", choices=sorted(PROMPTS), default="xcalc")
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--workspace", default=str(HERE / "results" / "sandbox-workspace"))
@@ -87,6 +113,21 @@ def start_device(args, device_id, project_id, workspace):
     raise SystemExit("The bench device did not connect; see " + log.name)
 
 
+def prepare_sync_workspace(workspace):
+    for name, content in SYNC_FILES.items():
+        path = workspace / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8", newline="\n")
+
+
+def sandbox_listing(session_id):
+    listing = subprocess.run(
+        ["docker", "exec", f"pointer-sandbox-{session_id}", "sh", "-c",
+         "cd /workspace/project && find . -type f | sort && cat version.txt"],
+        capture_output=True, text=True)
+    return listing.stdout.strip().splitlines() if listing.returncode == 0 else None
+
+
 def wait_idle(api, session_id, timeout):
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -120,14 +161,16 @@ def run_task(api, project, provider, model, args):
     session_id = session["id"]
     api.call("PATCH", f"/sessions/{session_id}", {"autoApprove": True})
     started = time.time()
-    api.call("POST", f"/sessions/{session_id}/messages", {"text": PROMPT, "mode": "agent"})
+    if args.task == "sync":
+        prepare_sync_workspace(args.workspace_path)
+    api.call("POST", f"/sessions/{session_id}/messages", {"text": PROMPTS[args.task], "mode": "agent"})
     state = wait_idle(api, session_id, args.timeout)
     seconds = time.time() - started
     items = api.call("GET", f"/sessions/{session_id}/items")
     calls = [item for item in items if item["type"] == "tool_call" and not item.get("parentItemId")]
     answer = next((item.get("text") or "" for item in reversed(items) if item["type"] == "assistant_message"), "")
     first_sandbox_call = next((call for call in calls
-                               if call["toolName"] == "sandbox_run" or call["toolName"].startswith("desktop_")), None)
+                               if call["toolName"].startswith(("sandbox_", "desktop_"))), None)
     local_commands = [call for call in calls if call["toolName"] == "run_command"]
     container, container_status = container_state(session_id)
     usage = api.call("GET", f"/sessions/{session_id}/usage")
@@ -153,12 +196,34 @@ def run_task(api, project, provider, model, args):
         "localCommandOutput": [(call.get("result") or {}).get("output", "")[:300] for call in local_commands],
         "screenshots": sum(len(call.get("images") or []) for call in calls),
         "answer": answer[:600],
-        "success": EXPECTED in answer
-                   and any(call.get("toolStatus") == "succeeded" for call in calls
-                           if call["toolName"] == "sandbox_run")
-                   and any("Windows" in ((call.get("result") or {}).get("output") or "") for call in local_commands),
         "usage": usage["entries"],
     }
+    if args.task in ("sync", "measure"):
+        syncs = [call for call in calls if call["toolName"] == "sandbox_sync"]
+        outputs = [((call.get("result") or {}).get("output") or "") for call in calls
+                   if call["toolName"] == "sandbox_run"]
+        listing = sandbox_listing(session_id)
+        result["syncs"] = [{"status": call.get("toolStatus"), "result": call.get("result"),
+                            "resultText": call.get("resultText"),
+                            "seconds": seconds_between(call.get("createdAt"), call.get("completedAt"))}
+                           for call in syncs]
+        result["sandboxFiles"] = listing if args.task == "sync" else len(listing or [])
+        result["success"] = len([call for call in syncs if call.get("toolStatus") == "succeeded"]) >= 2
+    if args.task == "sync":
+        result["success"] = (
+            len([call for call in syncs if call.get("toolStatus") == "succeeded"]) >= 2
+            and any(SYNC_FIRST in output for output in outputs)
+            and any(SYNC_SECOND in output for output in outputs)
+            and listing is not None
+            and "./.env" not in listing
+            and not any(line.startswith("./build/") for line in listing)
+        )
+    if args.task == "xcalc":
+        result["success"] = (
+            EXPECTED in answer
+            and any(call.get("toolStatus") == "succeeded" for call in calls if call["toolName"] == "sandbox_run")
+            and any("Windows" in ((call.get("result") or {}).get("output") or "") for call in local_commands)
+        )
     if not args.keep:
         api.call("DELETE", f"/sessions/{session_id}")
     return result
@@ -170,6 +235,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     workspace = Path(args.workspace).resolve()
     workspace.mkdir(parents=True, exist_ok=True)
+    args.workspace_path = workspace
     device_id = str(uuid.uuid4())
     api = Api(args.api, args.email, args.password, device_id)
     project = sandbox_project(api)
@@ -195,7 +261,7 @@ def main():
             api.call("PATCH", f"/providers/{provider['id']}/models/{model['id']}",
                      {"supportsVision": model["supportsVision"]})
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = out / f"sandbox-check-{stamp}.json"
+    path = out / f"sandbox-check-{args.task}-{stamp}.json"
     path.write_text(json.dumps({"runs": runs}, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Saved {path}")
 
