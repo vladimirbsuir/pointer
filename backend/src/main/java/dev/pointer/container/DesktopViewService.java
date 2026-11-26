@@ -3,9 +3,11 @@ package dev.pointer.container;
 import dev.pointer.common.crypto.SecretCipher;
 import dev.pointer.common.error.ApiException;
 import dev.pointer.session.SessionService;
+import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
@@ -94,16 +96,24 @@ public class DesktopViewService {
             viewer.close(DesktopViewer.TOO_MANY_VIEWERS);
             return viewer;
         }
-        var address = workspaces
-                .findBySessionId(sessionId)
-                .filter(RemoteWorkspace::hasDesktopView)
-                .flatMap(workspace -> runtime.streamAddress(workspace.getContainerName()));
+        var address = streamAddress(sessionId);
         if (address.isEmpty()) {
             viewer.close(DesktopViewer.DISPLAY_UNREACHABLE);
             return viewer;
         }
         viewer.connect(client, address.get());
         return viewer;
+    }
+
+    private Optional<URI> streamAddress(UUID sessionId) {
+        try {
+            return workspaces
+                    .findBySessionId(sessionId)
+                    .filter(RemoteWorkspace::hasDesktopView)
+                    .flatMap(workspace -> runtime.streamAddress(workspace.getContainerName()));
+        } catch (ContainerException exception) {
+            return Optional.empty();
+        }
     }
 
     void closeViewers(UUID sessionId, CloseStatus status) {

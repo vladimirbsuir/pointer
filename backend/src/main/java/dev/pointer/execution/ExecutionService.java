@@ -26,6 +26,7 @@ public class ExecutionService {
     private static final Duration POLL_INTERVAL = Duration.ofMillis(250);
     private static final Duration DISCONNECT_GRACE = Duration.ofSeconds(30);
     private static final Duration CANCEL_GRACE = Duration.ofSeconds(5);
+    private static final Duration RUNNER_CONNECT_GRACE = Duration.ofMinutes(2);
 
     private final DeviceChannel channel;
     private final ObjectProvider<ServerOperation> serverOperations;
@@ -146,8 +147,9 @@ public class ExecutionService {
     private Optional<ExecutionResult> awaitDevice(
             ExecutionRequest request, ExecutionListener listener, Cancellation cancellation) {
         var waiting = false;
+        var unreachableSince = 0L;
         while (!isReady(request)) {
-            if (cancellation.isCancelled()) {
+            if (cancellation.isCancelled() || Thread.currentThread().isInterrupted()) {
                 return Optional.of(ExecutionResult.failure(
                         ExecutionResult.CANCELLED, "cancelled", "Cancelled while waiting for the device"));
             }
@@ -161,6 +163,18 @@ public class ExecutionService {
                     listener.onDeviceAvailable();
                     return Optional.of(
                             ExecutionResult.failure(ExecutionResult.FAILED, "executor_unavailable", failure.get()));
+                }
+                if (isManaged(request.deviceId()) && readiness.stream().allMatch(hook -> hook.isReady(request))) {
+                    unreachableSince = unreachableSince == 0 ? System.nanoTime() : unreachableSince;
+                    if (System.nanoTime() - unreachableSince > RUNNER_CONNECT_GRACE.toNanos()) {
+                        listener.onDeviceAvailable();
+                        return Optional.of(ExecutionResult.failure(
+                                ExecutionResult.FAILED,
+                                "executor_unavailable",
+                                "The container is running but its runner did not connect to the server"));
+                    }
+                } else {
+                    unreachableSince = 0L;
                 }
             }
             sleep(POLL_INTERVAL);

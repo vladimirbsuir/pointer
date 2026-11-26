@@ -372,6 +372,22 @@ public class SessionWriter {
         return interrupted.size();
     }
 
+    @Transactional
+    public void recoverTurn(UUID sessionId, UUID turnId) {
+        var session = sessions.findById(sessionId).orElse(null);
+        if (session == null) {
+            return;
+        }
+        entityManager.refresh(session, LockModeType.PESSIMISTIC_WRITE);
+        cancelPendingApprovals(session);
+        turns.findById(turnId)
+                .filter(turn -> Turn.RUNNING.equals(turn.getStatus()))
+                .ifPresent(turn -> interruptTurn(session, turn));
+        if (!SessionStatus.IDLE.equals(session.getStatus())) {
+            changeStatus(session, SessionStatus.ERROR);
+        }
+    }
+
     private void interruptTurn(AgentSession session, Turn turn) {
         closeUnfinishedItems(session.getUserId(), session.getId(), turn.getId(), Item.CANCELLED);
         turn.finish(Turn.INTERRUPTED, INTERRUPTED_ERROR, clock.instant());

@@ -72,7 +72,8 @@ public class ApprovalService {
         try {
             while (true) {
                 try {
-                    return future.get(POLL_MILLIS, TimeUnit.MILLISECONDS);
+                    var decision = future.get(POLL_MILLIS, TimeUnit.MILLISECONDS);
+                    return cancellation.isCancelled() ? Decision.cancellation() : decision;
                 } catch (TimeoutException exception) {
                     if (cancellation.isCancelled()) {
                         transactions.executeWithoutResult(status -> cancel(userId, sessionId, approvalId));
@@ -125,7 +126,11 @@ public class ApprovalService {
     }
 
     private void cancel(UUID userId, UUID sessionId, UUID approvalId) {
-        approvals.findById(approvalId).filter(Approval::isPending).ifPresent(approval -> {
+        approvals.findById(approvalId).ifPresent(approval -> {
+            entityManager.refresh(approval, LockModeType.PESSIMISTIC_WRITE);
+            if (!approval.isPending()) {
+                return;
+            }
             approval.resolve(Approval.CANCELLED, null, null, clock.instant());
             approvals.save(approval);
             eventLog.append(

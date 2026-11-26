@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -442,10 +443,10 @@ class ToolCallHandler {
                 "fileChanges",
                 result.fileChanges().stream()
                         .map(change -> Map.of(
-                                "path", change.getOrDefault("path", ""),
-                                "changeKind", change.getOrDefault("changeKind", "modified"),
-                                "linesAdded", change.getOrDefault("linesAdded", 0),
-                                "linesRemoved", change.getOrDefault("linesRemoved", 0)))
+                                "path", Objects.requireNonNullElse(change.get("path"), ""),
+                                "changeKind", Objects.requireNonNullElse(change.get("changeKind"), "modified"),
+                                "linesAdded", Objects.requireNonNullElse(change.get("linesAdded"), 0),
+                                "linesRemoved", Objects.requireNonNullElse(change.get("linesRemoved"), 0)))
                         .toList());
         var text = result.succeeded() && renderedText != null && !renderedText.isBlank()
                 ? truncate(renderedText, MAX_RESULT_CHARS)

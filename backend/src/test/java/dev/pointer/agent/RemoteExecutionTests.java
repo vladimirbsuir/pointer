@@ -1,5 +1,6 @@
 package dev.pointer.agent;
 
+import static dev.pointer.testing.GatewayTestClient.type;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -145,6 +146,44 @@ class RemoteExecutionTests extends RemoteSessionIntegrationTest {
                         .query(String.class)
                         .single())
                 .isEqualTo("desktop,executor");
+    }
+
+    @Test
+    void aFailedCloneStopsTheContainerSoItHoldsNoSlot() throws Exception {
+        var setup = remoteSetUp();
+        var created = createRemoteSession(setup);
+        var sessionId = UUID.fromString(created.path("session").path("id").asString());
+        var spec = fakeRuntime().awaitCreatedForProject(setup.projectId(), TIMEOUT);
+        awaitTrue(() -> fakeRuntime().isRunning(spec.name()));
+
+        try (var runner = GatewayTestClient.connect(
+                port,
+                runnerToken(spec),
+                UUID.fromString(spec.environment().get("POINTER_DEVICE_ID")),
+                List.of("executor"),
+                List.of())) {
+            runner.onMessage(message -> {
+                if (!type(message).equals("exec.request")) {
+                    return;
+                }
+                runner.send(
+                        "exec.result",
+                        Map.of(
+                                "callId", message.path("payload").path("callId").asString(),
+                                "status", "failed",
+                                "error", Map.of("code", "git_failed", "message", "Remote branch nope not found")));
+            });
+            runner.send(
+                    "device.projects_changed",
+                    Map.of("projects", List.of(setup.projectId().toString())));
+            var workspace = awaitWorkspace(
+                    setup,
+                    sessionId,
+                    current -> "failed".equals(current.path("status").asString()));
+            assertThat(workspace.path("error").asString()).contains("Remote branch nope not found");
+        }
+
+        awaitTrue(() -> !fakeRuntime().isRunning(spec.name()));
     }
 
     @Test

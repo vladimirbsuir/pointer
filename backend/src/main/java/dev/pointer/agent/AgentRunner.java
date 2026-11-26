@@ -56,6 +56,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 @Service
 @RequiredArgsConstructor
@@ -153,15 +154,34 @@ public class AgentRunner implements LiveItemSnapshots {
 
     private void launch(UUID userId, UUID sessionId, UUID turnId) {
         executor.execute(() -> {
+            var current = turnId;
             try {
                 var nextTurn = Optional.of(turnId);
                 while (nextTurn.isPresent()) {
-                    nextTurn = runTurn(userId, sessionId, nextTurn.get());
+                    current = nextTurn.get();
+                    nextTurn = runTurn(userId, sessionId, current);
                 }
             } catch (Throwable throwable) {
                 log.error("Agent loop for session {} stopped unexpectedly", sessionId, throwable);
+                recover(sessionId, current);
             }
         });
+    }
+
+    private void recover(UUID sessionId, UUID turnId) {
+        try {
+            writer.recoverTurn(sessionId, turnId);
+        } catch (RuntimeException exception) {
+            log.error("Could not recover turn {} of session {}", turnId, sessionId, exception);
+        }
+    }
+
+    @TransactionalEventListener
+    void onSessionDeleted(SessionService.SessionDeleted deleted) {
+        var turn = running.get(deleted.sessionId());
+        if (turn != null) {
+            turn.cancellation.cancel();
+        }
     }
 
     private Optional<UUID> runTurn(UUID userId, UUID sessionId, UUID turnId) {

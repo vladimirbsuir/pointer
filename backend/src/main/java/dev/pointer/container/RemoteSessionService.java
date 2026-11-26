@@ -407,6 +407,7 @@ public class RemoteSessionService {
 
     void onSessionDeleted(UUID sessionId, UUID deviceId) {
         sandboxLocks.remove(sessionId);
+        publishLocks.remove(sessionId);
         var serverSession = devices.isRunner(deviceId);
         Thread.ofVirtual().name("remote-remove-" + sessionId).start(() -> {
             var revoked = devices.revokeRunnersOf(sessionId);
@@ -448,7 +449,20 @@ public class RemoteSessionService {
     void resetInterruptedStarts() {
         workspaces
                 .findByStatusIn(List.of(RemoteWorkspace.QUEUED, RemoteWorkspace.STARTING, RemoteWorkspace.PREPARING))
-                .forEach(workspace -> changeStatus(workspace.getId(), RemoteWorkspace.STOPPED, null));
+                .forEach(workspace -> {
+                    stopQuietly(workspace);
+                    changeStatus(workspace.getId(), RemoteWorkspace.STOPPED, null);
+                });
+    }
+
+    private void stopQuietly(RemoteWorkspace workspace) {
+        try {
+            if (runtime.exists(workspace.getContainerName())) {
+                runtime.stop(workspace.getContainerName());
+            }
+        } catch (ContainerException exception) {
+            log.warn("Could not stop container {}: {}", workspace.getContainerName(), exception.getMessage());
+        }
     }
 
     private void startAsync(UUID workspaceId) {
@@ -458,10 +472,23 @@ public class RemoteSessionService {
         Thread.ofVirtual().name("remote-start-" + workspaceId).start(() -> {
             try {
                 start(workspaceId);
+            } catch (RuntimeException exception) {
+                log.error("The start of workspace {} failed", workspaceId, exception);
+                failQuietly(workspaceId, "The container could not start: " + exception.getMessage());
             } finally {
                 starting.remove(workspaceId);
             }
         });
+    }
+
+    private void failQuietly(UUID workspaceId, String message) {
+        try {
+            if (workspaces.existsById(workspaceId)) {
+                changeStatus(workspaceId, RemoteWorkspace.FAILED, message);
+            }
+        } catch (RuntimeException exception) {
+            log.warn("Could not mark workspace {} as failed: {}", workspaceId, exception.getMessage());
+        }
     }
 
     private void start(UUID workspaceId) {
@@ -504,6 +531,7 @@ public class RemoteSessionService {
         changeStatus(workspaceId, RemoteWorkspace.PREPARING, null);
         var credentials = users.gitHubCredentials(workspace.getUserId()).orElse(null);
         if (credentials == null) {
+            stopQuietly(workspace);
             changeStatus(workspaceId, RemoteWorkspace.FAILED, "GitHub repository access is missing");
             return;
         }
@@ -515,6 +543,7 @@ public class RemoteSessionService {
         arguments.put("authorEmail", credentials.login() + "@users.noreply.github.com");
         var result = runRepoOperation(workspace, PREPARE, arguments, properties.prepareTimeout());
         if (!result.succeeded()) {
+            stopQuietly(workspace);
             changeStatus(workspaceId, RemoteWorkspace.FAILED, errorMessage(result));
             return;
         }
@@ -547,6 +576,10 @@ public class RemoteSessionService {
                 }
             }
             if (excess <= 0) {
+                if (!SANDBOX_COUNTED_STATUSES.contains(
+                        workspaces.findById(sandbox.getId()).orElseThrow().getStatus())) {
+                    changeStatus(sandbox.getId(), RemoteWorkspace.QUEUED, null);
+                }
                 return true;
             }
             changeStatus(
@@ -574,22 +607,33 @@ public class RemoteSessionService {
     void removeAbandonedSandboxes() {
         var cutoff = clock.instant().minus(properties.sandboxRemoveAfter());
         for (var sandbox : workspaces.findByKindAndLastActiveAtBefore(RemoteWorkspace.SANDBOX, cutoff)) {
-            if (starting.contains(sandbox.getId()) || !isSessionIdle(sandbox)) {
+            if (!starting.add(sandbox.getId())) {
                 continue;
             }
             try {
-                runtime.remove(sandbox.getContainerName(), sandbox.getVolumeName());
-            } catch (ContainerException exception) {
-                log.warn("Could not remove sandbox {}: {}", sandbox.getContainerName(), exception.getMessage());
-                continue;
+                removeAbandoned(sandbox);
+            } finally {
+                starting.remove(sandbox.getId());
             }
-            devices.revoke(sandbox.getDeviceId());
-            transactions.executeWithoutResult(status -> workspaces.deleteById(sandbox.getId()));
-            log.info(
-                    "Removed the sandbox of session {}, unused since {}",
-                    sandbox.getSessionId(),
-                    sandbox.getLastActiveAt());
         }
+    }
+
+    private void removeAbandoned(RemoteWorkspace sandbox) {
+        if (!isSessionIdle(sandbox)) {
+            return;
+        }
+        try {
+            runtime.remove(sandbox.getContainerName(), sandbox.getVolumeName());
+        } catch (ContainerException exception) {
+            log.warn("Could not remove sandbox {}: {}", sandbox.getContainerName(), exception.getMessage());
+            return;
+        }
+        devices.revoke(sandbox.getDeviceId());
+        transactions.executeWithoutResult(status -> workspaces.deleteById(sandbox.getId()));
+        log.info(
+                "Removed the sandbox of session {}, unused since {}",
+                sandbox.getSessionId(),
+                sandbox.getLastActiveAt());
     }
 
     private boolean acquireSlot(UUID workspaceId) {
