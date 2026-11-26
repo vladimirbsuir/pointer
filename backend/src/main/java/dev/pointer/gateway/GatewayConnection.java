@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.PingMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
@@ -31,6 +32,7 @@ final class GatewayConnection {
     private volatile Set<UUID> projects = Set.of();
     private volatile Set<String> interpreters = Set.of();
     private volatile boolean ready;
+    private volatile Instant lastPongAt;
 
     GatewayConnection(
             WebSocketSession session,
@@ -38,13 +40,15 @@ final class GatewayConnection {
             UUID userId,
             UUID tokenDeviceId,
             boolean runner,
-            Instant expiresAt) {
+            Instant expiresAt,
+            Instant connectedAt) {
         this.session = new ConcurrentWebSocketSessionDecorator(session, SEND_TIME_LIMIT_MS, BUFFER_SIZE_LIMIT);
         this.json = json;
         this.userId = userId;
         this.runner = runner;
         this.tokenDeviceId = tokenDeviceId;
         this.tokenExpiresAt = expiresAt;
+        this.lastPongAt = connectedAt;
     }
 
     String id() {
@@ -137,6 +141,25 @@ final class GatewayConnection {
         } catch (IOException | IllegalStateException exception) {
             close(CloseStatus.SESSION_NOT_RELIABLE);
         }
+    }
+
+    synchronized void ping() {
+        if (!session.isOpen()) {
+            return;
+        }
+        try {
+            session.sendMessage(new PingMessage());
+        } catch (IOException | IllegalStateException exception) {
+            close(CloseStatus.SESSION_NOT_RELIABLE);
+        }
+    }
+
+    void recordPong(Instant at) {
+        this.lastPongAt = at;
+    }
+
+    Instant lastPongAt() {
+        return lastPongAt;
     }
 
     void close(CloseStatus status) {

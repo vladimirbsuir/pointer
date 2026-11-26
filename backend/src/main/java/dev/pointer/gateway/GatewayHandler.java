@@ -8,6 +8,7 @@ import dev.pointer.session.LiveItemSnapshots;
 import dev.pointer.session.SessionService;
 import dev.pointer.tool.McpToolCatalog;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -22,6 +23,7 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.PongMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -36,6 +38,7 @@ class GatewayHandler extends TextWebSocketHandler {
     static final CloseStatus PROTOCOL_ERROR = new CloseStatus(4400, "Protocol error");
     static final CloseStatus UNAUTHORIZED = new CloseStatus(4401, "Unauthorized");
     static final CloseStatus UNSUPPORTED_VERSION = new CloseStatus(4426, "Unsupported protocol version");
+    private static final Duration PONG_TIMEOUT = Duration.ofSeconds(60);
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final Logger log = LoggerFactory.getLogger(GatewayHandler.class);
@@ -90,7 +93,8 @@ class GatewayHandler extends TextWebSocketHandler {
                 UUID.fromString(jwt.getSubject()),
                 deviceClaim == null ? null : UUID.fromString(deviceClaim),
                 Boolean.TRUE.equals(jwt.getClaimAsBoolean(AuthPrincipal.RUNNER_CLAIM)),
-                jwt.getExpiresAt()));
+                jwt.getExpiresAt(),
+                clock.instant()));
     }
 
     @Override
@@ -154,6 +158,23 @@ class GatewayHandler extends TextWebSocketHandler {
             registry.remove(connection);
             relay.onDisconnect(connection);
         });
+    }
+
+    @Override
+    protected void handlePongMessage(WebSocketSession session, PongMessage message) {
+        registry.get(session.getId()).ifPresent(connection -> connection.recordPong(clock.instant()));
+    }
+
+    @Scheduled(fixedDelay = 20_000)
+    void keepAlive() {
+        var deadline = clock.instant().minus(PONG_TIMEOUT);
+        for (var connection : registry.all()) {
+            if (connection.lastPongAt().isBefore(deadline)) {
+                connection.close(CloseStatus.SESSION_NOT_RELIABLE);
+            } else {
+                connection.ping();
+            }
+        }
     }
 
     @Scheduled(fixedDelay = 30_000)
