@@ -176,7 +176,7 @@ fn check_limits(selection: &Selection, max_files: u64, max_bytes: u64) -> Result
     }
     if selection.bytes > max_bytes {
         let mut largest: Vec<&Selected> = selection.files.iter().collect();
-        largest.sort_by(|left, right| right.size.cmp(&left.size));
+        largest.sort_by_key(|file| std::cmp::Reverse(file.size));
         let names = largest
             .iter()
             .take(LISTED_LARGEST)
