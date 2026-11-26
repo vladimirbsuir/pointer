@@ -15,9 +15,10 @@ import {
 type ModelPickerProps = {
   value: string | null;
   onChange: (modelId: string) => void;
+  compact?: boolean;
 };
 
-export function ModelPicker({ value, onChange }: ModelPickerProps) {
+export function ModelPicker({ value, onChange, compact }: ModelPickerProps) {
   const { t } = useTranslation();
   const { data: providers } = useProviders();
   const options = enabledModels(providers);
@@ -30,7 +31,7 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="gap-1.5" />}>
         <CpuIcon />
-        <span className="max-w-48 truncate">
+        <span className={compact ? "max-w-32 truncate" : "max-w-48 truncate"}>
           {current ? current.model.displayName : t("chat.chooseModel")}
         </span>
         <ChevronDownIcon className="opacity-60" />

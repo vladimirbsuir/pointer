@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { structuredPatch } from "diff";
@@ -66,11 +66,16 @@ export function ToolProposalPanel({
   const [rejecting, setRejecting] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
   const previous = preview.previous;
   const schemaBefore = previous ? JSON.stringify(previous.parameters, null, 2) : "";
   const schemaAfter = JSON.stringify(preview.parameters, null, 2);
 
   const resolve = async (decision: "approved" | "denied") => {
+    if (submitting.current) {
+      return;
+    }
+    submitting.current = true;
     setBusy(true);
     try {
       await unwrap(
@@ -92,6 +97,7 @@ export function ToolProposalPanel({
       );
     } catch (error) {
       toast.error(errorMessage(t, toAppError(error)));
+      submitting.current = false;
       setBusy(false);
     }
   };

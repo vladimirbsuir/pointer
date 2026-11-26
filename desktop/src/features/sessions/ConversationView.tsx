@@ -40,6 +40,21 @@ import { SandboxControl } from "./SandboxControl";
 import { WorktreeControl } from "./WorktreeControl";
 
 const BUSY_STATUSES = ["running", "waiting_for_approval", "waiting_for_executor"];
+const COMPACT_HEADER_WIDTH = 1280;
+
+function useElementWidth<T extends HTMLElement>() {
+  const [node, setNode] = useState<T | null>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    if (!node) {
+      return;
+    }
+    const observer = new ResizeObserver(() => setWidth(node.clientWidth));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [node]);
+  return [setNode, width] as const;
+}
 
 export function ConversationView({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation();
@@ -47,6 +62,8 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
   const { data: providers } = useProviders();
   const { data: settings } = useSettings();
   const [pane, setPane] = useState<"changes" | "desktop" | null>(null);
+  const [headerRef, headerWidth] = useElementWidth<HTMLElement>();
+  const compactHeader = pane !== null || (headerWidth > 0 && headerWidth < COMPACT_HEADER_WIDTH);
   const changesOpen = pane === "changes";
   const desktopOpen = pane === "desktop";
   const terminalOpen = useWorkspace((state) => state.terminalOpen);
@@ -129,7 +146,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
           body,
         }),
       )) as Session;
-      patchSession({ ...updated, status: session.status });
+      patchSession(updated);
     } catch (error) {
       toast.error(errorMessage(t, toAppError(error)));
     }
@@ -167,13 +184,16 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
   return (
     <div className="flex h-full min-w-0 flex-1">
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-4 border-b px-4 py-2">
+        <header
+          ref={headerRef}
+          className="flex items-center justify-between gap-4 border-b px-4 py-2"
+        >
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="truncate text-sm font-medium">{session.title}</h2>
             <WorktreeControl
               session={session}
               busy={running}
-              onChanged={(updated) => patchSession({ ...updated, status: session.status })}
+              onChanged={(updated) => patchSession(updated)}
             />
             {remote && <RemoteControl sessionId={sessionId} busy={running} />}
             {remote && (
@@ -184,7 +204,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
                 sessionId={sessionId}
                 sandbox={sandbox}
                 busy={running}
-                compact={pane !== null}
+                compact={compactHeader}
               />
             )}
           </div>
@@ -199,7 +219,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
               session={session}
               open={usageOpen}
               onOpenChange={setUsageOpen}
-              onBudgetChanged={(updated) => patchSession({ ...updated, status: session.status })}
+              onBudgetChanged={(updated) => patchSession(updated)}
             />
             <Button
               size="icon-sm"
@@ -228,7 +248,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
               onClick={() => setPane(changesOpen ? null : "changes")}
             >
               <FileDiffIcon />
-              <span className={cn(pane !== null && "sr-only")}>{t("chat.changes")}</span>
+              <span className={cn(compactHeader && "sr-only")}>{t("chat.changes")}</span>
               {activeChanges > 0 && (
                 <span className="rounded-full bg-primary px-1.5 text-[0.65rem] text-primary-foreground tabular-nums">
                   {activeChanges}
@@ -255,7 +275,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
                 checked={session.autoApprove}
                 onCheckedChange={(autoApprove) => void updateSession({ autoApprove })}
               />
-              <span className={cn(pane !== null && "sr-only")}>{t("chat.autoApprove")}</span>
+              <span className={cn(compactHeader && "sr-only")}>{t("chat.autoApprove")}</span>
             </label>
             <label
               className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
@@ -268,7 +288,7 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
                   void updateSession({ routing: smart ? "smart" : "off" })
                 }
               />
-              <span className={cn(pane !== null && "sr-only")}>{t("chat.smartRouting")}</span>
+              <span className={cn(compactHeader && "sr-only")}>{t("chat.smartRouting")}</span>
             </label>
             <label
               className={cn(
@@ -283,15 +303,16 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
                 disabled={!canEscalate && session.escalation !== "on"}
                 onCheckedChange={(on) => void updateSession({ escalation: on ? "on" : "off" })}
               />
-              <span className={cn(pane !== null && "sr-only")}>{t("chat.escalation")}</span>
+              <span className={cn(compactHeader && "sr-only")}>{t("chat.escalation")}</span>
             </label>
             <ContextStrategyPicker
               value={session.contextStrategy}
-              compact={pane !== null}
+              compact={compactHeader}
               onChange={(contextStrategy) => void updateSession({ contextStrategy })}
             />
             <ModelPicker
               value={session.modelId}
+              compact={compactHeader}
               onChange={(modelId) => void updateSession({ modelId })}
             />
           </div>

@@ -85,6 +85,7 @@ export function useDesktopView(
   const attempt = useRef(0);
   const slowCloses = useRef(0);
   const timer = useRef<number | null>(null);
+  const hiddenTimer = useRef<number | null>(null);
   const generation = useRef(0);
   const connectAgain = useRef<() => void>(() => {});
 
@@ -236,10 +237,17 @@ export function useDesktopView(
   }, [displayStarts, reconnect]);
 
   useEffect(() => {
+    const clearHiddenTimer = () => {
+      if (hiddenTimer.current !== null) {
+        window.clearTimeout(hiddenTimer.current);
+        hiddenTimer.current = null;
+      }
+    };
     const onVisibility = () => {
-      clearTimer();
+      clearHiddenTimer();
       if (document.hidden) {
-        timer.current = window.setTimeout(() => {
+        hiddenTimer.current = window.setTimeout(() => {
+          hiddenTimer.current = null;
           disconnect();
           update({ kind: "paused" });
         }, HIDDEN_GRACE_MS);
@@ -248,7 +256,10 @@ export function useDesktopView(
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      clearHiddenTimer();
+    };
   }, [disconnect, reconnect, update]);
 
   const retryNow = useCallback(() => {

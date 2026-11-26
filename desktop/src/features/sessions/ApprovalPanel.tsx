@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { api, unwrap } from "@/shared/api/client";
@@ -19,10 +19,15 @@ type ApprovalPanelProps = {
 export function ApprovalPanel({ sessionId, approvalId, preview }: ApprovalPanelProps) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
   const [denying, setDenying] = useState(false);
   const [message, setMessage] = useState("");
 
   const resolve = async (decision: "approved" | "denied", scope: "once" | "session") => {
+    if (submitting.current) {
+      return;
+    }
+    submitting.current = true;
     setBusy(true);
     try {
       await unwrap(
@@ -33,6 +38,7 @@ export function ApprovalPanel({ sessionId, approvalId, preview }: ApprovalPanelP
       );
     } catch (error) {
       toast.error(errorMessage(t, toAppError(error)));
+      submitting.current = false;
       setBusy(false);
     }
   };

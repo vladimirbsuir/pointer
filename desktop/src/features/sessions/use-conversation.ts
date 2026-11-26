@@ -191,7 +191,12 @@ function reducer(state: ConversationState, action: Action): ConversationState {
     case "snapshot":
       return { ...state, items: upsert(state.items, action.item) };
     case "sessionPatched":
-      return { ...state, session: action.session };
+      return {
+        ...state,
+        session: state.session
+          ? { ...action.session, status: state.session.status }
+          : action.session,
+      };
   }
 }
 
