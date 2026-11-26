@@ -48,11 +48,17 @@ def export(_item):
     dialog = Gtk.FileChooserDialog(title="Export notes", parent=window, action=Gtk.FileChooserAction.SAVE)
     dialog.add_buttons("Cancel", Gtk.ResponseType.CANCEL, "Export", Gtk.ResponseType.ACCEPT)
     dialog.set_current_name("notes.txt")
+    dialog.set_do_overwrite_confirmation(True)
     state["dialog"] = True
     write_state()
     response = dialog.run()
     if response == Gtk.ResponseType.ACCEPT:
+        path = dialog.get_filename()
+        text = "".join(note + "\n" for note in state["notes"])
+        with open(path, "w", encoding="utf-8") as output:
+            output.write(text)
         state["exported"] += 1
+        state["lastExport"] = {"path": path, "text": text}
     dialog.destroy()
     state["dialog"] = False
     write_state()

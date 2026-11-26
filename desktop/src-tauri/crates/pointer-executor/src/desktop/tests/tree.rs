@@ -378,7 +378,7 @@ fn tree_of_a_web_page_in_chromium_reaches_the_form() {
             fixture: "form-web",
             toolkit: "Chromium",
             expected: &[
-                ("document", "form-web {\"order\":\"ABCD\",\"text\":\"\"}"),
+                ("document", "form-web {\"order\":\"ABCD\",\"text\":\"\",\"users\":[],\"dialog\":false}"),
                 ("list item", ""),
                 ("entry", ""),
             ],

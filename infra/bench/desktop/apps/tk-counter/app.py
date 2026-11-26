@@ -3,10 +3,13 @@ import os
 import sys
 import tkinter as tk
 
-CHECK_PATH = sys.argv[1] if len(sys.argv) > 1 else "/tmp/tk-counter.json"
+ARGUMENTS = [argument for argument in sys.argv[1:] if not argument.startswith("--")]
+CHECK_PATH = ARGUMENTS[0] if ARGUMENTS else "/tmp/tk-counter.json"
+MILESTONE = next((int(argument.split("=", 1)[1]) for argument in sys.argv[1:]
+                  if argument.startswith("--milestone=")), None)
 FONT = ("DejaVu Sans", 14)
 
-state = {"count": 0, "saved": 0}
+state = {"count": 0, "saved": 0, "dialog": False, "dismissed": 0}
 
 root = tk.Tk()
 root.title("Tk Counter")
@@ -46,10 +49,38 @@ def write_state(*_):
     os.replace(temporary, CHECK_PATH)
 
 
+def close_milestone(dialog):
+    dialog.grab_release()
+    dialog.destroy()
+    state["dialog"] = False
+    state.pop("ok", None)
+    state["dismissed"] += 1
+    write_state()
+
+
+def show_milestone():
+    dialog = tk.Toplevel(root)
+    dialog.title("Milestone")
+    dialog.geometry("320x140+190+240")
+    dialog.transient(root)
+    tk.Label(dialog, text=f"You reached {MILESTONE} clicks!", font=FONT).pack(pady=16)
+    ok = tk.Button(dialog, text="OK", font=FONT, width=8, command=lambda: close_milestone(dialog))
+    ok.pack()
+    dialog.protocol("WM_DELETE_WINDOW", lambda: close_milestone(dialog))
+    dialog.wait_visibility()
+    dialog.update_idletasks()
+    dialog.grab_set()
+    state["dialog"] = True
+    state["ok"] = bounds(ok)
+    write_state()
+
+
 def increment():
     state["count"] += 1
     label.configure(text=f"Count: {state['count']}")
     write_state()
+    if MILESTONE and state["count"] == MILESTONE:
+        root.after(200, show_milestone)
 
 
 def save(_event):

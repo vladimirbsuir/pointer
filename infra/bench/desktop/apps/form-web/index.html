@@ -12,6 +12,11 @@
   #list li[data-id="C"] { background: #0000ff; }
   #list li[data-id="D"] { background: #ff00ff; }
   #text { margin: 0 24px; font-size: 18px; width: 320px; height: 40px; border: none; background: #ffff00; }
+  #signup { margin: 24px; width: 320px; display: grid; gap: 8px; }
+  #signup input { font-size: 16px; height: 32px; }
+  #signup button { font-size: 16px; height: 36px; width: 120px; }
+  #error { color: #b00020; min-height: 20px; font-size: 14px; }
+  dialog { font-size: 16px; }
 </style>
 </head>
 <body>
@@ -22,15 +27,71 @@
   <li draggable="true" data-id="D">D</li>
 </ul>
 <input id="text" type="text" autocomplete="off">
+<form id="signup" novalidate>
+  <label for="username">Username</label>
+  <input id="username" type="text" autocomplete="off">
+  <label for="email">Email</label>
+  <input id="email" type="text" autocomplete="off">
+  <div id="error" role="alert"></div>
+  <button id="register" type="submit">Register</button>
+</form>
+<dialog id="done">
+  <p id="done-text"></p>
+  <button id="close" type="button">Close</button>
+</dialog>
 <script>
   const list = document.getElementById("list");
   const text = document.getElementById("text");
+  const signup = document.getElementById("signup");
+  const username = document.getElementById("username");
+  const email = document.getElementById("email");
+  const error = document.getElementById("error");
+  const done = document.getElementById("done");
+  const users = [];
   let dragged = null;
 
   function report() {
     const order = [...list.children].map((item) => item.dataset.id).join("");
-    document.title = "form-web " + JSON.stringify({ order, text: text.value });
+    document.title = "form-web " + JSON.stringify({ order, text: text.value, users, dialog: done.open });
   }
+
+  function problem(name, address) {
+    if (!name) {
+      return "Enter a username.";
+    }
+    if (/\s/.test(name)) {
+      return "Usernames cannot contain spaces. Use a dash instead.";
+    }
+    if (!/^[A-Za-z0-9-]+$/.test(name)) {
+      return "Use only letters, digits and dashes.";
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) {
+      return "Enter a valid email address.";
+    }
+    return "";
+  }
+
+  signup.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = username.value.trim();
+    const message = problem(name, email.value.trim());
+    error.textContent = message;
+    if (message) {
+      report();
+      return;
+    }
+    users.push(name);
+    username.value = "";
+    email.value = "";
+    document.getElementById("done-text").textContent = "Registered " + name + ".";
+    done.showModal();
+    report();
+  });
+  document.getElementById("close").addEventListener("click", () => {
+    done.close();
+    report();
+  });
+  done.addEventListener("close", report);
 
   list.addEventListener("dragstart", (event) => {
     dragged = event.target;

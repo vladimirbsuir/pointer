@@ -1,6 +1,6 @@
 # GUI testing sandbox
 
-Measurements for [F7](../features/f7-gui-sandbox/README.md). Phase 1.1 (resources of the display stack), the live check of phase 1.2 (providers, schema cost), image masking (1.3), the live view (1.4) and the accessibility tree (1.5) are below; the benchmark of phase 1.6 (success, grounding, cost and masking per model) will be added here.
+Measurements for [F7](../features/f7-gui-sandbox/README.md). Phase 1.1 (resources of the display stack), the live check of phase 1.2 (providers, schema cost), image masking (1.3), the live view (1.4), the accessibility tree (1.5) and the benchmark of phase 1.6 (success, grounding, cost, the masking and tree ablations, calibration and the defaults taken from them) are below.
 
 ## Phase 1.1: resources of the `gui` image
 
@@ -175,3 +175,237 @@ DeepSeek read the tree after the window appeared, clicked the entry, the button 
 ### Typing with the rebuilt image
 
 The image rebuilt for this phase came with Chromium 156, and the runner test that types `Привет 😀 café` into Chromium failed in five of eight runs: characters came out as the first remapped one (`ППивет`, `cafП`). `xdotool type` binds each character missing from the keyboard map to one spare key code in turn, and this Chromium kept the first mapping. It failed the same way with the accessibility bridge disabled, so it is not caused by the tree. `desktop_type` now binds all missing characters of the text to free key codes in one change and waits 150 ms before typing; the test then passed eight runs of eight.
+
+## Phase 1.6: benchmark
+
+Measured on 2026-11-25 and 2026-11-26 with `infra/bench/desktop/run.py` against a local backend (`bootRun`); the tables come from `infra/bench/desktop/report.py` (commands in `infra/bench/desktop/README.md`). Every run starts a fresh bench device inside the `gui` image as the session's executor, so each task begins on an empty display with the fixtures copied into `/workspace`. The agent gets the task in an Agent session, the harness polls the application's own state (a JSON file or the window title), and the run passes when the task's check holds at the end. Unless a section says otherwise the screenshot policy was the phase 1.3 default (`keep 3, block 4`) and the tree tool was on.
+
+### Tasks and fixtures
+
+Seven fixture applications in `infra/bench/desktop/apps/`; five of them have three tasks each, the `matrix` group of 15 tasks:
+
+| Kind | What it asks | Examples |
+|---|---|---|
+| Single action | One input and a look at the result | click Increment once (`tk-counter`, `tauri-counter`), check Pinned (`gtk-notes`), drag list item D above A (`form-web`), add the todo milk (`electron-todo`) |
+| Sequence | Five to eleven inputs across fields, menus and dialogs | two notes, Pinned, File > Export… and Cancel (`gtk-notes`); register a user and close the confirmation (`form-web`); three todos, one done, Hide done (`electron-todo`) |
+| Trap | Something the prompt does not mention gets in the way | a modal milestone dialog at count 3 (`tk-counter`), an in-page lock at 3 (`tauri-counter`), "file exists, replace?" on export (`gtk-notes`), a username field that rejects spaces (`form-web`), a "What's new" overlay that covers the form 1.5 seconds after the start (`electron-todo`) |
+
+`qt-settings` and `swing-calc` add one sequence each for the tree ablation. Every task has a reference solution (`reference.py`) that drives the application with `xdotool` and the runner's accessibility reader inside the image without a model; `run.py --verify-fixture` solved all 17 tasks and the click accuracy screens before any model ran.
+
+### Models
+
+| Provider | Model | Used for |
+|---|---|---|
+| Experiential Labs | `gpt-6-luna` | matrix (one repetition: the free plan's 1M tokens a day hold about one), grid, calibration |
+| TokenHarbor | `deepseek-v4.1-flash:free` | matrix (three repetitions), grid, both ablations, calibration |
+| TokenHarbor | `mimo-v2.6-flash:free` | matrix (three repetitions), grid, calibration |
+| Kilo Gateway | `nvidia/nemotron-3.5-super-vl:free` | matrix (one repetition); its grid and calibration runs failed with `provider_unauthorized` after Kilo invalidated the key, so it has no grounding or calibration numbers |
+
+Screened with one `tk-single` run and dropped: Kilo's `particle-ai/particle-1:free` and `inclusionai/ling-3.2-flash:free` (provider errors), `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` (it answers coordinates as fractions between 0 and 1, hit 1 of 6 grid buttons and needed 40 requests for one click), and the Mistral models (`402 billing_no_api_budget_configured` until the account activates a plan).
+
+### Success by model and task kind (metric 1)
+
+| Provider | Model | Single | Sequence | Trap | All | Rate |
+|---|---|---|---|---|---|---|
+| Experiential Labs | `gpt-6-luna` | 5/5 | 5/5 | 5/5 | 15/15 | 100 % |
+| Kilo Gateway | `nvidia/nemotron-3.5-super-vl:free` | 5/5 | 5/5 | 4/4 | 14/14 | 100 % |
+| TokenHarbor | `deepseek-v4.1-flash:free` | 15/15 | 15/15 | 15/15 | 45/45 | 100 % |
+| TokenHarbor | `mimo-v2.6-flash:free` | 14/15 | 15/15 | 15/15 | 44/45 | 98 % |
+
+Failures and reruns:
+
+- `deepseek-v4.1-flash:free`, `web-sequence`, one run: the model registered the user, then closed the browser window instead of the confirmation dialog, so the page state could not be read at the end. The run is not counted (`matrix-unreadable`) and the task was run a fourth time, which passed; read strictly, it is one more failure of 46.
+- `mimo-v2.6-flash:free`, `web-single`, one run: five drags from item D to points near A left the list unchanged; the model then tried the keyboard and reached the harness's 10-minute limit after 26 calls. Its other two runs, and every run of the other models, reordered the list with one drag.
+- `gpt-6-luna`: two runs (`gtk-trap`, `web-trap`) were cut by the free plan's limit of 10 requests a minute in the middle of the task and were run again with a pause between runs; both passed. The cut runs are kept apart (`matrix-el-ratelimited`) and not counted.
+- `nemotron-3.5-super-vl:free`, `tauri-trap`: the provider failed both attempts (a rate limit, then the invalidated key) before the first request; it is the missing run of 15.
+
+Every model that could be run solved every kind of task. All traps were handled from the screenshots alone (the milestone dialog, the lock, the replace question, the validation message under the field and the overlay); no model clicked through a trap blindly, and no trap run failed. The two real failures were a drag that did not take and a model closing the window it was meant to keep open.
+
+### Click accuracy (metric 2)
+
+`grid-targets` fills the screen with 48 labelled buttons at seeded random positions and sizes (70–120 by 24–34 pixels; `griddense` packs them tighter). The model takes one screenshot and clicks six named buttons with `observe: false`, one call each, without looking again, so each click is a pure grounding decision. A hit lands inside the named button; dx and dy are the distances from the button's centre.
+
+| Model | Coordinates | Buttons | Display | Runs | Hits | Accuracy | Median dx | Median dy | Wrong button | Not clicked | Largest error px |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `deepseek-v4.1-flash:free` | normalized | dense | 1280x800 | 2 | 7/12 | 58 % | 1.8 | 5.2 | 0 | 0 | 164 |
+| `deepseek-v4.1-flash:free` | normalized | regular | 1280x800 | 2 | 11/12 | 92 % | 1.2 | 1.2 | 0 | 0 | 28 |
+| `deepseek-v4.1-flash:free` | pixels | dense | 1280x800 | 2 | 10/12 | 83 % | 1.2 | 1.2 | 0 | 0 | 125 |
+| `deepseek-v4.1-flash:free` | pixels | dense | 1920x1080 | 2 | 8/12 | 67 % | 0.8 | 0.8 | 0 | 0 | 140 |
+| `deepseek-v4.1-flash:free` | pixels | regular | 1024x768 | 1 | 6/6 | 100 % | 0.8 | 0.8 | 0 | 0 | 10 |
+| `deepseek-v4.1-flash:free` | pixels | regular | 1280x800 | 2 | 11/12 | 92 % | 1.2 | 1.0 | 0 | 0 | 41 |
+| `deepseek-v4.1-flash:free` | pixels | regular | 1920x1080 | 1 | 6/6 | 100 % | 2.2 | 1.5 | 0 | 0 | 14 |
+| `gpt-6-luna` | normalized | dense | 1280x800 | 2 | 12/12 | 100 % | 0.5 | 0.8 | 0 | 0 | 2 |
+| `gpt-6-luna` | normalized | regular | 1280x800 | 2 | 10/12 | 83 % | 1.5 | 0.5 | 0 | 0 | 256 |
+| `gpt-6-luna` | pixels | dense | 1280x800 | 2 | 12/12 | 100 % | 0.5 | 0.5 | 0 | 0 | 2 |
+| `gpt-6-luna` | pixels | dense | 1920x1080 | 2 | 12/12 | 100 % | 0.5 | 0.5 | 0 | 0 | 2 |
+| `gpt-6-luna` | pixels | regular | 1024x768 | 1 | 6/6 | 100 % | 0.5 | 0.5 | 0 | 0 | 2 |
+| `gpt-6-luna` | pixels | regular | 1280x800 | 2 | 12/12 | 100 % | 0.5 | 0.5 | 0 | 0 | 2 |
+| `gpt-6-luna` | pixels | regular | 1920x1080 | 1 | 6/6 | 100 % | 1.0 | 0.5 | 0 | 0 | 2 |
+| `mimo-v2.6-flash:free` | normalized | dense | 1280x800 | 2 | 12/12 | 100 % | 2.8 | 1.2 | 0 | 0 | 5 |
+| `mimo-v2.6-flash:free` | normalized | regular | 1280x800 | 2 | 12/12 | 100 % | 1.2 | 1.0 | 0 | 0 | 54 |
+| `mimo-v2.6-flash:free` | pixels | dense | 1280x800 | 2 | 12/12 | 100 % | 2.5 | 1.0 | 0 | 0 | 6 |
+| `mimo-v2.6-flash:free` | pixels | dense | 1920x1080 | 2 | 12/12 | 100 % | 1.5 | 0.5 | 0 | 0 | 7 |
+| `mimo-v2.6-flash:free` | pixels | regular | 1024x768 | 2 | 12/12 | 100 % | 3.8 | 1.5 | 0 | 0 | 36 |
+| `mimo-v2.6-flash:free` | pixels | regular | 1280x800 | 2 | 12/12 | 100 % | 1.2 | 1.0 | 0 | 0 | 51 |
+| `mimo-v2.6-flash:free` | pixels | regular | 1920x1080 | 2 | 12/12 | 100 % | 2.0 | 1.5 | 0 | 0 | 11 |
+
+Observations:
+
+- **`gpt-6-luna` and `mimo-v2.6-flash:free` are exact.** Every pixel click hit, within 1–4 pixels of the centre in the median, on every display size, including 1920x1080, which the model sees scaled to 1280x720 and the backend maps back.
+- **DeepSeek misses on dense screens.** It hit 92–100 % of regular buttons but 83 % of dense ones at 1280x800 and 67 % at 1920x1080. A miss is not slightly off: the median error of the clicks is about one pixel, while a miss lies 40–160 pixels away on an empty spot, so the model picked the wrong place, not the wrong pixel. No click landed on a wrong button.
+- **The 0–1000 grid helps no model here.** With `normalized`, DeepSeek fell to 58 % on dense screens and `gpt-6-luna` had one 256-pixel miss; MiMo was exact either way. All three test models keep `coordinate_system = pixels`, the default.
+- **Scaling costs little for good models.** The 1920x1080 display was as accurate as 1280x800 for `gpt-6-luna` and MiMo; for DeepSeek the dense buttons became small enough to be missed more often.
+
+### Cost and time per task (metric 3)
+
+Medians over the matrix runs; time is the whole run from the first message to the idle session, split into the model's time (requests, including waits after rate limits) and the tools' time, of which settle and `desktop_wait` are shown separately.
+
+| Model | Runs | Requests | Tool calls | Screenshots | Prompt tokens | Cached | Output tokens | Time s | Model s | Tools s | Settle s | Wait s | s per request |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `gpt-6-luna` | 15 | 10 | 9 | 7 | 67.7k | 77 % | 317 | 32 | 22 | 4.8 | 1.8 | 0.4 | 2.8 |
+| `nvidia/nemotron-3.5-super-vl:free` | 14 | 16 | 14 | 10 | 162.2k | 56 % | 1,833 | 106 | 92 | 6.4 | 2.9 | 0.4 | 6.7 |
+| `deepseek-v4.1-flash:free` | 45 | 11 | 11 | 6 | 94.0k | 91 % | 1,010 | 36 | 32 | 4.5 | 1.5 | 0.4 | 3.3 |
+| `mimo-v2.6-flash:free` | 45 | 11 | 10 | 7 | 90.5k | 86 % | 631 | 92 | 72 | 5.1 | 1.8 | 0.4 | 7.2 |
+
+At a cached price of a tenth, a matrix task costs the equivalent of 17k uncached prompt tokens with DeepSeek, 19k with `gpt-6-luna`, 27k with MiMo and 82k with Nemotron. Model time is 69–90 % of the wall-clock time for every model; settling adds 1.5–2.9 seconds a task, so the 300 ms settle delay is not what makes GUI work slow. `gpt-6-luna` and DeepSeek take about 3 seconds per request, a pace a user can follow in the live view; the free MiMo and Nemotron endpoints take about 7. Nemotron's provider served only 56 % of the prompt from its cache against 77–91 % for the others, which makes it the most expensive model per task.
+
+### Calibration of the image estimate
+
+The prompt tokens of a one-step Ask turn with one uploaded image, minus the same turn without it (`run.py --calibrate`):
+
+| Provider | Model | 1280x800 | 1280x720 | 1024x768 | 640x400 | Pixels per token |
+|---|---|---|---|---|---|---|
+| Experiential Labs | `gpt-6-luna` | 1,201 | 1,105 | 922 | 313 | 818–853 |
+| TokenHarbor | `mimo-v2.6-flash:free` | 1,002 | 882 | 770 | 242 | 1,021–1,058 |
+| TokenHarbor | `deepseek-v4.1-flash:free` | 642 | 578 | 496 | 200 | 1,280–1,595 |
+| Estimate at 750 pixels per token | | 1,366 | 1,229 | 1,049 | 342 | |
+
+The providers count between 818 and 1,595 pixels per token, so the estimate of 750 was 9–113 % too high. `pointer.desktop.pixels-per-token` is now 800, just below the smallest ratio measured: the estimate still never undercounts a test model, which keeps compaction thresholds on the safe side, and overcounts `gpt-6-luna` by 2–7 % instead of 9–14 %.
+
+### Share of screenshots in the prompt (metric 4)
+
+From the masking runs below (DeepSeek, two sequence tasks of 9–12 screenshots): with every screenshot kept a request carried 9.6k prompt tokens on average, with only the newest one 7.4k. At DeepSeek's 642 tokens per 1280x800 screenshot the images are about 30 % of an average request when nothing is masked (2.2k of screenshots that masking removes plus the visible one), the desktop tool schemas 15 % (1.4k, phase 1.2), and the system prompt, the other tools, the results and the conversation the rest. The share grows with the length of the task, since every kept screenshot stays in every later request.
+
+### Masking ablation (metric 5)
+
+DeepSeek on `gtk-sequence` and `electron-sequence`, two runs each per policy; the backend was restarted with `POINTER_DESKTOP_KEEP_IMAGES` and `POINTER_DESKTOP_IMAGE_MASK_BLOCK` for each policy. Runs of one policy differ in length (the model decides how often it looks), so the figures are per request. The cost-equivalent counts cached tokens at a tenth; prefix reuse is the share of each request's prefix that matched the previous request, from the usage ledger; a repeated action is the same input call with the same arguments twice in a row.
+
+| Screenshots kept | Passed | Requests | Screenshots | Prompt per request | Uncached per request | Cost-equivalent per request | Prefix reuse | Repeated actions |
+|---|---|---|---|---|---|---|---|---|
+| all | 4/4 | 64 | 37 | 9.63k | 0.60k | 1.51k | 92 % | 0 |
+| keep 3, block 4 (phase 1.3 default) | 4/4 | 70 | 41 | 9.13k | 0.76k | 1.60k | 88 % | 0 |
+| keep 3, block 1 | 4/4 | 64 | 41 | 8.19k | 1.51k | 2.18k | 73 % | 0 |
+| keep 1, block 4 (new default) | 4/4 | 64 | 39 | 8.14k | 0.64k | 1.39k | 88 % | 0 |
+| keep 1, block 1 | 4/4 | 65 | 39 | 7.40k | 0.90k | 1.55k | 86 % | 0 |
+
+Observations:
+
+- **No policy cost success or caused repeats.** Every run passed and no model repeated an input, so on tasks of this length the model never needed a screenshot older than the newest: each screenshot shows the whole current state, unlike old text results, whose content stays relevant.
+- **`keep 1, block 4` is the cheapest and sends 15 % less.** It sends 8.1k tokens per request against 9.6k with everything kept; its cost-equivalent is 8 % below keeping everything and 13 % below the old default. The old default saved only 5 % of the context here, because a task of ten screenshots moves its boundary at most once.
+- **Per-step masking breaks the cache when it keeps more than one screenshot.** `keep 3, block 1` masks the screenshot three steps back at every step, so every request misses the cache from there on: prefix reuse fell to 73 % and the uncached tokens doubled, which made it the most expensive policy, as phase 1.3 predicted. With `keep 1` the newly masked screenshot is always the previous step's, so `block 1` costs less (86 % reuse) but still more than `block 4`.
+
+`pointer.desktop.keep-images` is now 1, with `image-mask-block` 4. The ablation used one model and tasks of up to twelve screenshots; a model that needs to compare with an earlier screen can still describe it in its own words or look again, and deployments that want more keep `POINTER_DESKTOP_KEEP_IMAGES`.
+
+### Tree ablation (metric 6)
+
+DeepSeek on one sequence task per toolkit, two runs each, with `desktop_tree` available (`pixels and tree`) and with its tool row disabled (`pixels only`, `run.py --no-tree`). The prompt does not mention the tree. Requests, screenshots, prompt tokens and time are medians; tree calls and clicks are totals over both runs.
+
+| Model | Toolkit | Tools | Passed | Requests | Screenshots | Prompt tokens | Time s | Tree calls | Clicks by id |
+|---|---|---|---|---|---|---|---|---|---|
+| `deepseek-v4.1-flash:free` | Chromium | pixels only | 2/2 | 11 | 8 | 96.4k | 41 | 0 | 0/9 |
+| `deepseek-v4.1-flash:free` | Chromium | pixels and tree | 2/2 | 12 | 8 | 92.1k | 53 | 3 | 8/9 |
+| `deepseek-v4.1-flash:free` | Electron | pixels only | 2/2 | 14 | 11 | 113.6k | 47 | 0 | 0/11 |
+| `deepseek-v4.1-flash:free` | Electron | pixels and tree | 2/2 | 18 | 9 | 153.1k | 73 | 6 | 16/16 |
+| `deepseek-v4.1-flash:free` | GTK | pixels only | 2/2 | 16 | 10 | 141.3k | 46 | 0 | 0/16 |
+| `deepseek-v4.1-flash:free` | GTK | pixels and tree | 2/2 | 18 | 10 | 169.5k | 86 | 8 | 15/15 |
+| `deepseek-v4.1-flash:free` | Qt | pixels only | 2/2 | 16 | 8 | 128.4k | 60 | 1 | 0/11 |
+| `deepseek-v4.1-flash:free` | Qt | pixels and tree | 2/2 | 14 | 6 | 121.4k | 53 | 4 | 9/9 |
+| `deepseek-v4.1-flash:free` | Swing | pixels only | 2/2 | 14 | 8 | 114.0k | 44 | 0 | 0/7 |
+| `deepseek-v4.1-flash:free` | Swing | pixels and tree | 2/2 | 12 | 6 | 93.6k | 41 | 2 | 6/6 |
+| `deepseek-v4.1-flash:free` | Tauri | pixels only | 2/2 | 9 | 6 | 61.9k | 30 | 0 | 0/8 |
+| `deepseek-v4.1-flash:free` | Tauri | pixels and tree | 2/2 | 11 | 6 | 82.6k | 63 | 4 | 8/8 |
+| `deepseek-v4.1-flash:free` | Tk | pixels only | 2/2 | 13 | 6 | 97.6k | 43 | 0 | 0/8 |
+| `deepseek-v4.1-flash:free` | Tk | pixels and tree | 2/2 | 8 | 5 | 65.9k | 26 | 0 | 0/4 |
+
+Observations:
+
+- **The tree did not change success.** Both arms solved every task. One `pixels only` run of `electron-sequence` ended its turn after one sentence and no tool call; that is a stop of the model before it started, unrelated to the tree, and the task was run again (the stopped run is kept as `tree-off-stopped`).
+- **Where a tree exists, the model clicks by id.** With the tree DeepSeek read it 1–4 times a task and made 62 of 63 clicks by `elementId` on GTK, Qt, Chromium, Electron, Tauri and Swing. It never called the tool on Tk, where there is no tree.
+- **It does not save tokens or time on small applications.** Reading the tree is an extra request, and the model still looks at the screen after acting, so the two arms needed about as many requests and screenshots; the tree arm used fewer prompt tokens on Qt, Chromium and Swing and more on GTK, Electron and Tauri. On screens this simple DeepSeek's pixel clicks were already right.
+- **What the tree buys is independence from grounding.** A click by id does not depend on where the model thinks a control is, which matters where grounding fails: on the dense grid above DeepSeek missed a sixth of the buttons by pixels. The tree stays on.
+
+### Settle delay
+
+The reference solutions record, after every input, when the screen stopped changing: tiles of 32x32 pixels are compared for 2.5 seconds, tiles that also change while the application is idle are ignored, and a tile that flips between two values (a blinking caret) counts at its first change.
+
+| Toolkit | Action | Actions | Median ms | 90th percentile ms | Largest ms | Over 300 ms |
+|---|---|---|---|---|---|---|
+| Chromium | click | 24 | 10 | 116 | 120 | 0 |
+| Chromium | drag | 2 | 216 | 216 | 216 | 0 |
+| Chromium | key | 2 | 8 | 9 | 9 | 0 |
+| Chromium | type | 12 | 8 | 1,017 | 1,017 | 5 |
+| Electron | click | 20 | 8 | 9 | 10 | 0 |
+| Electron | key | 6 | 8 | 8 | 9 | 0 |
+| Electron | type | 12 | 8 | 16 | 16 | 0 |
+| GTK | click | 28 | 113 | 292 | 300 | 0 |
+| GTK | key | 4 | 236 | 464 | 464 | 2 |
+| GTK | type | 8 | 4 | 144 | 158 | 0 |
+| Qt | click | 10 | 8 | 9 | 9 | 0 |
+| Qt | key | 2 | 7 | 7 | 7 | 0 |
+| Qt | type | 4 | 8 | 8 | 8 | 0 |
+| Swing | click | 6 | 16 | 17 | 21 | 0 |
+| Swing | key | 4 | 4 | 8 | 8 | 0 |
+| Swing | type | 4 | 4 | 8 | 8 | 0 |
+| Tauri | click | 26 | 8 | 9 | 1,765 | 3 |
+| Tauri | type | 3 | 40 | 45 | 45 | 0 |
+| Tk | clickState | 22 | 8 | 10 | 119 | 0 |
+| Tk | key | 2 | 0 | 0 | 0 | 0 |
+| Tk | type | 2 | 8 | 8 | 8 | 0 |
+
+The input operations return their screenshot 300 ms after the last input event. Clicks settled within 120 ms in every toolkit except GTK, where a button's press animation takes up to 300 ms; GTK's menus and file chooser opened by a key took 460 ms; the values above one second in Chromium and Tauri are a caret that first appears after its blink interval, not a slow interface. In the model runs an observed input was followed by another screenshot with no input in between in 4 of 693 cases (two Electron, one Chromium, one Tk), so the models almost never needed a second look. `pointer.desktop.settle-ms` stays 300: 500 ms for the GTK menus would add 0.2 seconds to every input of every toolkit, while a model that sees a half-open menu looks again.
+
+### Defaults after the benchmark
+
+| Setting | Before | After | Reason |
+|---|---|---|---|
+| `pointer.desktop.keep-images` / `image-mask-block` | 3 / 4 | 1 / 4 | Cheapest policy, 15 % smaller requests, no loss of success, no repeats |
+| `pointer.desktop.pixels-per-token` | 750 | 800 | Just below the smallest provider ratio measured (818) |
+| `pointer.desktop.settle-ms` | 300 | 300 | 4 extra screenshots in 693 observed inputs |
+| Display size and image limit | 1280x800, 1280x800 | unchanged | 1920x1080 scaled down lost DeepSeek's dense clicks; the good grounders were exact at both |
+| Coordinate convention of the test models | pixels | pixels | No model was more accurate on the 0–1000 grid |
+| `desktop_tree` | on | on | Used for nearly every click where it exists, no cost to success elsewhere |
+| Tool form | eleven tools | eleven tools | The schemas are 15 % of a request and cached after the first step, and wrong arguments were rare (below), so the single-tool form was not built |
+
+Of 2,411 desktop calls by the four models, 21 failed with `invalid_arguments`, all by MiMo and all on `desktop_wait`: its nested `untilLog` object came back with MiMo's own tool-call markup inside the value (`"untilLog": "<parameter=processId>p1"`). MiMo corrected the call each time. A flat argument would avoid this; a single tool with an `action` argument would nest every argument one level deeper.
+
+### Isolation levels (metric 7)
+
+| | Container display (this feature) | Background control through accessibility APIs (macOS assistants) | Foreground control on the user's display (Windows assistants) |
+|---|---|---|---|
+| Interference with the user | None: own display, pointer and keyboard focus | Low: input goes to the target application without moving the user's pointer, but it acts on the user's real applications | High: one cursor and one focus shared with the user, who has to stop working |
+| Reproducibility | High: a fresh display in a recreated container per run (every run above started empty) | Low: depends on the state of the user's applications | Low: the same, plus whatever else is on the screen |
+| Applications covered | Anything that runs on Linux under X11; measured here: Tk, GTK, Qt, Chromium, Electron, Tauri (WebKitGTK), Swing | Applications of the platform that expose accessibility | Everything on the screen |
+| Platform fidelity | Linux builds and engines (WebKitGTK instead of WebView2 for Tauri) | The real platform | The real platform |
+| Runs on a server without the user | Yes | No | No |
+
+The first column is measured in this document; the other two summarise the vendors' published descriptions of their computer-use features and are not measured here.
+
+### Resource cost (metric 8)
+
+Memory (`memory.current`, page cache included) and the peak of processes and threads of the container while the reference solution ran each fixture, on top of the display stack of phase 1.1:
+
+| Fixture | Toolkit | Memory | Processes and threads, peak |
+|---|---|---|---|
+| `tk-counter` | Tk | 62 MB | 19 |
+| `gtk-notes` | GTK 3 | 72 MB | 32 |
+| `tauri-counter` | Tauri 2 (WebKitGTK) | 102 MB | 87 |
+| `qt-settings` | Qt 6 | 105 MB | 30 |
+| `electron-todo` | Electron 39 | 155 MB | 133 |
+| `form-web` | Chromium 156 | 184 MB | 133 |
+| `swing-calc` | Java Swing | 226 MB | 59 |
+
+Every fixture fits in the runner's limits (4 GB, 512 processes) with room for a build next to it, so no separate GUI limit is needed. The `gui` image needs 3.2 GB of disk unpacked, which the current production host (1 vCPU, 913 MB of memory, 1.9 GB of free disk) does not have; GUI sessions are not offered there until it grows. On a host with the disk for the image, the number of GUI sessions is bounded by the runner's memory limit, not by the display.
+
+### What a pass proves (metric 10)
+
+Not measured in stage 1. Running the same `tauri-counter` task against the Windows build needs the desktop tools on the user's machine, which is stage 2 ([stage-2-local-sessions.md](../features/f7-gui-sandbox/stage-2-local-sessions.md)); a pass here shows that the logic and the layout of the Linux build work, as the scope of stage 1 says.

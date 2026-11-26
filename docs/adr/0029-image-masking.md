@@ -20,8 +20,8 @@ The result masking of [F5](../features/f5-cache-aware-context.md) does not help:
 
 ## Consequences
 
-- A long GUI task holds at most `keep + block − 1` screenshots in its requests (6 with the defaults) instead of all of them; each move of the boundary costs one uncached suffix from the first newly masked screenshot onwards, once per `block` screenshots.
-- The defaults are provisional: phase 1.6 measures `keep-images` of 1, 3 and all with blocks of 1 and 4, and calibrates the pixels per token against the providers' reported usage.
+- A long GUI task holds at most `keep + block − 1` screenshots in its requests (4 with the defaults) instead of all of them; each move of the boundary costs one uncached suffix from the first newly masked screenshot onwards, once per `block` screenshots.
+- The defaults were provisional (`keep 3, block 4`, 750 pixels per token). Phase 1.6 measured `keep-images` of 1, 3 and all with blocks of 1 and 4 and calibrated the estimate against the providers ([desktop.md](../benchmarks/desktop.md#masking-ablation-metric-5)): every policy kept the success rate with no repeated actions, `keep 1, block 4` was the cheapest and sent 15 % fewer tokens per request than keeping everything, and `keep 3, block 1` was the most expensive because it breaks the cache at every step. The defaults are now `keep-images` 1 with `image-mask-block` 4, and 800 pixels per token, just below the smallest ratio a test provider reported (818).
 - The model loses old screenshots. When it needs to see an earlier state again it has to recreate it or take a new screenshot; the ablation of phase 1.6 counts repeated actions to show what that costs.
 - `ChatMessage` changed from a list of URLs to a list of images with an estimate; only the context assembler creates images, and the provider client still sends URLs only.
 

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tauri-counter</title>
+<style>
+  body { margin: 24px; font: 18px "DejaVu Sans", sans-serif; background: #f4f6fb; }
+  h1 { font-size: 24px; margin: 0 0 16px; }
+  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+  input { font-size: 18px; width: 220px; }
+  button { font-size: 18px; padding: 6px 16px; }
+  #count { font-size: 28px; }
+  #modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: none; align-items: center; justify-content: center; }
+  #modal.open { display: flex; }
+  #modal section { background: #ffffff; padding: 24px; width: 380px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<h1 id="heading">Counter</h1>
+<div class="row">
+  <input id="name" type="text" aria-label="Counter name" placeholder="Counter name" autocomplete="off">
+  <button id="save" type="button">Save name</button>
+</div>
+<div class="row">
+  <span id="count">Count: 0</span>
+  <button id="increment" type="button">Increment</button>
+</div>
+<div id="modal" role="dialog" aria-modal="true" aria-label="Counter locked">
+  <section>
+    <p id="modal-text"></p>
+    <div class="row">
+      <button id="stay" type="button">Stay locked</button>
+      <button id="unlock" type="button">Unlock</button>
+    </div>
+  </section>
+</div>
+<script>
+  const state = { count: 0, name: "", locked: false, unlocked: false, dialog: false };
+  const invoke = (command, args) => window.__TAURI_INTERNALS__.invoke(command, args);
+  const modal = document.getElementById("modal");
+  let lockAt = null;
+
+  function report() {
+    state.dialog = modal.classList.contains("open");
+    invoke("report", { snapshot: state });
+  }
+
+  function render() {
+    document.getElementById("count").textContent = "Count: " + state.count;
+    document.getElementById("heading").textContent = state.name ? "Counter: " + state.name : "Counter";
+  }
+
+  function openLock() {
+    document.getElementById("modal-text").textContent =
+      "The counter is locked at " + lockAt + ". Unlock it to keep counting?";
+    modal.classList.add("open");
+  }
+
+  document.getElementById("increment").addEventListener("click", () => {
+    if (state.locked) {
+      openLock();
+      report();
+      return;
+    }
+    state.count += 1;
+    if (lockAt && !state.unlocked && state.count >= lockAt) {
+      state.locked = true;
+      openLock();
+    }
+    render();
+    report();
+  });
+  document.getElementById("save").addEventListener("click", () => {
+    state.name = document.getElementById("name").value.trim();
+    render();
+    report();
+  });
+  document.getElementById("stay").addEventListener("click", () => {
+    modal.classList.remove("open");
+    report();
+  });
+  document.getElementById("unlock").addEventListener("click", () => {
+    state.locked = false;
+    state.unlocked = true;
+    modal.classList.remove("open");
+    report();
+  });
+  invoke("lock_at").then((value) => {
+    lockAt = value;
+    report();
+  });
+</script>
+</body>
+</html>

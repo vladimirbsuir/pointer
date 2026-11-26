@@ -5,9 +5,14 @@
 <title>electron-todo</title>
 <style>
   body { margin: 24px; font: 18px "DejaVu Sans", sans-serif; }
-  input { font-size: 18px; width: 320px; }
+  input { font-size: 18px; }
+  #text { width: 320px; }
   button { font-size: 18px; }
-  li { margin: 6px 0; }
+  li { margin: 6px 0; list-style: none; }
+  li.hidden { display: none; }
+  #overlay { position: fixed; inset: 0; background: rgba(20, 20, 40, 0.85); display: none; align-items: center; justify-content: center; }
+  #overlay.open { display: flex; }
+  #overlay section { background: #ffffff; padding: 24px; width: 360px; border-radius: 8px; }
 </style>
 </head>
 <body>
@@ -17,15 +22,41 @@
 </form>
 <label><input id="done" type="checkbox"> Hide done</label>
 <ul id="items" aria-label="Todos"></ul>
+<div id="overlay" role="dialog" aria-modal="true" aria-label="What's new">
+  <section>
+    <h2>What's new</h2>
+    <p>Todos can now be marked as done and hidden.</p>
+    <button id="dismiss" type="button">Got it</button>
+  </section>
+</div>
 <script>
   const form = document.getElementById("form");
   const text = document.getElementById("text");
   const items = document.getElementById("items");
-  const done = document.getElementById("done");
+  const hideDone = document.getElementById("done");
+  const overlay = document.getElementById("overlay");
+
+  function entries() {
+    return [...items.children].map((item) => ({
+      name: item.querySelector("span").textContent,
+      done: item.querySelector("input").checked,
+    }));
+  }
 
   function report() {
-    const todos = [...items.children].map((item) => item.textContent);
-    document.title = "electron-todo " + JSON.stringify({ todos, hideDone: done.checked });
+    const all = entries();
+    document.title = "electron-todo " + JSON.stringify({
+      todos: all.map((entry) => entry.name),
+      done: all.filter((entry) => entry.done).map((entry) => entry.name),
+      hideDone: hideDone.checked,
+      overlay: overlay.classList.contains("open"),
+    });
+  }
+
+  function applyFilter() {
+    for (const item of items.children) {
+      item.classList.toggle("hidden", hideDone.checked && item.querySelector("input").checked);
+    }
   }
 
   form.addEventListener("submit", (event) => {
@@ -35,12 +66,35 @@
       return;
     }
     const item = document.createElement("li");
-    item.textContent = value;
+    const label = document.createElement("label");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.addEventListener("change", () => {
+      applyFilter();
+      report();
+    });
+    const name = document.createElement("span");
+    name.textContent = value;
+    label.append(box, " ", name);
+    item.appendChild(label);
     items.appendChild(item);
     text.value = "";
     report();
   });
-  done.addEventListener("change", report);
+  hideDone.addEventListener("change", () => {
+    applyFilter();
+    report();
+  });
+  document.getElementById("dismiss").addEventListener("click", () => {
+    overlay.classList.remove("open");
+    report();
+  });
+  if (new URLSearchParams(location.search).get("whatsNew")) {
+    setTimeout(() => {
+      overlay.classList.add("open");
+      report();
+    }, 1500);
+  }
   report();
 </script>
 </body>

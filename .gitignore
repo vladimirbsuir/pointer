@@ -35,3 +35,5 @@ infra/bench/desktop/results/
 infra/bench/escalation/workspace/
 infra/bench/device/target/
 infra/bench/*.local.json
+infra/bench/desktop/apps/tauri-counter/gen/
+!infra/bench/desktop/apps/tauri-counter/dist/

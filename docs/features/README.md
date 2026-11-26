@@ -14,7 +14,7 @@ Each spec is a technical brief for implementation: what is built, where it plugs
 | F4 | [Agent memory](f4-agent-memory.md) | MEM-1 to MEM-7 | Implemented |
 | F5 | [Cache-aware context management](f5-cache-aware-context.md) | CACHE-1 to CACHE-7 | In progress |
 | F6 | [Trajectory-aware model escalation](f6-trajectory-escalation.md) | ESC-1 to ESC-6 | In progress (calibration runs open) |
-| F7 | [GUI testing sandbox](f7-gui-sandbox/README.md) | GUI-1 to GUI-13 | In progress (phases 1.1 to 1.5 done) |
+| F7 | [GUI testing sandbox](f7-gui-sandbox/README.md) | GUI-1 to GUI-13 | Stage 1 implemented (phases 1.1 to 1.6); stage 2 not scheduled |
 
 Status values: `Approved` (agreed, not started), `In progress`, `Implemented`, `Dropped`.
 
