@@ -2,10 +2,12 @@
 
 What is left after the roadmap and the approved features ([features/README.md](features/README.md)), as of 2026-11-26. Each item says where it is and what done looks like. Remove an item when it is done, or move it to the relevant spec.
 
-## Not verified live
+## Gaps found in the live check of 2026-11-26
 
-- The realtime fixes of efc1a65 (read timeout, token refresh every 30 seconds, abort of the writer and refresher on sign-out, flush of undelivered results after `welcome`, final close codes) compile and pass clippy but were not run in the Tauri app. Check: sleep the machine or cut the network with the app connected and confirm it reconnects within about a minute; stay connected for more than 15 minutes and confirm no `4401` close; sign out and confirm the device goes offline on the backend at once.
-- The fixes of the open-work pass of 2026-11-26 (the review leftovers) are covered by unit and integration tests but were not run in the Tauri app: check that a gap in `seq` re-subscribes (for example by dropping a message in the dev mock), that revoking the device on the backend closes with `4403` and signs the app out, that a `4426` close shows the update message, and that `run_command` with `server &` returns at once and the server dies with the call's cancel or timeout on Windows.
+The realtime and executor fixes were checked in the Tauri app on Windows against a local backend, through a proxy that could drop events, stall the connection and inject close codes. They all worked: a dropped event re-subscribed from the last contiguous `seq`; a stalled link reconnected within a minute; a connection stayed up for more than 15 minutes with a token refresh and no `4401`; sign-out closed the socket at once; `4426` showed the update message and stopped reconnecting; `4403` signed the app out; `run_command` returned about a second after the shell exited although a background child still held the pipes; and an orphaned grandchild was killed on both timeout and cancel. The check found that the backend sent no keep-alive pings, so an idle app reconnected every minute; that is fixed. Left:
+
+- **No device revocation in the backend.** [03-protocol.md](03-protocol.md) lists `GET /devices`, `PATCH /devices/{id}` and `DELETE /devices/{id}` and the close code `4403` for a disabled account or a revoked device, but there is no device controller and the gateway never closes with `4403` (the client side was checked with an injected close only). Done: add the endpoints, close the device's connection with `4403` when it is revoked or the account is disabled, and refuse its refresh token; or remove both from the protocol.
+- **Undelivered results not checked live.** Results that finish while the app is disconnected are sent after `welcome` (efc1a65); the live check did not cut the connection during a running command. Check: stall the connection while a `run_command` runs and confirm the result reaches the turn after the reconnect.
 
 ## Measurements and runs still open
 
