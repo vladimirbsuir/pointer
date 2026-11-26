@@ -52,6 +52,43 @@ class ToolFlowTests extends AgentIntegrationTest {
     }
 
     @Test
+    void resultFromAnotherDeviceIsIgnored() throws Exception {
+        var setup = setUp(false);
+        llm.enqueueToolCall("call_1", "read_file", "{\"path\":\"README.md\"}");
+        llm.enqueueText("Done.");
+        var otherDeviceId = UUID.randomUUID();
+        var other = login(setup.email(), PASSWORD, otherDeviceId);
+
+        try (var intruder = GatewayTestClient.connect(port, other.accessToken(), otherDeviceId, List.of("viewer"));
+                var device = executor(setup, new CopyOnWriteArrayList<>(), request -> {
+                    intruder.send(
+                            "exec.result",
+                            Map.of(
+                                    "callId",
+                                    request.path("callId").asString(),
+                                    "status",
+                                    "succeeded",
+                                    "result",
+                                    Map.of("content", "forged", "totalLines", 1)));
+                    pause();
+                    return succeeded(Map.of("content", "genuine", "totalLines", 1));
+                })) {
+            send(setup, "What is in the readme?", null);
+            device.awaitEvent("turn.completed", TIMEOUT);
+        }
+
+        assertThat(llm.requests().get(1)).contains("genuine").doesNotContain("forged");
+    }
+
+    private static void pause() {
+        try {
+            Thread.sleep(300);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @Test
     void editRequiresApprovalWithDiffPreviewAndRecordsFileChange() throws Exception {
         var setup = setUp(false);
         llm.enqueueToolCall("call_1", "edit_file", "{\"path\":\"a.txt\",\"oldText\":\"one\",\"newText\":\"two\"}");

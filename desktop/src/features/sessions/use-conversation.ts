@@ -52,16 +52,26 @@ const initialState: ConversationState = {
   changesVersion: 0,
 };
 
+function withStreamedState(current: Item, replacement: Item): Item {
+  const keepStreamedText =
+    replacement.status === "in_progress" &&
+    (current.text?.length ?? 0) > (replacement.text?.length ?? 0);
+  const keepLiveOutput = current.liveOutput !== undefined && !replacement.output;
+  return {
+    ...replacement,
+    ...(keepStreamedText ? { text: current.text } : {}),
+    ...(keepLiveOutput ? { liveOutput: current.liveOutput } : {}),
+  };
+}
+
 function upsert(items: Item[], item: Item): Item[] {
   const index = items.findIndex((existing) => existing.id === item.id);
-  if (index < 0) {
+  const current = items[index];
+  if (!current) {
     return [...items, item];
   }
   const next = items.slice();
-  const current = items[index];
-  const keepStreamedText =
-    item.status === "in_progress" && (current?.text?.length ?? 0) > (item.text?.length ?? 0);
-  next[index] = keepStreamedText ? { ...item, text: current?.text } : item;
+  next[index] = withStreamedState(current, item);
   return next;
 }
 

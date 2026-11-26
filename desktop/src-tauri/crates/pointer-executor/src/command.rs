@@ -8,10 +8,14 @@ use tokio::process::Command;
 use tokio::sync::{mpsc, watch};
 
 use super::paths::resolve;
+use super::process_tree::ProcessTree;
 use super::{ExecError, ExecOutcome, Request};
 
+#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const MAX_OUTPUT_BYTES: usize = 200 * 1024;
+const PIPE_GRACE: Duration = Duration::from_millis(500);
+#[cfg(windows)]
 const UTF8_PREAMBLE: &str = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $ProgressPreference = 'SilentlyContinue'; ";
 
 pub enum Finish {
@@ -153,7 +157,7 @@ pub async fn run_process(
     let mut child = process
         .spawn()
         .map_err(|error| ExecError::failed("spawn_failed", error.to_string()))?;
-    let pid = child.id();
+    let tree = ProcessTree::adopt(&child);
 
     if let (Some(mut writer), Some(input)) = (child.stdin.take(), stdin) {
         tokio::spawn(async move {
@@ -162,16 +166,19 @@ pub async fn run_process(
         });
     }
     let (sender, mut receiver) = mpsc::unbounded_channel::<(&'static str, String)>();
+    let mut pumps = Vec::new();
     if let Some(stdout) = child.stdout.take() {
-        tokio::spawn(pump(stdout, "stdout", sender.clone()));
+        pumps.push(tokio::spawn(pump(stdout, "stdout", sender.clone())));
     }
     if let Some(stderr) = child.stderr.take() {
-        tokio::spawn(pump(stderr, "stderr", sender.clone()));
+        pumps.push(tokio::spawn(pump(stderr, "stderr", sender.clone())));
     }
     drop(sender);
 
     let timeout = tokio::time::sleep(Duration::from_millis(timeout_ms));
     tokio::pin!(timeout);
+    let pipe_grace = tokio::time::sleep(Duration::MAX);
+    tokio::pin!(pipe_grace);
     let mut combined = Tail::default();
     let mut stdout = Tail::default();
     let mut stderr = Tail::default();
@@ -194,6 +201,12 @@ pub async fn run_process(
             },
             status = child.wait(), if exit.is_none() => {
                 exit = Some(status.ok().and_then(|status| status.code()));
+                pipe_grace
+                    .as_mut()
+                    .reset(tokio::time::Instant::now() + PIPE_GRACE);
+            },
+            _ = &mut pipe_grace, if exit.is_some() => {
+                break Finish::Exited(exit.flatten());
             },
             _ = &mut timeout => break Finish::TimedOut,
             changed = cancel.changed() => {
@@ -207,9 +220,14 @@ pub async fn run_process(
         }
     };
 
-    if !matches!(finish, Finish::Exited(_)) {
-        kill_tree(pid).await;
+    if matches!(finish, Finish::Exited(_)) {
+        tree.leave_running();
+    } else {
+        tree.kill();
         let _ = child.kill().await;
+    }
+    for pump in pumps {
+        pump.abort();
     }
     Ok(ProcessRun {
         finish,
@@ -258,34 +276,6 @@ fn decodable_prefix(bytes: &[u8]) -> usize {
     }
 }
 
-#[cfg(not(windows))]
-async fn kill_tree(pid: Option<u32>) {
-    let Some(pid) = pid else {
-        return;
-    };
-    let _ = Command::new("kill")
-        .args(["-KILL", &format!("-{pid}")])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await;
-}
-
-#[cfg(windows)]
-async fn kill_tree(pid: Option<u32>) {
-    let Some(pid) = pid else {
-        return;
-    };
-    let mut taskkill = Command::new("taskkill");
-    taskkill
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    #[cfg(windows)]
-    taskkill.creation_flags(CREATE_NO_WINDOW);
-    let _ = taskkill.status().await;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,6 +297,16 @@ mod tests {
     const SLEEP: &str = "Start-Sleep -Seconds 30";
     #[cfg(not(windows))]
     const SLEEP: &str = "sleep 30";
+    #[cfg(windows)]
+    const BACKGROUND_CHILD_AND_EXIT: &str = "Start-Process -NoNewWindow powershell -ArgumentList '-NoProfile','-Command','Start-Sleep 20'; exit 4";
+    #[cfg(not(windows))]
+    const BACKGROUND_CHILD_AND_EXIT: &str = "sleep 20 & exit 4";
+    #[cfg(windows)]
+    const ORPHAN_WRITES_LATE_AND_SHELL_WAITS: &str = "cmd /c 'start /b powershell -NoProfile -Command Start-Sleep 3; Set-Content late.txt x'; Start-Sleep 30";
+    #[cfg(not(windows))]
+    const ORPHAN_WRITES_LATE_AND_SHELL_WAITS: &str = "( (sleep 3; touch late.txt) & ); sleep 30";
+    const LATE_FILE: &str = "late.txt";
+    const ORPHAN_DELAY: Duration = Duration::from_secs(5);
 
     fn request(args: Value, timeout_ms: u64) -> Request {
         Request {
@@ -383,5 +383,75 @@ mod tests {
 
         assert_eq!(error.status, "cancelled");
         assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[tokio::test]
+    async fn returns_when_the_shell_exits_although_a_background_child_holds_the_pipes() {
+        let root = tempfile::tempdir().unwrap();
+        let (_cancel_sender, cancel) = watch::channel(false);
+
+        let started = std::time::Instant::now();
+        let outcome = run_command(
+            root.path(),
+            &request(json!({"command": BACKGROUND_CHILD_AND_EXIT}), 60_000),
+            &[],
+            |_, _| {},
+            cancel,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(outcome.result["exitCode"], 4);
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[tokio::test]
+    async fn timeout_kills_orphaned_background_children() {
+        let root = tempfile::tempdir().unwrap();
+        let (_cancel_sender, cancel) = watch::channel(false);
+
+        let error = run_command(
+            root.path(),
+            &request(
+                json!({"command": ORPHAN_WRITES_LATE_AND_SHELL_WAITS}),
+                1_500,
+            ),
+            &[],
+            |_, _| {},
+            cancel,
+        )
+        .await
+        .unwrap_err();
+        tokio::time::sleep(ORPHAN_DELAY).await;
+
+        assert_eq!(error.status, "timeout");
+        assert!(!root.path().join(LATE_FILE).exists());
+    }
+
+    #[tokio::test]
+    async fn cancellation_kills_orphaned_background_children() {
+        let root = tempfile::tempdir().unwrap();
+        let (cancel_sender, cancel) = watch::channel(false);
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(1_500)).await;
+            let _ = cancel_sender.send(true);
+        });
+
+        let error = run_command(
+            root.path(),
+            &request(
+                json!({"command": ORPHAN_WRITES_LATE_AND_SHELL_WAITS}),
+                60_000,
+            ),
+            &[],
+            |_, _| {},
+            cancel,
+        )
+        .await
+        .unwrap_err();
+        tokio::time::sleep(ORPHAN_DELAY).await;
+
+        assert_eq!(error.status, "cancelled");
+        assert!(!root.path().join(LATE_FILE).exists());
     }
 }

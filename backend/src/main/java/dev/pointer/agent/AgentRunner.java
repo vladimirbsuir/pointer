@@ -153,19 +153,34 @@ public class AgentRunner implements LiveItemSnapshots {
     }
 
     private void launch(UUID userId, UUID sessionId, UUID turnId) {
+        var first = new RunningTurn(sessionId);
+        running.put(sessionId, first);
         executor.execute(() -> {
             var current = turnId;
+            var turn = first;
             try {
-                var nextTurn = Optional.of(turnId);
+                var nextTurn = runTurn(userId, sessionId, current, turn);
                 while (nextTurn.isPresent()) {
                     current = nextTurn.get();
-                    nextTurn = runTurn(userId, sessionId, current);
+                    turn = registerNext(sessionId, turn);
+                    nextTurn = runTurn(userId, sessionId, current, turn);
                 }
             } catch (Throwable throwable) {
                 log.error("Agent loop for session {} stopped unexpectedly", sessionId, throwable);
                 recover(sessionId, current);
+            } finally {
+                running.remove(sessionId, turn);
             }
         });
+    }
+
+    private RunningTurn registerNext(UUID sessionId, RunningTurn previous) {
+        var next = new RunningTurn(sessionId);
+        running.put(sessionId, next);
+        if (previous.cancellation.isCancelled()) {
+            next.cancellation.cancel();
+        }
+        return next;
     }
 
     private void recover(UUID sessionId, UUID turnId) {
@@ -184,9 +199,7 @@ public class AgentRunner implements LiveItemSnapshots {
         }
     }
 
-    private Optional<UUID> runTurn(UUID userId, UUID sessionId, UUID turnId) {
-        var turn = new RunningTurn(sessionId);
-        running.put(sessionId, turn);
+    private Optional<UUID> runTurn(UUID userId, UUID sessionId, UUID turnId, RunningTurn turn) {
         try {
             var context = writer.turnContext(userId, sessionId, turnId);
             var main = providerService.resolve(userId, context.modelId(), context.executorDeviceId());
@@ -338,8 +351,6 @@ public class AgentRunner implements LiveItemSnapshots {
         } catch (RuntimeException exception) {
             log.error("Turn {} failed", turnId, exception);
             return fail(userId, sessionId, turnId, turn, "internal_error", "Unexpected error while running the agent");
-        } finally {
-            running.remove(sessionId, turn);
         }
     }
 

@@ -269,6 +269,7 @@ public class SessionWriter {
             UUID userId, UUID sessionId, UUID turnId, String reason, Map<String, Object> error) {
         var session = lockOwned(userId, sessionId);
         var turn = turns.findById(turnId).orElseThrow();
+        cancelPendingApprovals(session);
         closeUnfinishedItems(userId, sessionId, turnId, Turn.CANCELLED.equals(reason) ? Item.CANCELLED : Item.FAILED);
         turn.finish(reason, error, clock.instant());
         turns.save(turn);
@@ -279,13 +280,17 @@ public class SessionWriter {
         payload.put("error", error);
         eventLog.append(userId, sessionId, "turn.completed", payload);
         var queued = items.findBySessionIdAndTurnIdIsNullOrderByPosition(sessionId);
-        if (Turn.COMPLETED.equals(reason) && !queued.isEmpty()) {
+        if (startsQueuedTurn(reason) && !queued.isEmpty()) {
             var next = openTurn(session, null, Turn.MESSAGE);
             queued.forEach(item -> attach(session, item, next.getId()));
             return Optional.of(next.getId());
         }
         changeStatus(session, Turn.FAILED.equals(reason) ? SessionStatus.ERROR : SessionStatus.IDLE);
         return Optional.empty();
+    }
+
+    private static boolean startsQueuedTurn(String reason) {
+        return Turn.COMPLETED.equals(reason) || Turn.STEP_LIMIT.equals(reason);
     }
 
     @Transactional

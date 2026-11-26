@@ -1,4 +1,5 @@
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
@@ -12,6 +13,7 @@ const MAX_READ_BYTES: usize = 256 * 1024;
 const MAX_LIST_ENTRIES: usize = 1000;
 const MAX_RULES_BYTES: usize = 50 * 1024;
 const MAX_ATTACHMENT_BYTES: u64 = 200 * 1024;
+const MAX_TEXT_FILE_BYTES: u64 = 10 * 1024 * 1024;
 const RULES_FILES: [&str; 2] = ["AGENTS.md", "CLAUDE.md"];
 
 pub fn list_directory(root: &Path, request: &Request) -> Result<ExecOutcome, ExecError> {
@@ -279,13 +281,25 @@ pub fn read_attachment(root: &Path, requested: &str) -> Result<String, ExecError
 }
 
 fn read_text(path: &Path) -> Result<String, ExecError> {
-    let bytes = fs::read(path).map_err(|error| {
+    let opening = |error: std::io::Error| {
         if error.kind() == std::io::ErrorKind::NotFound {
             ExecError::failed("file_not_found", "The file does not exist")
         } else {
             ExecError::failed("io_error", error.to_string())
         }
-    })?;
+    };
+    let file = File::open(path).map_err(opening)?;
+    let size = file.metadata().map_err(opening)?.len();
+    if size > MAX_TEXT_FILE_BYTES {
+        return Err(text_file_too_large(size));
+    }
+    let mut bytes = Vec::with_capacity(size as usize);
+    file.take(MAX_TEXT_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(opening)?;
+    if bytes.len() as u64 > MAX_TEXT_FILE_BYTES {
+        return Err(text_file_too_large(bytes.len() as u64));
+    }
     if bytes.iter().take(8192).any(|byte| *byte == 0) {
         return Err(ExecError::failed(
             "binary_file",
@@ -293,6 +307,15 @@ fn read_text(path: &Path) -> Result<String, ExecError> {
         ));
     }
     Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+fn text_file_too_large(size: u64) -> ExecError {
+    ExecError::failed(
+        "file_too_large",
+        format!(
+            "The file has {size} bytes, more than the {MAX_TEXT_FILE_BYTES} bytes the file tools read or change. Inspect or change parts of it with run_command instead."
+        ),
+    )
 }
 
 fn is_utf8(path: &Path) -> bool {
@@ -479,6 +502,80 @@ mod tests {
         assert_eq!(outcome.result["content"], "     2\t2\n     3\t3\n");
         assert_eq!(outcome.result["totalLines"], 4);
         assert_eq!(outcome.result["truncated"], true);
+    }
+
+    fn large_file(root: &Path, name: &str) {
+        File::create(root.join(name))
+            .unwrap()
+            .set_len(MAX_TEXT_FILE_BYTES + 1)
+            .unwrap();
+    }
+
+    #[test]
+    fn read_file_refuses_a_file_over_the_size_limit() {
+        let root = tempfile::tempdir().unwrap();
+        large_file(root.path(), "huge.log");
+
+        let error = read_file(
+            root.path(),
+            &request(json!({"path": "huge.log", "limit": 10}), false),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, "file_too_large");
+        assert!(error.message.contains("run_command"));
+    }
+
+    #[test]
+    fn edit_and_write_refuse_to_change_a_file_over_the_size_limit() {
+        let root = tempfile::tempdir().unwrap();
+        large_file(root.path(), "huge.log");
+
+        let edit = edit_file(
+            root.path(),
+            &request(
+                json!({"path": "huge.log", "oldText": "a", "newText": "b"}),
+                false,
+            ),
+        )
+        .unwrap_err();
+        let write = write_file(
+            root.path(),
+            &request(json!({"path": "huge.log", "content": "small"}), false),
+        )
+        .unwrap_err();
+
+        assert_eq!(edit.code, "file_too_large");
+        assert_eq!(write.code, "file_too_large");
+        assert_eq!(
+            fs::metadata(root.path().join("huge.log")).unwrap().len(),
+            MAX_TEXT_FILE_BYTES + 1
+        );
+    }
+
+    #[test]
+    fn read_file_accepts_a_file_at_the_size_limit() {
+        let root = tempfile::tempdir().unwrap();
+        let mut content = "line
+"
+        .repeat(1000)
+        .into_bytes();
+        content.resize(MAX_TEXT_FILE_BYTES as usize, b'x');
+        fs::write(root.path().join("edge.txt"), &content).unwrap();
+
+        let outcome = read_file(
+            root.path(),
+            &request(json!({"path": "edge.txt", "limit": 2}), false),
+        )
+        .unwrap();
+
+        assert_eq!(
+            outcome.result["content"],
+            "     1	line
+     2	line
+"
+        );
+        assert_eq!(outcome.result["totalLines"], 1001);
     }
 
     #[test]

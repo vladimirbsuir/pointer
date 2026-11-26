@@ -11,7 +11,7 @@ use crate::config::API_URL;
 use crate::error::{AppError, AppResult};
 use crate::mcp::{McpHub, ServerConfig, ServerView};
 use crate::projects::ProjectMap;
-use crate::realtime::Realtime;
+use crate::realtime::{Realtime, RealtimeStatus};
 use crate::terminal::{TerminalEvent, Terminals};
 
 const MAX_FILE_SUGGESTIONS: usize = 30;
@@ -112,8 +112,8 @@ pub fn realtime_unsubscribe(realtime: State<'_, Realtime>, session_id: String) {
 }
 
 #[tauri::command]
-pub fn realtime_status(realtime: State<'_, Realtime>) -> bool {
-    realtime.is_connected()
+pub fn realtime_status(realtime: State<'_, Realtime>) -> RealtimeStatus {
+    realtime.status()
 }
 
 #[tauri::command]

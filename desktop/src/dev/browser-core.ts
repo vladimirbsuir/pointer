@@ -16,8 +16,12 @@ type AuthResponse = { accessToken: string; refreshToken: string; user: unknown }
 
 let accessToken: string | null = null;
 let socket: WebSocket | null = null;
-let connected = false;
-const subscriptions = new Map<string, number>();
+let status: { connected: boolean; closeCode: number | null } = {
+  connected: false,
+  closeCode: null,
+};
+const FINAL_CLOSE_CODES = [4403, 4409, 4426];
+const subscriptions = new Map<string, { lastSeq: number; awaitingReplay: boolean }>();
 
 function deviceId() {
   let id = localStorage.getItem(deviceKey);
@@ -108,9 +112,29 @@ function send(type: string, payload: unknown) {
   }
 }
 
-function setConnected(value: boolean) {
-  connected = value;
-  void emit("realtime://status", { connected: value });
+function setStatus(connected: boolean, closeCode: number | null = null) {
+  status = { connected, closeCode };
+  void emit("realtime://status", status);
+}
+
+function subscribe(sessionId: string, afterSeq: number) {
+  subscriptions.set(sessionId, { lastSeq: afterSeq, awaitingReplay: true });
+  send("session.subscribe", { sessionId, afterSeq });
+}
+
+function acceptsEvent(sessionId: string, seq: number) {
+  const subscription = subscriptions.get(sessionId);
+  if (!subscription) {
+    return true;
+  }
+  if (seq === subscription.lastSeq + 1) {
+    subscription.lastSeq = seq;
+    return true;
+  }
+  if (seq > subscription.lastSeq && !subscription.awaitingReplay) {
+    subscribe(sessionId, subscription.lastSeq);
+  }
+  return false;
 }
 
 function connect() {
@@ -133,10 +157,8 @@ function connect() {
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
     if (message.type === "welcome") {
-      setConnected(true);
-      subscriptions.forEach((afterSeq, sessionId) =>
-        send("session.subscribe", { sessionId, afterSeq }),
-      );
+      setStatus(true);
+      subscriptions.forEach(({ lastSeq }, sessionId) => subscribe(sessionId, lastSeq));
       return;
     }
     if (message.type === "exec.request") {
@@ -150,18 +172,25 @@ function connect() {
       }, 150);
       return;
     }
-    if (message.type === "session.event") {
-      const { sessionId, seq } = message.payload;
-      if (subscriptions.has(sessionId) && seq > (subscriptions.get(sessionId) ?? 0)) {
-        subscriptions.set(sessionId, seq);
+    if (
+      message.type === "session.event" &&
+      !acceptsEvent(message.payload.sessionId, message.payload.seq)
+    ) {
+      return;
+    }
+    if (message.type === "session.subscribed") {
+      const subscription = subscriptions.get(message.payload.sessionId);
+      if (subscription) {
+        subscription.awaitingReplay = false;
       }
     }
     void emit("realtime://message", message);
   };
-  ws.onclose = () => {
+  ws.onclose = (event) => {
     socket = null;
-    setConnected(false);
-    if (accessToken) {
+    const finalClose = FINAL_CLOSE_CODES.includes(event.code);
+    setStatus(false, finalClose ? event.code : null);
+    if (accessToken && !finalClose) {
       setTimeout(connect, 2000);
     }
   };
@@ -260,15 +289,14 @@ export function installBrowserCore() {
           return null;
         }
         case "realtime_subscribe":
-          subscriptions.set(String(args.sessionId), Number(args.afterSeq));
-          send("session.subscribe", { sessionId: args.sessionId, afterSeq: args.afterSeq });
+          subscribe(String(args.sessionId), Number(args.afterSeq));
           return null;
         case "realtime_unsubscribe":
           subscriptions.delete(String(args.sessionId));
           send("session.unsubscribe", { sessionId: args.sessionId });
           return null;
         case "realtime_status":
-          return connected;
+          return status;
         case "projects_local":
           return localProjects();
         case "project_repository":

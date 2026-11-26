@@ -5,6 +5,7 @@ mod desktop;
 mod files;
 mod index;
 mod paths;
+mod process_tree;
 mod search;
 mod sync;
 mod web;
@@ -17,10 +18,11 @@ pub use search::suggest_files;
 pub use worktree::Worktree;
 
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use serde_json::{Map, Value, json};
@@ -154,14 +156,17 @@ impl Executor {
         mcp: Option<Arc<dyn McpCaller>>,
         emit: Emit,
     ) {
+        let started = Instant::now();
         let call_id = payload["callId"].as_str().unwrap_or_default().to_string();
-        let (cancel_sender, cancel) = watch::channel(false);
-        if let Ok(mut running) = self.running.lock() {
-            running.insert(call_id.clone(), cancel_sender);
-        }
+        let cancel = match self.register(&call_id) {
+            Ok(cancel) => cancel,
+            Err(error) => {
+                emit("exec.result", result_payload(&call_id, Err(error), started));
+                return;
+            }
+        };
         let executor = self.clone();
         tokio::spawn(async move {
-            let started = Instant::now();
             let request = Request {
                 operation: payload["operation"]
                     .as_str()
@@ -192,6 +197,27 @@ impl Executor {
             emit("exec.result", result_payload(&call_id, outcome, started));
             executor.forget(&call_id);
         });
+    }
+
+    fn register(&self, call_id: &str) -> Result<watch::Receiver<bool>, ExecError> {
+        if call_id.is_empty() {
+            return Err(ExecError::rejected(
+                "invalid_request",
+                "The request has no callId",
+            ));
+        }
+        let mut running = self.running.lock().unwrap_or_else(PoisonError::into_inner);
+        match running.entry(call_id.to_string()) {
+            Entry::Occupied(_) => Err(ExecError::rejected(
+                "duplicate_call_id",
+                format!("A call with id {call_id} is already running"),
+            )),
+            Entry::Vacant(entry) => {
+                let (cancel_sender, cancel) = watch::channel(false);
+                entry.insert(cancel_sender);
+                Ok(cancel)
+            }
+        }
     }
 
     pub fn cancel(&self, call_id: &str) {
@@ -423,4 +449,90 @@ fn result_payload(
         }
     }
     Value::Object(payload)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+
+    #[cfg(windows)]
+    const SLEEP: &str = "Start-Sleep -Seconds 30";
+    #[cfg(not(windows))]
+    const SLEEP: &str = "sleep 30";
+
+    fn recording_emit() -> (Emit, mpsc::UnboundedReceiver<Value>) {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        let emit: Emit = Arc::new(move |event: &str, payload: Value| {
+            if event == "exec.result" {
+                let _ = sender.send(payload);
+            }
+        });
+        (emit, receiver)
+    }
+
+    fn workspace(root: &std::path::Path) -> Option<Workspace> {
+        Some(Workspace {
+            project: root.to_path_buf(),
+            worktree: None,
+        })
+    }
+
+    fn sleep_request(call_id: Option<&str>) -> Value {
+        let mut payload = json!({
+            "operation": "run_command",
+            "arguments": { "command": SLEEP },
+            "timeoutMs": 60_000,
+        });
+        if let Some(call_id) = call_id {
+            payload["callId"] = json!(call_id);
+        }
+        payload
+    }
+
+    #[tokio::test]
+    async fn a_request_without_call_id_is_rejected() {
+        let root = tempfile::tempdir().unwrap();
+        let executor = Arc::new(Executor::default());
+        let (emit, mut results) = recording_emit();
+
+        executor.handle(sleep_request(None), workspace(root.path()), None, emit);
+        let result = results.recv().await.unwrap();
+
+        assert_eq!(result["status"], "rejected");
+        assert_eq!(result["error"]["code"], "invalid_request");
+        assert!(executor.running.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_duplicate_call_id_is_rejected_while_the_first_call_runs() {
+        let root = tempfile::tempdir().unwrap();
+        let executor = Arc::new(Executor::default());
+        let (emit, mut results) = recording_emit();
+
+        executor.handle(
+            sleep_request(Some("cal_1")),
+            workspace(root.path()),
+            None,
+            emit.clone(),
+        );
+        executor.handle(
+            sleep_request(Some("cal_1")),
+            workspace(root.path()),
+            None,
+            emit,
+        );
+        let duplicate = results.recv().await.unwrap();
+        executor.cancel("cal_1");
+        let first = tokio::time::timeout(Duration::from_secs(20), results.recv())
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(duplicate["callId"], "cal_1");
+        assert_eq!(duplicate["status"], "rejected");
+        assert_eq!(duplicate["error"]["code"], "duplicate_call_id");
+        assert_eq!(first["callId"], "cal_1");
+        assert_eq!(first["status"], "cancelled");
+    }
 }

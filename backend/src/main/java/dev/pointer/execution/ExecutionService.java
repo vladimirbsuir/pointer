@@ -130,18 +130,16 @@ public class ExecutionService {
                 .findFirst();
     }
 
-    public void onOutput(UUID callId, String stream, String data) {
-        var call = pending.get(callId);
-        if (call != null) {
-            call.listener.onOutput(stream, data);
-        }
+    public void onOutput(UUID deviceId, UUID callId, String stream, String data) {
+        callFrom(deviceId, callId).ifPresent(call -> call.listener.onOutput(stream, data));
     }
 
-    public void onResult(UUID callId, ExecutionResult result) {
-        var call = pending.get(callId);
-        if (call != null) {
-            call.future.complete(result);
-        }
+    public void onResult(UUID deviceId, UUID callId, ExecutionResult result) {
+        callFrom(deviceId, callId).ifPresent(call -> call.future.complete(result));
+    }
+
+    private Optional<PendingCall> callFrom(UUID deviceId, UUID callId) {
+        return Optional.ofNullable(pending.get(callId)).filter(call -> call.deviceId.equals(deviceId));
     }
 
     private Optional<ExecutionResult> awaitDevice(

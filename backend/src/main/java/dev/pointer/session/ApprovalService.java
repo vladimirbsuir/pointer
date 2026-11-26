@@ -82,7 +82,11 @@ public class ApprovalService {
                 }
             }
         } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
+            try {
+                transactions.executeWithoutResult(status -> cancel(userId, sessionId, approvalId));
+            } finally {
+                Thread.currentThread().interrupt();
+            }
             return Decision.cancellation();
         } catch (ExecutionException exception) {
             return Decision.cancellation();
@@ -93,7 +97,7 @@ public class ApprovalService {
 
     @Transactional
     public void resolve(UUID userId, UUID sessionId, UUID approvalId, ResolveApprovalRequest request) {
-        sessionService.owned(userId, sessionId);
+        entityManager.refresh(sessionService.owned(userId, sessionId), LockModeType.PESSIMISTIC_WRITE);
         var approval = approvals
                 .findById(approvalId)
                 .filter(found -> found.getSessionId().equals(sessionId))
@@ -115,7 +119,9 @@ public class ApprovalService {
             payload.put("tool", request.tool());
         }
         eventLog.append(userId, sessionId, "approval.resolved", payload);
-        writer.changeStatus(userId, sessionId, SessionStatus.RUNNING);
+        if (waiting.containsKey(approvalId)) {
+            writer.changeStatus(userId, sessionId, SessionStatus.RUNNING);
+        }
         var decision = new Decision(status, scope, request.message(), request.tool());
         eventLog.afterCommit(() -> {
             var future = waiting.get(approvalId);

@@ -39,6 +39,10 @@
     "linkFolder": "Link folder",
     "connected": "Connected",
     "disconnected": "Reconnecting…",
+    "offline": "Disconnected",
+    "updateRequired": "Update required",
+    "updateRequiredMessage": "The server no longer supports this version of Pointer. Update the app to reconnect.",
+    "accessRevoked": "You have been signed out because your account was disabled or this device was revoked.",
     "semanticIndex": "Semantic index"
   },
   "settings": {

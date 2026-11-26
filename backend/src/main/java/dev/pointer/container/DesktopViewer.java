@@ -33,6 +33,7 @@ final class DesktopViewer implements WebSocket.Listener {
     private static final String BLOCKING_SEND_TIMEOUT = "org.apache.tomcat.websocket.BLOCKING_SEND_TIMEOUT";
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final long POLL_MILLIS = 500;
+    private static final long INPUT_BUFFER_LIMIT = 1024 * 1024;
 
     private final WebSocketSession viewer;
     private final UUID sessionId;
@@ -40,6 +41,7 @@ final class DesktopViewer implements WebSocket.Listener {
     private final long bufferLimit;
     private final BlockingQueue<BinaryMessage> outbound = new LinkedBlockingQueue<>();
     private final AtomicLong queuedBytes = new AtomicLong();
+    private final AtomicLong pendingInputBytes = new AtomicLong();
     private final AtomicBoolean closed = new AtomicBoolean();
     private final CompletableFuture<WebSocket> connected = new CompletableFuture<>();
     private CompletableFuture<WebSocket> upstreamSends = connected;
@@ -78,12 +80,30 @@ final class DesktopViewer implements WebSocket.Listener {
     }
 
     void forward(BinaryMessage message) {
+        if (closed.get()) {
+            return;
+        }
         var payload = message.getPayload();
-        var copy = ByteBuffer.allocate(payload.remaining()).put(payload).flip();
+        var size = payload.remaining();
+        if (pendingInputBytes.addAndGet(size) > INPUT_BUFFER_LIMIT) {
+            close(TOO_SLOW);
+            return;
+        }
+        var copy = ByteBuffer.allocate(size).put(payload).flip();
         var last = message.isLast();
         synchronized (this) {
-            upstreamSends = upstreamSends.thenCompose(upstream -> upstream.sendBinary(copy, last));
+            upstreamSends = upstreamSends
+                    .thenCompose(upstream -> upstream.sendBinary(copy, last))
+                    .whenComplete((upstream, failure) -> afterInputSent(size, failure));
         }
+    }
+
+    private void afterInputSent(int size, Throwable failure) {
+        if (failure != null) {
+            close(DISPLAY_STOPPED);
+            return;
+        }
+        pendingInputBytes.addAndGet(-size);
     }
 
     @Override

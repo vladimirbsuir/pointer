@@ -123,10 +123,11 @@ class GatewayHandler extends TextWebSocketHandler {
                 case "session.unsubscribe" -> connection.unsubscribe(uuid(payload, "sessionId"));
                 case "exec.output" ->
                     execution.onOutput(
+                            connection.deviceId(),
                             uuid(payload, "callId"),
                             payload.path("stream").asString("stdout"),
                             payload.path("data").asString(""));
-                case "exec.result" -> deliverResult(payload);
+                case "exec.result" -> deliverResult(connection, payload);
                 case "relay.response.start" ->
                     relay.onStart(
                             uuid(payload, "relayId"), payload.path("status").asInt());
@@ -190,7 +191,7 @@ class GatewayHandler extends TextWebSocketHandler {
         welcome.put("userId", connection.userId());
         welcome.put("limits", Map.of("maxMessageBytes", 4_194_304, "maxToolOutputBytes", 262_144));
         connection.send("welcome", id, welcome);
-        payload.path("undeliveredResults").forEach(this::deliverResult);
+        payload.path("undeliveredResults").forEach(result -> deliverResult(connection, result));
         log.debug("Device {} connected with capabilities {}", deviceId, capabilities);
     }
 
@@ -262,9 +263,9 @@ class GatewayHandler extends TextWebSocketHandler {
         mcpTools.report(connection.userId(), connection.deviceId(), reported);
     }
 
-    private void deliverResult(JsonNode payload) {
+    private void deliverResult(GatewayConnection connection, JsonNode payload) {
         Map<String, Object> result = json.convertValue(payload, MAP_TYPE);
-        execution.onResult(uuid(payload, "callId"), ExecutionService.parseResult(result));
+        execution.onResult(connection.deviceId(), uuid(payload, "callId"), ExecutionService.parseResult(result));
     }
 
     private static void error(GatewayConnection connection, String replyTo, String code, String message) {

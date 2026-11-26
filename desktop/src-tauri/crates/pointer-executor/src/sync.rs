@@ -24,7 +24,7 @@ const LISTED_LARGEST: usize = 5;
 const MANIFEST_NAME: &str = ".pointer-sync.json";
 const TRANSFER_PATH_PREFIX: &str = "/api/v1/";
 const ARCHIVE_CONTENT_TYPE: &str = "application/gzip";
-const PUBLIC_ENV_SUFFIXES: &[&str] = &["example", "sample", "template", "dist"];
+const PUBLIC_ENV_MARKERS: &[&str] = &["example", "sample", "template", "dist"];
 const SECRET_EXTENSIONS: &[&str] = &[
     "pem", "key", "p8", "p12", "pfx", "jks", "keystore", "crt", "cer", "der", "ppk",
 ];
@@ -33,11 +33,19 @@ const SECRET_NAMES: &[&str] = &[
     "id_dsa",
     "id_ecdsa",
     "id_ed25519",
+    ".envrc",
     ".netrc",
     ".npmrc",
     ".pypirc",
+    ".pgpass",
     ".git-credentials",
+    "credentials.json",
+    "secrets.json",
+    "secrets.yaml",
+    "secrets.yml",
 ];
+const SECRET_PATHS: &[&str] = &[".aws/credentials"];
+const SERVICE_ACCOUNT_MARKERS: &[&str] = &["service-account", "service_account"];
 const SCRIPT_MODE: u32 = 0o755;
 const FILE_MODE: u32 = 0o644;
 
@@ -148,20 +156,35 @@ fn select(root: &Path) -> Result<Selection, ExecError> {
 }
 
 fn is_secret(name: &str) -> bool {
-    let file_name = name.rsplit('/').next().unwrap_or(name).to_ascii_lowercase();
-    if file_name == ".env" {
-        return true;
-    }
-    if let Some(suffix) = file_name.strip_prefix(".env.") {
-        return !PUBLIC_ENV_SUFFIXES.contains(&suffix);
-    }
-    if SECRET_NAMES.contains(&file_name.as_str()) {
-        return true;
-    }
-    Path::new(&file_name)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| SECRET_EXTENSIONS.contains(&extension))
+    let name = name.to_ascii_lowercase();
+    let file_name = name.rsplit('/').next().unwrap_or(&name);
+    is_env_file(file_name)
+        || SECRET_NAMES.contains(&file_name)
+        || SECRET_PATHS
+            .iter()
+            .any(|path| name == *path || name.ends_with(&format!("/{path}")))
+        || is_service_account_key(file_name)
+        || Path::new(file_name)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| SECRET_EXTENSIONS.contains(&extension))
+}
+
+fn is_env_file(file_name: &str) -> bool {
+    let named_env = file_name == ".env"
+        || file_name.starts_with(".env.")
+        || (file_name.ends_with(".env") && file_name.len() > ".env".len());
+    named_env
+        && !file_name
+            .split('.')
+            .any(|part| PUBLIC_ENV_MARKERS.contains(&part))
+}
+
+fn is_service_account_key(file_name: &str) -> bool {
+    file_name.ends_with(".json")
+        && SERVICE_ACCOUNT_MARKERS
+            .iter()
+            .any(|marker| file_name.contains(marker))
 }
 
 fn check_limits(selection: &Selection, max_files: u64, max_bytes: u64) -> Result<(), ExecError> {
@@ -242,7 +265,48 @@ fn append<W: Write>(builder: &mut tar::Builder<W>, file: &Selected) -> io::Resul
             .map(|elapsed| elapsed.as_secs())
             .unwrap_or_default(),
     );
-    builder.append_data(&mut header, &file.name, source.take(metadata.len()))
+    builder.append_data(
+        &mut header,
+        &file.name,
+        ExactLength::new(source, metadata.len()),
+    )
+}
+
+struct ExactLength<R> {
+    source: R,
+    remaining: u64,
+}
+
+impl<R: Read> ExactLength<R> {
+    fn new(source: R, declared: u64) -> Self {
+        Self {
+            source,
+            remaining: declared,
+        }
+    }
+}
+
+impl<R: Read> Read for ExactLength<R> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        if self.remaining == 0 || buffer.is_empty() {
+            return Ok(0);
+        }
+        let allowed = usize::try_from(self.remaining)
+            .unwrap_or(usize::MAX)
+            .min(buffer.len());
+        let read = self.source.read(&mut buffer[..allowed])?;
+        if read == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                format!(
+                    "the file got shorter while it was being packed, {} bytes are missing; sync again",
+                    self.remaining
+                ),
+            ));
+        }
+        self.remaining -= read as u64;
+        Ok(read)
+    }
 }
 
 #[cfg(unix)]
@@ -471,6 +535,9 @@ mod tests {
         write(root, ".env.example", "TOKEN=");
         write(root, "certs/server.key", "key");
         write(root, "deploy/id_ed25519", "key");
+        write(root, "deploy/prod.env", "TOKEN=3");
+        write(root, ".aws/credentials", "[default]");
+        write(root, "config/secrets.yaml", "token: 4");
         write(root, ".github/workflows/ci.yml", "on: push");
 
         let selection = select(root).unwrap();
@@ -492,10 +559,136 @@ mod tests {
         assert_eq!(
             selection.excluded,
             vec![
+                ".aws/credentials",
                 ".env",
                 ".env.local",
                 "certs/server.key",
-                "deploy/id_ed25519"
+                "config/secrets.yaml",
+                "deploy/id_ed25519",
+                "deploy/prod.env"
+            ]
+        );
+    }
+
+    #[test]
+    fn secret_filter_covers_env_and_credential_files() {
+        let secret = [
+            ".env",
+            ".env.local",
+            "config/.ENV.production",
+            "deploy/prod.env",
+            "Staging.env",
+            ".envrc",
+            ".aws/credentials",
+            "home/.aws/credentials",
+            "credentials.json",
+            "config/secrets.yaml",
+            "secrets.yml",
+            "secrets.json",
+            ".netrc",
+            ".pgpass",
+            ".npmrc",
+            ".pypirc",
+            ".git-credentials",
+            "service-account.json",
+            "keys/my-project-service-account-key.json",
+            "gcp_service_account.json",
+            "certs/server.key",
+            "deploy/id_ed25519",
+        ];
+        let public = [
+            ".env.example",
+            ".env.sample",
+            ".env.template",
+            ".env.dist",
+            "example.env",
+            "prod.example.env",
+            "prod.env.example",
+            "src/environment.ts",
+            "src/env.ts",
+            ".aws/config",
+            "credentials.md",
+            "src/secrets.rs",
+            "service-account.md",
+            "package.json",
+        ];
+
+        for name in secret {
+            assert!(is_secret(name), "{name} should be left out");
+        }
+        for name in public {
+            assert!(!is_secret(name), "{name} should be sent");
+        }
+    }
+
+    #[test]
+    fn exact_length_copies_the_declared_size_and_no_more() {
+        let mut copied = Vec::new();
+
+        ExactLength::new(&b"0123456789"[..], 4)
+            .read_to_end(&mut copied)
+            .unwrap();
+
+        assert_eq!(copied, b"0123");
+    }
+
+    #[test]
+    fn a_file_that_shrinks_while_packing_fails_instead_of_shifting_the_archive() {
+        let mut builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_entry_type(tar::EntryType::Regular);
+        header.set_size(10);
+        header.set_mode(FILE_MODE);
+
+        let error = builder
+            .append_data(
+                &mut header,
+                "logs/app.log",
+                ExactLength::new(&b"0123"[..], 10),
+            )
+            .unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+        assert!(error.to_string().contains("got shorter"));
+    }
+
+    #[test]
+    fn a_file_that_grows_while_packing_keeps_the_declared_size() {
+        let mut builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_entry_type(tar::EntryType::Regular);
+        header.set_size(4);
+        header.set_mode(FILE_MODE);
+        builder
+            .append_data(
+                &mut header,
+                "logs/app.log",
+                ExactLength::new(&b"0123456789"[..], 4),
+            )
+            .unwrap();
+        header.set_size(2);
+        builder
+            .append_data(&mut header, "next.txt", ExactLength::new(&b"ok"[..], 2))
+            .unwrap();
+        let bytes = builder.into_inner().unwrap();
+
+        let mut archive = tar::Archive::new(&bytes[..]);
+        let entries = archive
+            .entries()
+            .unwrap()
+            .map(|entry| {
+                let mut entry = entry.unwrap();
+                let mut content = String::new();
+                entry.read_to_string(&mut content).unwrap();
+                (entry.path().unwrap().to_string_lossy().to_string(), content)
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            entries,
+            vec![
+                ("logs/app.log".to_string(), "0123".to_string()),
+                ("next.txt".to_string(), "ok".to_string()),
             ]
         );
     }

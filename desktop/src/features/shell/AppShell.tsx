@@ -13,7 +13,13 @@ import { queryKeys } from "@/shared/api/queries";
 import { toAppError, type Project } from "@/shared/api/types";
 import { errorMessage } from "@/shared/i18n/errors";
 import { notify } from "@/shared/lib/notify";
-import { onRealtimeMessage, useRealtimeConnected } from "@/shared/realtime/realtime";
+import type { RealtimeStatus } from "@/shared/api/core";
+import {
+  ACCESS_REVOKED_CLOSE_CODE,
+  onRealtimeMessage,
+  UNSUPPORTED_VERSION_CLOSE_CODE,
+  useRealtimeStatus,
+} from "@/shared/realtime/realtime";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/utils";
 import { Avatar, AvatarFallback } from "@/shared/ui/avatar";
@@ -39,15 +45,37 @@ function initials(name: string) {
     .join("");
 }
 
+function connectionLabelKey({ connected, closeCode }: RealtimeStatus) {
+  if (connected) {
+    return "shell.connected";
+  }
+  if (closeCode === UNSUPPORTED_VERSION_CLOSE_CODE) {
+    return "shell.updateRequired";
+  }
+  return closeCode === null ? "shell.disconnected" : "shell.offline";
+}
+
 export function AppShell() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
   const activeSessionId = useWorkspace((state) => state.activeSessionId);
-  const connected = useRealtimeConnected();
+  const realtimeStatus = useRealtimeStatus();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const statuses = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    if (realtimeStatus.closeCode === ACCESS_REVOKED_CLOSE_CODE) {
+      toast.error(t("shell.accessRevoked"), { id: "realtime-access-revoked" });
+      void signOut();
+    } else if (realtimeStatus.closeCode === UNSUPPORTED_VERSION_CLOSE_CODE) {
+      toast.error(t("shell.updateRequiredMessage"), {
+        id: "realtime-update-required",
+        duration: Infinity,
+      });
+    }
+  }, [realtimeStatus.closeCode, signOut, t]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -124,9 +152,13 @@ export function AppShell() {
           <span
             className={cn(
               "size-2 rounded-full",
-              connected ? "bg-emerald-500" : "bg-muted-foreground/40",
+              realtimeStatus.connected
+                ? "bg-emerald-500"
+                : realtimeStatus.closeCode === null
+                  ? "bg-muted-foreground/40"
+                  : "bg-destructive",
             )}
-            title={connected ? t("shell.connected") : t("shell.disconnected")}
+            title={t(connectionLabelKey(realtimeStatus))}
           />
         </div>
         <ProjectsSidebar />

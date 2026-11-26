@@ -431,6 +431,15 @@ public class RemoteSessionService {
         }
     }
 
+    private void removeOrphan(RemoteWorkspace workspace) {
+        log.info("Removing container {} of a deleted session", workspace.getContainerName());
+        try {
+            runtime.remove(workspace.getContainerName(), workspace.getVolumeName());
+        } catch (ContainerException exception) {
+            log.warn("Could not remove container {}: {}", workspace.getContainerName(), exception.getMessage());
+        }
+    }
+
     void stopIdle() {
         var cutoff = clock.instant().minus(properties.idleTimeout());
         for (var workspace : workspaces.findByStatusAndLastActiveAtBefore(RemoteWorkspace.READY, cutoff)) {
@@ -517,7 +526,11 @@ public class RemoteSessionService {
             }
             runtime.start(workspace.getContainerName());
         } catch (ContainerException exception) {
-            changeStatus(workspaceId, RemoteWorkspace.FAILED, exception.getMessage());
+            failQuietly(workspaceId, exception.getMessage());
+            return;
+        }
+        if (!workspaces.existsById(workspaceId)) {
+            removeOrphan(workspace);
             return;
         }
         if (workspace.isSandbox()) {

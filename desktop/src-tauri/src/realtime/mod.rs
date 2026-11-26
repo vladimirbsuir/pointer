@@ -1,11 +1,11 @@
 mod relay;
+mod subscriptions;
 
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
+use serde::Serialize;
 use serde_json::{Value, json};
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Emitter, Manager};
@@ -13,7 +13,6 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
-use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use uuid::Uuid;
 
 use crate::auth::session::AuthSession;
@@ -23,6 +22,7 @@ use crate::mcp::McpHub;
 use crate::projects::ProjectMap;
 use pointer_executor::{Emit, Executor, McpCaller, Workspace, Worktree};
 use relay::Relay;
+use subscriptions::{EventRoute, Subscriptions};
 
 const PROTOCOL_VERSION: u32 = 1;
 const MESSAGE_EVENT: &str = "realtime://message";
@@ -31,6 +31,13 @@ const TOKEN_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
 const READ_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
 const FINAL_CLOSE_CODES: [u16; 3] = [4403, 4409, 4426];
+
+#[derive(Clone, Copy, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RealtimeStatus {
+    connected: bool,
+    close_code: Option<u16>,
+}
 
 #[derive(Clone)]
 pub struct Outgoing(mpsc::UnboundedSender<String>);
@@ -64,8 +71,8 @@ impl Drop for AbortOnDrop {
 pub struct Realtime {
     task: Mutex<Option<JoinHandle<()>>>,
     outgoing: Mutex<Option<Outgoing>>,
-    subscriptions: Mutex<HashMap<String, i64>>,
-    connected: AtomicBool,
+    subscriptions: Mutex<Subscriptions>,
+    status: Mutex<RealtimeStatus>,
     relay: Arc<Relay>,
     executor: Arc<Executor>,
     undelivered: Mutex<Vec<Value>>,
@@ -77,7 +84,7 @@ impl Default for Realtime {
             task: Mutex::default(),
             outgoing: Mutex::default(),
             subscriptions: Mutex::default(),
-            connected: AtomicBool::default(),
+            status: Mutex::default(),
             relay: Arc::default(),
             executor: Arc::new(Executor::default().with_api_url(API_URL)),
             undelivered: Mutex::default(),
@@ -106,7 +113,7 @@ impl Realtime {
             handle.abort();
         }
         self.set_outgoing(None);
-        self.set_connected(app, false);
+        self.set_status(app, RealtimeStatus::default());
         if let Ok(mut subscriptions) = self.subscriptions.lock() {
             subscriptions.clear();
         }
@@ -114,7 +121,7 @@ impl Realtime {
 
     pub fn subscribe(&self, session_id: &str, after_seq: i64) {
         if let Ok(mut subscriptions) = self.subscriptions.lock() {
-            subscriptions.insert(session_id.to_string(), after_seq);
+            subscriptions.subscribe(session_id, after_seq);
         }
         self.send(
             "session.subscribe",
@@ -124,13 +131,13 @@ impl Realtime {
 
     pub fn unsubscribe(&self, session_id: &str) {
         if let Ok(mut subscriptions) = self.subscriptions.lock() {
-            subscriptions.remove(session_id);
+            subscriptions.unsubscribe(session_id);
         }
         self.send("session.unsubscribe", json!({ "sessionId": session_id }));
     }
 
-    pub fn is_connected(&self) -> bool {
-        self.connected.load(Ordering::SeqCst)
+    pub fn status(&self) -> RealtimeStatus {
+        self.status.lock().map(|status| *status).unwrap_or_default()
     }
 
     pub fn projects_changed(&self, project_ids: Vec<String>) {
@@ -186,34 +193,37 @@ impl Realtime {
         }
     }
 
-    fn set_connected(&self, app: &AppHandle, connected: bool) {
-        self.connected.store(connected, Ordering::SeqCst);
-        let _ = app.emit(STATUS_EVENT, json!({ "connected": connected }));
+    fn set_status(&self, app: &AppHandle, status: RealtimeStatus) {
+        if let Ok(mut current) = self.status.lock() {
+            *current = status;
+        }
+        let _ = app.emit(STATUS_EVENT, status);
     }
 
-    fn track_event(&self, payload: &Value) {
+    fn route_event(&self, payload: &Value) -> EventRoute {
         let (Some(session_id), Some(seq)) =
             (payload["sessionId"].as_str(), payload["seq"].as_i64())
         else {
-            return;
+            return EventRoute::Deliver;
         };
-        if let Ok(mut subscriptions) = self.subscriptions.lock()
-            && let Some(last) = subscriptions.get_mut(session_id)
-            && seq > *last
+        self.subscriptions
+            .lock()
+            .map(|mut subscriptions| subscriptions.route(session_id, seq))
+            .unwrap_or(EventRoute::Deliver)
+    }
+
+    fn confirm_subscription(&self, payload: &Value) {
+        if let Some(session_id) = payload["sessionId"].as_str()
+            && let Ok(mut subscriptions) = self.subscriptions.lock()
         {
-            *last = seq;
+            subscriptions.confirm(session_id);
         }
     }
 
-    fn subscriptions(&self) -> Vec<(String, i64)> {
+    fn resubscribe_all(&self) -> Vec<(String, i64)> {
         self.subscriptions
             .lock()
-            .map(|subscriptions| {
-                subscriptions
-                    .iter()
-                    .map(|(id, seq)| (id.clone(), *seq))
-                    .collect()
-            })
+            .map(|mut subscriptions| subscriptions.resubscribe_all())
             .unwrap_or_default()
     }
 }
@@ -221,21 +231,34 @@ impl Realtime {
 async fn run(app: AppHandle) {
     let mut backoff = Duration::from_secs(1);
     loop {
-        match connect_once(&app).await {
-            Ok(Disconnect::Final) => break,
-            Ok(Disconnect::Lost { was_stable }) if was_stable => backoff = Duration::from_secs(1),
-            Ok(Disconnect::Lost { .. }) | Err(_) => {}
-        }
+        let outcome = connect_once(&app).await;
         let realtime = app.state::<Realtime>();
         realtime.set_outgoing(None);
-        realtime.set_connected(&app, false);
+        let close_code = match outcome {
+            Ok(Disconnect::Final { close_code }) => Some(close_code),
+            Ok(Disconnect::Lost { was_stable: true }) => {
+                backoff = Duration::from_secs(1);
+                None
+            }
+            Ok(Disconnect::Lost { .. }) | Err(_) => None,
+        };
+        realtime.set_status(
+            &app,
+            RealtimeStatus {
+                connected: false,
+                close_code,
+            },
+        );
+        if close_code.is_some() {
+            break;
+        }
         tokio::time::sleep(jitter(backoff)).await;
         backoff = (backoff * 2).min(MAX_BACKOFF);
     }
 }
 
 enum Disconnect {
-    Final,
+    Final { close_code: u16 },
     Lost { was_stable: bool },
 }
 
@@ -318,12 +341,11 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
         let text = match message {
             Ok(Message::Text(text)) => text.to_string(),
             Ok(Message::Close(frame)) => {
-                if frame.is_some_and(|frame| {
-                    FINAL_CLOSE_CODES
-                        .iter()
-                        .any(|code| frame.code == CloseCode::from(*code))
-                }) {
-                    result = Disconnect::Final;
+                if let Some(close_code) = frame
+                    .map(|frame| u16::from(frame.code))
+                    .filter(|code| FINAL_CLOSE_CODES.contains(code))
+                {
+                    result = Disconnect::Final { close_code };
                 }
                 break;
             }
@@ -336,7 +358,13 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
         match envelope["type"].as_str().unwrap_or_default() {
             "welcome" => {
                 realtime.set_outgoing(Some(outgoing.clone()));
-                realtime.set_connected(app, true);
+                realtime.set_status(
+                    app,
+                    RealtimeStatus {
+                        connected: true,
+                        close_code: None,
+                    },
+                );
                 for payload in realtime.take_undelivered() {
                     outgoing.send("exec.result", payload);
                 }
@@ -344,7 +372,7 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
                     "device.tools",
                     json!({ "tools": app.state::<Arc<McpHub>>().reported_tools() }),
                 );
-                for (session_id, after_seq) in realtime.subscriptions() {
+                for (session_id, after_seq) in realtime.resubscribe_all() {
                     outgoing.send(
                         "session.subscribe",
                         json!({ "sessionId": session_id, "afterSeq": after_seq }),
@@ -384,8 +412,18 @@ async fn connect_once(app: &AppHandle) -> Result<Disconnect, String> {
             "relay.cancel" => realtime
                 .relay
                 .cancel(envelope["payload"]["relayId"].as_str().unwrap_or_default()),
-            "session.event" => {
-                realtime.track_event(&envelope["payload"]);
+            "session.event" => match realtime.route_event(&envelope["payload"]) {
+                EventRoute::Deliver => {
+                    let _ = app.emit(MESSAGE_EVENT, envelope);
+                }
+                EventRoute::Discard => {}
+                EventRoute::Resubscribe { after_seq } => outgoing.send(
+                    "session.subscribe",
+                    json!({ "sessionId": envelope["payload"]["sessionId"], "afterSeq": after_seq }),
+                ),
+            },
+            "session.subscribed" => {
+                realtime.confirm_subscription(&envelope["payload"]);
                 let _ = app.emit(MESSAGE_EVENT, envelope);
             }
             _ => {

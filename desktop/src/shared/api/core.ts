@@ -12,6 +12,8 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 export type TerminalEvent =
   { kind: "output"; data: string } | { kind: "exit"; code: number | null };
 
+export type RealtimeStatus = { connected: boolean; closeCode: number | null };
+
 export type McpServerConfig = { name: string; enabled: boolean } & (
   | { transport: "stdio"; command: string; args: string[]; env: Record<string, string> }
   | { transport: "http"; url: string; headers: Record<string, string> }
@@ -36,7 +38,7 @@ export const core = {
   subscribe: (sessionId: string, afterSeq: number) =>
     call<void>("realtime_subscribe", { sessionId, afterSeq }),
   unsubscribe: (sessionId: string) => call<void>("realtime_unsubscribe", { sessionId }),
-  realtimeStatus: () => call<boolean>("realtime_status"),
+  realtimeStatus: () => call<RealtimeStatus>("realtime_status"),
   localProjects: () => call<Record<string, string>>("projects_local"),
   linkProject: (projectId: string, path: string) => call<void>("project_link", { projectId, path }),
   unlinkProject: (projectId: string) => call<void>("project_unlink", { projectId }),

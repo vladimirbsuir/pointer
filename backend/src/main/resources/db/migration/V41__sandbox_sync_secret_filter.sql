@@ -1,0 +1,4 @@
+UPDATE tools
+SET description = 'Copy the current project files from the user''s computer to the sandbox''s project directory, so that sandbox_run and desktop_launch work on the latest code. Files ignored by .gitignore and the .git folder are not sent: the project''s .gitignore is the main boundary of what leaves the computer. Secret-looking files (.env files, keys, certificates and common credential files) are also left out, as a safety net that does not catch every secret. Files that an earlier sync sent and that are gone on the user''s computer are deleted; files the sandbox created itself, such as installed dependencies and build output, are kept. Edits never flow back: change files with the usual file tools and sync again before the next build or run in the sandbox.',
+    updated_at = now()
+WHERE id = '01930000-0000-7000-8000-00000000001c';

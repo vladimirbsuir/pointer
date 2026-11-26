@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
-import { core } from "@/shared/api/core";
+import { core, type RealtimeStatus } from "@/shared/api/core";
 
 export type RealtimeMessage = {
   type: string;
@@ -30,14 +30,19 @@ export function onRealtimeMessage(handler: Handler): () => void {
   return () => handlers.delete(handler);
 }
 
-export function useRealtimeConnected(): boolean {
-  const [connected, setConnected] = useState(false);
+export const ACCESS_REVOKED_CLOSE_CODE = 4403;
+export const UNSUPPORTED_VERSION_CLOSE_CODE = 4426;
+
+const disconnected: RealtimeStatus = { connected: false, closeCode: null };
+
+export function useRealtimeStatus(): RealtimeStatus {
+  const [status, setStatus] = useState(disconnected);
 
   useEffect(() => {
     let disposed = false;
-    void core.realtimeStatus().then((status) => !disposed && setConnected(status));
-    const unlisten = listen<{ connected: boolean }>("realtime://status", (event) =>
-      setConnected(event.payload.connected),
+    void core.realtimeStatus().then((current) => !disposed && setStatus(current));
+    const unlisten = listen<RealtimeStatus>("realtime://status", (event) =>
+      setStatus(event.payload),
     );
     return () => {
       disposed = true;
@@ -45,5 +50,5 @@ export function useRealtimeConnected(): boolean {
     };
   }, []);
 
-  return connected;
+  return status;
 }
