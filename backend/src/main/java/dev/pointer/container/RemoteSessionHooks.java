@@ -2,9 +2,11 @@ package dev.pointer.container;
 
 import dev.pointer.execution.ExecutionRequest;
 import dev.pointer.execution.ExecutorReadiness;
+import dev.pointer.execution.SandboxProvider;
 import dev.pointer.session.SessionEventListener;
 import dev.pointer.session.SessionEventRecord;
 import dev.pointer.session.SessionService;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +18,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 @RequiredArgsConstructor
-class RemoteSessionHooks implements ExecutorReadiness, SessionEventListener {
+class RemoteSessionHooks implements ExecutorReadiness, SandboxProvider, SessionEventListener {
 
     private final RemoteSessionService service;
 
@@ -36,8 +38,23 @@ class RemoteSessionHooks implements ExecutorReadiness, SessionEventListener {
     }
 
     @Override
+    public Optional<String> failure(ExecutionRequest request) {
+        return service.failure(request);
+    }
+
+    @Override
     public Set<String> defaultCapabilities(UUID deviceId) {
-        return service.defaultCapabilities();
+        return service.defaultCapabilities(deviceId);
+    }
+
+    @Override
+    public boolean offers(UUID userId, UUID projectId, UUID deviceId) {
+        return service.offersSandbox(userId, projectId);
+    }
+
+    @Override
+    public Optional<UUID> sandboxFor(UUID userId, UUID sessionId, UUID projectId) {
+        return service.sandboxFor(userId, sessionId, projectId);
     }
 
     @Override

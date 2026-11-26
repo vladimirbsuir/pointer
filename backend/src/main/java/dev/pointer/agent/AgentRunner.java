@@ -28,6 +28,7 @@ import dev.pointer.session.SessionService;
 import dev.pointer.session.SessionWriter;
 import dev.pointer.session.Turn;
 import dev.pointer.session.UsageLedger;
+import dev.pointer.tool.ToolDefinition;
 import dev.pointer.tool.ToolRegistry;
 import dev.pointer.user.SettingsService;
 import jakarta.annotation.PreDestroy;
@@ -331,6 +332,7 @@ public class AgentRunner implements LiveItemSnapshots {
             ResolvedModel caller) {
         var definitions = new ArrayList<ChatRequest.ToolDefinition>();
         var canSee = routes.step().model().supportsVision();
+        var sandboxed = !execution.hasCapability(deviceId, ToolDefinition.DESKTOP_CAPABILITY);
         toolRegistry.available(userId, projectId, deviceId).stream()
                 .filter(tool -> tool.availableIn(mode))
                 .filter(tool -> canSee || !tool.isDesktop())
@@ -338,7 +340,10 @@ public class AgentRunner implements LiveItemSnapshots {
                         tool.getName(),
                         tool.isDesktop()
                                 ? DesktopTools.describe(
-                                        tool.getOperation(), tool.getDescription(), caller.coordinateSystem())
+                                        tool.getOperation(),
+                                        tool.getDescription(),
+                                        caller.coordinateSystem(),
+                                        sandboxed)
                                 : tool.getDescription(),
                         tool.getParametersSchema()))
                 .forEach(definitions::add);

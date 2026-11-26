@@ -101,6 +101,7 @@ Unique: (`provider`, `provider_user_id`), (`user_id`, `provider`).
 | `revoked_at` | timestamptz | Nullable |
 | `kind` | text | `desktop` or `runner` (the device of a server session, [ADR 0016](adr/0016-remote-execution-in-containers.md)) |
 | `runner_secret_hash` | text | Nullable; SHA-256 of the runner secret, cleared on revoke |
+| `session_id` | uuid | Nullable, no foreign key; the session a `runner` device serves (its server session or its sandbox), so deleting the session revokes the device after the cascade has removed the workspace row (F7 stage 2, V38). Partial index where not null |
 | `capabilities` | text[] | Capabilities of the latest `hello` (`executor`, `desktop`, ...), sorted; empty until the device first connects. Decides the tools of an offline device (F7, GUI-4) |
 | `created_at`, `updated_at` | timestamptz | |
 
@@ -199,6 +200,7 @@ Primary key: (`model_id`, `position`). Unique: (`model_id`, `fallback_model_id`)
 | `user_id` | uuid | FK `users` |
 | `name` | text | Defaults to the folder name |
 | `repository` | text | Nullable; GitHub `owner/name` used by server sessions |
+| `sandbox_enabled` | boolean | Default false; local sessions of the project may use a Linux sandbox container on the server ([F7 stage 2](features/f7-gui-sandbox/stage-2-local-sessions.md), V38) |
 | `archived_at` | timestamptz | Nullable |
 | `created_at`, `updated_at` | timestamptz | |
 
@@ -238,7 +240,7 @@ The tool registry (TOOL-8).
 
 Unique: (`name`, `owner_user_id`, `project_id`) with `NULLS NOT DISTINCT`.
 
-The desktop tools of F7 are built-in rows whose `operation` starts with `desktop_`: V35 seeds eleven of them, V37 adds `desktop_tree` and gives `desktop_click` the `elementId` argument.
+The desktop tools of F7 are built-in rows whose `operation` starts with `desktop_`: V35 seeds eleven of them, V37 adds `desktop_tree` and gives `desktop_click` the `elementId` argument. V38 adds `sandbox_run`, the first row whose `operation` starts with `sandbox_`: such tools run on the session's sandbox and are offered only when it has one (F7 stage 2).
 
 ### `permission_policies`
 
@@ -483,18 +485,19 @@ Remote control through a Telegram bot (REM-1, 2, [ADR 0015](adr/0015-telegram-re
 
 Server sessions on a per-session container (REM-3, [ADR 0016](adr/0016-remote-execution-in-containers.md)).
 
-`remote_workspaces`: one row per server session.
+`remote_workspaces`: one row per session container, either a server session (`kind = 'session'`) or the sandbox of a local session (`kind = 'sandbox'`, [F7 stage 2](features/f7-gui-sandbox/stage-2-local-sessions.md)). A session has at most one.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | PK |
 | `session_id` | uuid | FK `sessions`, cascade, unique |
 | `user_id` | uuid | FK `users`, cascade |
-| `device_id` | uuid | FK `devices`; the runner device of the session |
-| `repository` | text | GitHub `owner/name` |
-| `branch` | text | `pointer/<first 8 characters of the session id>` |
+| `device_id` | uuid | FK `devices`; the runner device of the session or of its sandbox |
+| `kind` | text | `session` (default) or `sandbox` (V38) |
+| `repository` | text | GitHub `owner/name`; null for a sandbox |
+| `branch` | text | `pointer/<first 8 characters of the session id>`; null for a sandbox |
 | `base_branch` | text | Branch the session branch starts from; the repository default when not chosen |
-| `container_name`, `volume_name` | text | Unique Docker names derived from the session id |
+| `container_name`, `volume_name` | text | Unique Docker names derived from the session id: `pointer-session-<id>` and `pointer-workspace-<id>`, or `pointer-sandbox-<id>` for both of a sandbox |
 | `status` | text | `queued` (waiting for a free container slot), `starting`, `preparing`, `ready`, `stopped`, `failed` |
 | `error` | text | Nullable; last start or push failure |
 | `pushed_commit` | text | Nullable; last commit pushed to the branch |

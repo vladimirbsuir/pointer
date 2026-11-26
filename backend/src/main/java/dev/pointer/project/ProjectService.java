@@ -45,6 +45,9 @@ public class ProjectService {
             project.changeRepository(
                     request.repository().isBlank() ? null : request.repository().strip(), clock.instant());
         }
+        if (request.sandboxEnabled() != null) {
+            project.enableSandbox(request.sandboxEnabled(), clock.instant());
+        }
         if (request.archived() != null) {
             project.archive(request.archived(), clock.instant());
         }
@@ -67,13 +70,15 @@ public class ProjectService {
                 project.getId(),
                 project.getName(),
                 project.getRepository(),
+                project.isSandboxEnabled(),
                 project.getArchivedAt(),
                 project.getCreatedAt());
     }
 
     public static final String REPOSITORY_PATTERN = "^$|^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$";
 
-    public record ProjectResponse(UUID id, String name, String repository, Instant archivedAt, Instant createdAt) {}
+    public record ProjectResponse(
+            UUID id, String name, String repository, boolean sandboxEnabled, Instant archivedAt, Instant createdAt) {}
 
     public record CreateProjectRequest(
             @NotBlank @Size(max = 200) String name,
@@ -84,6 +89,8 @@ public class ProjectService {
             @Size(min = 1, max = 200) String name,
 
             @Size(max = 200) @Pattern(regexp = REPOSITORY_PATTERN) String repository,
+
+            Boolean sandboxEnabled,
 
             Boolean archived) {}
 }

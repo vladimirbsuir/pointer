@@ -316,6 +316,7 @@
   },
   "approval": {
     "title": "Allow this action?",
+    "titleSandbox": "Allow this command in the Linux sandbox on the server?",
     "allowOnce": "Allow",
     "allowSession": "Allow for this session",
     "deny": "Deny",
@@ -329,6 +330,7 @@
     "write_file": "Write {{target}}",
     "edit_file": "Edit {{target}}",
     "run_command": "Run {{target}}",
+    "sandbox_run": "Run in the sandbox {{target}}",
     "web_fetch": "Fetch {{target}}",
     "other": "Use {{name}}",
     "lines": "{{count}} lines",
@@ -518,6 +520,14 @@
     "restore": "Restore",
     "enabled": "Enabled",
     "delete": "Delete tool"
+  },
+  "sandbox": {
+    "menu": "Linux sandbox…",
+    "menuEnabled": "Linux sandbox: on",
+    "title": "Linux sandbox of {{project}}",
+    "description": "Local sessions of this project can run and look at GUI applications in a Linux container on the Pointer server, with its own virtual display, while you keep working.",
+    "enabled": "Allow the sandbox",
+    "enabledHint": "The agent gets the desktop tools and sandbox_run. The container starts on its first use and is removed with the session. Files of this computer reach it only when the agent sends them."
   },
   "repository": {
     "menu": "GitHub repository…",

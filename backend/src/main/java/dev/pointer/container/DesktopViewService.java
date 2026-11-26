@@ -46,8 +46,12 @@ public class DesktopViewService {
     }
 
     DesktopViewDtos.DesktopStatus status(UUID userId, UUID sessionId) {
-        var workspace = owned(userId, sessionId);
-        if (!isAvailable(workspace)) {
+        sessions.get(userId, sessionId);
+        var workspace = workspaces
+                .findBySessionId(sessionId)
+                .filter(candidate -> candidate.getUserId().equals(userId))
+                .orElse(null);
+        if (workspace == null || !isAvailable(workspace)) {
             return new DesktopViewDtos.DesktopStatus(false, false, null, null);
         }
         var display = display(workspace);

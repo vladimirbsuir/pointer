@@ -41,9 +41,9 @@ if [ -z "$domain" ]; then
   exit 1
 fi
 case "$runner" in
-  slim) runner_image=ghcr.io/vladimirbsuir/pointer-runner:slim; runner_cpus=1; runner_memory=512MB; runner_desktop=false ;;
-  full) runner_image=ghcr.io/vladimirbsuir/pointer-runner:latest; runner_cpus=2; runner_memory=4GB; runner_desktop=false ;;
-  gui) runner_image=ghcr.io/vladimirbsuir/pointer-runner:gui; runner_cpus=2; runner_memory=4GB; runner_desktop=true ;;
+  slim) runner_image=ghcr.io/vladimirbsuir/pointer-runner:slim; runner_cpus=1; runner_memory=512MB; runner_desktop=false; sandbox_image= ;;
+  full) runner_image=ghcr.io/vladimirbsuir/pointer-runner:latest; runner_cpus=2; runner_memory=4GB; runner_desktop=false; sandbox_image= ;;
+  gui) runner_image=ghcr.io/vladimirbsuir/pointer-runner:gui; runner_cpus=2; runner_memory=4GB; runner_desktop=true; sandbox_image=$runner_image ;;
   *) echo "--runner is slim, full or gui." >&2; exit 2 ;;
 esac
 if [ -f .env ] && [ "$force" != true ]; then
@@ -66,6 +66,7 @@ umask 077
   echo "POINTER_RUNNER_CPUS=$runner_cpus"
   echo "POINTER_RUNNER_MEMORY=$runner_memory"
   echo "POINTER_RUNNER_DESKTOP=$runner_desktop"
+  echo "POINTER_SANDBOX_IMAGE=$sandbox_image"
   if [ "$bundled_proxy" = true ]; then
     echo "COMPOSE_PROFILES=proxy"
   fi

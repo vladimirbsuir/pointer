@@ -25,7 +25,9 @@ public class ToolDefinition extends BaseEntity {
     public static final String CUSTOM = "custom";
     public static final String CUSTOM_OPERATION = "custom_tool.run";
     public static final String DESKTOP_CAPABILITY = "desktop";
+    public static final String SANDBOX_RUN = "sandbox_run";
     private static final String DESKTOP_OPERATION_PREFIX = "desktop_";
+    private static final String SANDBOX_OPERATION_PREFIX = "sandbox_";
 
     private String name;
     private String description;
@@ -131,6 +133,10 @@ public class ToolDefinition extends BaseEntity {
 
     public boolean isDesktop() {
         return operation != null && operation.startsWith(DESKTOP_OPERATION_PREFIX);
+    }
+
+    public boolean isSandbox() {
+        return operation != null && operation.startsWith(SANDBOX_OPERATION_PREFIX);
     }
 
     public boolean availableIn(String mode) {

@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ class ToolCallHandler {
 
     static final int MAX_RESULT_CHARS = 30_000;
     private static final String WEB_FETCH = "web_fetch";
+    private static final String RUN_COMMAND = "run_command";
     private static final int MAX_STORED_OUTPUT_CHARS = 20_000;
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration DEFAULT_COMMAND_TIMEOUT = Duration.ofMinutes(2);
@@ -271,6 +273,9 @@ class ToolCallHandler {
             preview.put("kind", "command");
             preview.put("command", arguments.get("command"));
             preview.put("workingDirectory", arguments.getOrDefault("workingDirectory", "."));
+            if (tool.isSandbox()) {
+                preview.put("target", "sandbox");
+            }
         }
         writer.updateItem(scope.userId(), scope.sessionId(), itemId, Map.of("toolStatus", "awaiting_approval"));
         var approvalId = approvals.request(scope.userId(), scope.sessionId(), itemId, preview);
@@ -298,13 +303,14 @@ class ToolCallHandler {
         return true;
     }
 
-    private void executeDesktop(TurnScope scope, UUID itemId, ToolDefinition tool, Map<String, Object> arguments) {
+    private void executeDesktop(
+            TurnScope scope, Target target, UUID itemId, ToolDefinition tool, Map<String, Object> arguments) {
         writer.updateItem(scope.userId(), scope.sessionId(), itemId, Map.of("toolStatus", "running"));
         var context = new DesktopCalls.CallContext(
                 scope.sessionId(),
                 scope.projectId(),
-                scope.deviceId(),
-                scope.worktree(),
+                target.deviceId(),
+                target.worktree(),
                 scope.cancellation(),
                 scope.step().coordinateSystem());
         var operation = tool.getOperation();
@@ -317,12 +323,12 @@ class ToolCallHandler {
                 new ExecutionRequest(
                         scope.sessionId(),
                         scope.projectId(),
-                        scope.deviceId(),
+                        target.deviceId(),
                         operation,
                         prepared.arguments(),
                         false,
                         desktop.timeout(operation, arguments),
-                        scope.worktree()),
+                        target.worktree()),
                 statusListener(scope),
                 scope.cancellation());
         var finished = desktop.finish(context, operation, prepared, result);
@@ -337,8 +343,13 @@ class ToolCallHandler {
     }
 
     private void execute(TurnScope scope, UUID itemId, ToolDefinition tool, Map<String, Object> arguments) {
+        var target = target(scope, tool);
+        if (target.isEmpty()) {
+            fail(scope, itemId, ToolErrorCodes.TOOL_UNAVAILABLE, "The sandbox is not available for this session.");
+            return;
+        }
         if (tool.isDesktop()) {
-            executeDesktop(scope, itemId, tool, arguments);
+            executeDesktop(scope, target.get(), itemId, tool, arguments);
             return;
         }
         writer.updateItem(scope.userId(), scope.sessionId(), itemId, Map.of("toolStatus", "running"));
@@ -363,7 +374,8 @@ class ToolCallHandler {
                 writer.changeStatus(scope.userId(), scope.sessionId(), SessionStatus.RUNNING);
             }
         };
-        var result = execution.execute(request(scope, tool, arguments, false), listener, scope.cancellation());
+        var result =
+                execution.execute(request(scope, target.get(), tool, arguments, false), listener, scope.cancellation());
         if (!result.fileChanges().isEmpty()) {
             fileChanges.record(scope.userId(), scope.sessionId(), scope.turnId(), itemId, result.fileChanges());
         }
@@ -438,8 +450,24 @@ class ToolCallHandler {
         return "Error (" + error.getOrDefault("code", result.status()) + "): " + error.getOrDefault("message", "");
     }
 
+    private Optional<Target> target(TurnScope scope, ToolDefinition tool) {
+        var sandboxed = tool.isSandbox()
+                || (tool.isDesktop() && !execution.hasCapability(scope.deviceId(), ToolDefinition.DESKTOP_CAPABILITY));
+        if (!sandboxed) {
+            return Optional.of(new Target(scope.deviceId(), scope.worktree()));
+        }
+        return execution
+                .sandboxFor(scope.userId(), scope.sessionId(), scope.projectId())
+                .map(device -> new Target(device, null));
+    }
+
     private ExecutionRequest request(
             TurnScope scope, ToolDefinition tool, Map<String, Object> arguments, boolean dryRun) {
+        return request(scope, new Target(scope.deviceId(), scope.worktree()), tool, arguments, dryRun);
+    }
+
+    private ExecutionRequest request(
+            TurnScope scope, Target target, ToolDefinition tool, Map<String, Object> arguments, boolean dryRun) {
         Map<String, Object> executorArguments;
         if (tool.isMcp()) {
             executorArguments =
@@ -452,12 +480,12 @@ class ToolCallHandler {
         return new ExecutionRequest(
                 scope.sessionId(),
                 scope.projectId(),
-                scope.deviceId(),
-                tool.getOperation(),
+                target.deviceId(),
+                ToolDefinition.SANDBOX_RUN.equals(tool.getOperation()) ? RUN_COMMAND : tool.getOperation(),
                 executorArguments,
                 dryRun,
                 timeoutFor(tool, arguments),
-                scope.worktree());
+                target.worktree());
     }
 
     private ExecutionListener statusListener(TurnScope scope) {
@@ -554,6 +582,8 @@ class ToolCallHandler {
             return new TurnScope(userId, sessionId, projectId, deviceId, turnId, mode, worktree, cancellation, step);
         }
     }
+
+    private record Target(UUID deviceId, String worktree) {}
 
     record StepModel(boolean vision, String coordinateSystem, String visionFallback) {
 

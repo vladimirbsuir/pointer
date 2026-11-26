@@ -62,6 +62,7 @@ const icons: Record<string, typeof WrenchIcon> = {
   write_file: FilePenIcon,
   edit_file: FilePenIcon,
   run_command: SquareTerminalIcon,
+  sandbox_run: SquareTerminalIcon,
   web_fetch: GlobeIcon,
   semantic_search: DatabaseZapIcon,
   propose_tool: HammerIcon,
@@ -148,7 +149,8 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
       case "grep":
         return t(`tools.${toolName}`, { target: argument(call, "pattern") });
       case "run_command":
-        return t("tools.run_command", { target: argument(call, "command") });
+      case "sandbox_run":
+        return t(`tools.${toolName}`, { target: argument(call, "command") });
       case "web_fetch":
         return t("tools.web_fetch", { target: argument(call, "url") });
       case "semantic_search":
@@ -197,6 +199,7 @@ export function ToolCallCard({ item, sessionId }: { item: Item; sessionId: strin
           count: (result.entries as unknown[] | undefined)?.length ?? 0,
         });
       case "run_command":
+      case "sandbox_run":
         return t("tools.exitCode", { code: String(result.exitCode ?? "?") });
       case "web_fetch":
         return t("tools.httpStatus", { code: String(result.status ?? "?") });

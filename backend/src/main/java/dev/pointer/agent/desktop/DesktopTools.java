@@ -25,6 +25,12 @@ public final class DesktopTools {
             + " screenshot, whatever its size: (0, 0) is its top left corner and (1000, 1000) its bottom right"
             + " corner.";
 
+    static final String SANDBOX_NOTE = "In this session the display runs in a Linux sandbox container on the Pointer"
+            + " server, not on the user's computer: the user's files are not there, sandbox_run runs commands in the"
+            + " sandbox and run_command runs them on the user's computer.";
+
+    private static final String LOCAL_COMMAND_TOOL = "run_command";
+    private static final String SANDBOX_COMMAND_TOOL = "sandbox_run";
     private static final Set<String> WITH_COORDINATES = Set.of(START, SCREENSHOT, MOVE, CLICK, DRAG, SCROLL, TREE);
     private static final Set<String> INPUTS = Set.of(MOVE, CLICK, DRAG, SCROLL, TYPE, KEY);
 
@@ -36,6 +42,15 @@ public final class DesktopTools {
         }
         var note = ResolvedModel.NORMALIZED.equals(coordinateSystem) ? GRID_NOTE : PIXELS_NOTE;
         return description + " " + note;
+    }
+
+    public static String describe(String operation, String description, String coordinateSystem, boolean sandboxed) {
+        var described = describe(operation, description, coordinateSystem);
+        if (!sandboxed) {
+            return described;
+        }
+        var routed = described.replace(LOCAL_COMMAND_TOOL, SANDBOX_COMMAND_TOOL);
+        return START.equals(operation) ? routed + " " + SANDBOX_NOTE : routed;
     }
 
     static boolean isInput(String operation) {

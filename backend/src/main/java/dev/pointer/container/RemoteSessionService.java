@@ -45,6 +45,8 @@ public class RemoteSessionService {
     private static final int MAX_COMMIT_SUBJECT = 72;
     private static final String DEFAULT_COMMIT_MESSAGE = "Pointer session changes";
     private static final String BRANCH_PREFIX = "pointer/";
+    private static final String SESSION_WORKSPACE = "/workspace/repo";
+    private static final String SANDBOX_WORKSPACE = "/workspace/project";
     private static final Duration SLOT_POLL_INTERVAL = Duration.ofSeconds(2);
     private static final List<String> RUNNING_STATUSES =
             List.of(RemoteWorkspace.STARTING, RemoteWorkspace.PREPARING, RemoteWorkspace.READY);
@@ -64,6 +66,7 @@ public class RemoteSessionService {
     private final Set<UUID> starting = ConcurrentHashMap.newKeySet();
     private final Set<UUID> runningCommands = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Object> publishLocks = new ConcurrentHashMap<>();
+    private final Map<UUID, Object> sandboxLocks = new ConcurrentHashMap<>();
     private final Object slots = new Object();
     private final ScheduledExecutorService timers = Executors.newSingleThreadScheduledExecutor(
             Thread.ofVirtual().name("remote-timeouts").factory());
@@ -128,6 +131,7 @@ public class RemoteSessionService {
                 runner.id(),
                 projectId,
                 new SessionDtos.CreateSessionRequest(request.title(), request.mode(), request.modelId()));
+        devices.bindToSession(runner.id(), session.id());
         var updated = sessions.update(
                 userId, session.id(), new SessionDtos.UpdateSessionRequest(null, null, null, true, null));
         var workspace = workspaces.save(new RemoteWorkspace(
@@ -146,18 +150,18 @@ public class RemoteSessionService {
         var sessionIds = sessions.list(userId, projectId).stream()
                 .map(SessionDtos.SessionResponse::id)
                 .toList();
-        return workspaces.findByUserIdAndSessionIdIn(userId, sessionIds).stream()
+        return workspaces.findByUserIdAndKindAndSessionIdIn(userId, RemoteWorkspace.SESSION, sessionIds).stream()
                 .map(RemoteSessionService::toResponse)
                 .toList();
     }
 
     public Optional<RemoteDtos.RemoteWorkspaceResponse> forSession(UUID userId, UUID sessionId) {
         sessions.get(userId, sessionId);
-        return workspaces.findBySessionId(sessionId).map(RemoteSessionService::toResponse);
+        return serverWorkspace(sessionId).map(RemoteSessionService::toResponse);
     }
 
     public boolean isRemote(UUID sessionId) {
-        return workspaces.findBySessionId(sessionId).isPresent();
+        return serverWorkspace(sessionId).isPresent();
     }
 
     RemoteDtos.PullRequestResponse openPullRequest(UUID userId, UUID sessionId) {
@@ -198,12 +202,11 @@ public class RemoteSessionService {
 
     public Optional<RemoteDtos.RemoteWorkspaceResponse> publishNow(UUID userId, UUID sessionId, UUID turnId) {
         publish(userId, sessionId, turnId);
-        return workspaces.findBySessionId(sessionId).map(RemoteSessionService::toResponse);
+        return serverWorkspace(sessionId).map(RemoteSessionService::toResponse);
     }
 
     public ExecutionResult runCommand(UUID sessionId, String command, Duration timeout, Cancellation cancellation) {
-        var workspace = workspaces
-                .findBySessionId(sessionId)
+        var workspace = serverWorkspace(sessionId)
                 .orElseThrow(
                         () -> ApiException.notFound("remote_session_not_found", "The session is not on the server"));
         touch(sessionId);
@@ -264,8 +267,14 @@ public class RemoteSessionService {
         return result.succeeded() ? Optional.ofNullable(result.result()) : Optional.empty();
     }
 
-    Set<String> defaultCapabilities() {
-        return properties.desktop() ? Set.of(EXECUTOR_CAPABILITY, DESKTOP_CAPABILITY) : Set.of(EXECUTOR_CAPABILITY);
+    Set<String> defaultCapabilities(UUID deviceId) {
+        var sandbox = workspaces
+                .findByDeviceId(deviceId)
+                .map(RemoteWorkspace::isSandbox)
+                .orElse(false);
+        return sandbox || properties.desktop()
+                ? Set.of(EXECUTOR_CAPABILITY, DESKTOP_CAPABILITY)
+                : Set.of(EXECUTOR_CAPABILITY);
     }
 
     boolean manages(UUID deviceId) {
@@ -286,7 +295,50 @@ public class RemoteSessionService {
         if (request.operation().startsWith("pointer.repo_")) {
             return;
         }
-        workspaces.findByDeviceId(request.deviceId()).ifPresent(workspace -> startAsync(workspace.getId()));
+        workspaces.findByDeviceId(request.deviceId()).ifPresent(workspace -> {
+            if (RemoteWorkspace.FAILED.equals(workspace.getStatus())) {
+                changeStatus(workspace.getId(), RemoteWorkspace.QUEUED, null);
+            }
+            startAsync(workspace.getId());
+        });
+    }
+
+    Optional<String> failure(ExecutionRequest request) {
+        if (request.operation().startsWith("pointer.repo_")) {
+            return Optional.empty();
+        }
+        return workspaces
+                .findByDeviceId(request.deviceId())
+                .filter(workspace -> RemoteWorkspace.FAILED.equals(workspace.getStatus()))
+                .map(workspace -> workspace.getError() == null
+                        ? "The container of the session could not start"
+                        : workspace.getError());
+    }
+
+    boolean offersSandbox(UUID userId, UUID projectId) {
+        return properties.enabled()
+                && projectId != null
+                && properties.sandboxImage() != null
+                && !properties.sandboxImage().isBlank()
+                && projects.owned(userId, projectId).isSandboxEnabled();
+    }
+
+    Optional<UUID> sandboxFor(UUID userId, UUID sessionId, UUID projectId) {
+        if (!offersSandbox(userId, projectId) || serverWorkspace(sessionId).isPresent()) {
+            return Optional.empty();
+        }
+        synchronized (sandboxLocks.computeIfAbsent(sessionId, id -> new Object())) {
+            var existing = workspaces.findBySessionIdAndKind(sessionId, RemoteWorkspace.SANDBOX);
+            if (existing.isPresent()) {
+                return Optional.of(existing.get().getDeviceId());
+            }
+            var project = projects.owned(userId, projectId);
+            var runner = devices.createRunner(userId, "Sandbox · " + project.getName());
+            devices.bindToSession(runner.id(), sessionId);
+            workspaces.save(RemoteWorkspace.sandbox(sessionId, userId, runner.id(), clock.instant()));
+            log.info("Created the sandbox of session {}", sessionId);
+            return Optional.of(runner.id());
+        }
     }
 
     void touch(UUID sessionId) {
@@ -299,7 +351,7 @@ public class RemoteSessionService {
     }
 
     void onTurnCompleted(UUID userId, UUID sessionId, UUID turnId) {
-        var workspace = workspaces.findBySessionId(sessionId).orElse(null);
+        var workspace = serverWorkspace(sessionId).orElse(null);
         if (workspace == null || !workspace.isReady()) {
             return;
         }
@@ -307,17 +359,28 @@ public class RemoteSessionService {
     }
 
     void onSessionDeleted(UUID sessionId, UUID deviceId) {
-        if (!devices.isRunner(deviceId)) {
-            return;
-        }
+        sandboxLocks.remove(sessionId);
+        var serverSession = devices.isRunner(deviceId);
         Thread.ofVirtual().name("remote-remove-" + sessionId).start(() -> {
-            try {
-                runtime.remove(containerName(sessionId), volumeName(sessionId));
-            } catch (ContainerException exception) {
-                log.warn("Could not remove the container of session {}: {}", sessionId, exception.getMessage());
+            var revoked = devices.revokeRunnersOf(sessionId);
+            if (revoked.isEmpty() && !serverSession) {
+                return;
             }
-            devices.revoke(deviceId);
+            for (var kind : List.of(RemoteWorkspace.SESSION, RemoteWorkspace.SANDBOX)) {
+                removeContainer(kind, sessionId);
+            }
+            if (serverSession) {
+                devices.revoke(deviceId);
+            }
         });
+    }
+
+    private void removeContainer(String kind, UUID sessionId) {
+        try {
+            runtime.remove(RemoteWorkspace.containerName(kind, sessionId), RemoteWorkspace.volumeName(kind, sessionId));
+        } catch (ContainerException exception) {
+            log.warn("Could not remove the {} container of session {}: {}", kind, sessionId, exception.getMessage());
+        }
     }
 
     void stopIdle() {
@@ -377,6 +440,14 @@ public class RemoteSessionService {
             runtime.start(workspace.getContainerName());
         } catch (ContainerException exception) {
             changeStatus(workspaceId, RemoteWorkspace.FAILED, exception.getMessage());
+            return;
+        }
+        if (workspace.isSandbox()) {
+            update(workspaceId, current -> {
+                current.changeStatus(RemoteWorkspace.READY, null, clock.instant());
+                current.touch(clock.instant());
+                return current;
+            });
             return;
         }
         changeStatus(workspaceId, RemoteWorkspace.PREPARING, null);
@@ -470,7 +541,7 @@ public class RemoteSessionService {
 
     private void publish(UUID userId, UUID sessionId, UUID turnId) {
         synchronized (publishLocks.computeIfAbsent(sessionId, id -> new Object())) {
-            var workspace = workspaces.findBySessionId(sessionId).orElse(null);
+            var workspace = serverWorkspace(sessionId).orElse(null);
             var credentials = users.gitHubCredentials(userId).orElse(null);
             if (workspace == null || credentials == null) {
                 return;
@@ -562,19 +633,23 @@ public class RemoteSessionService {
         environment.put("POINTER_DEVICE_ID", workspace.getDeviceId().toString());
         environment.put("POINTER_RUNNER_SECRET", secret);
         environment.put("POINTER_PROJECT_ID", session.projectId().toString());
-        environment.put("POINTER_WORKSPACE", "/workspace/repo");
+        environment.put("POINTER_WORKSPACE", workspace.isSandbox() ? SANDBOX_WORKSPACE : SESSION_WORKSPACE);
         environment.put(VncPasswords.FULL_VARIABLE, passwords.full());
         environment.put(VncPasswords.VIEW_VARIABLE, passwords.view());
         return new ContainerSpec(
                 workspace.getContainerName(),
                 workspace.getVolumeName(),
+                workspace.isSandbox() ? properties.sandboxImage() : properties.image(),
                 environment,
                 Map.of("dev.pointer.session", workspace.getSessionId().toString()));
     }
 
+    private Optional<RemoteWorkspace> serverWorkspace(UUID sessionId) {
+        return workspaces.findBySessionIdAndKind(sessionId, RemoteWorkspace.SESSION);
+    }
+
     private RemoteWorkspace owned(UUID userId, UUID sessionId) {
-        return workspaces
-                .findBySessionId(sessionId)
+        return serverWorkspace(sessionId)
                 .filter(workspace -> workspace.getUserId().equals(userId))
                 .orElseThrow(
                         () -> ApiException.notFound("remote_session_not_found", "The session is not on the server"));
@@ -609,14 +684,6 @@ public class RemoteSessionService {
         return result.error() == null
                 ? result.status()
                 : String.valueOf(result.error().getOrDefault("message", ""));
-    }
-
-    private static String containerName(UUID sessionId) {
-        return "pointer-session-" + sessionId;
-    }
-
-    private static String volumeName(UUID sessionId) {
-        return "pointer-workspace-" + sessionId;
     }
 
     static RemoteDtos.RemoteWorkspaceResponse toResponse(RemoteWorkspace workspace) {

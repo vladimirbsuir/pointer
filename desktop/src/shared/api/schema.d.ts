@@ -1557,6 +1557,7 @@ export interface components {
             id?: string;
             name?: string;
             repository?: string;
+            sandboxEnabled?: boolean;
             /** Format: date-time */
             archivedAt?: string;
             /** Format: date-time */
@@ -1820,6 +1821,7 @@ export interface components {
         UpdateProjectRequest: {
             name?: string;
             repository?: string;
+            sandboxEnabled?: boolean;
             archived?: boolean;
         };
         UpdateMemoryRequest: {

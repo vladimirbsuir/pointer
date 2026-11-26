@@ -48,7 +48,9 @@ export function ApprovalPanel({ sessionId, approvalId, preview }: ApprovalPanelP
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs font-medium">{t("approval.title")}</p>
+      <p className="text-xs font-medium">
+        {preview.target === "sandbox" ? t("approval.titleSandbox") : t("approval.title")}
+      </p>
       {preview.kind === "diff" ? (
         <DiffView diff={String(preview.unifiedDiff ?? "")} />
       ) : preview.kind === "fetch" ? (

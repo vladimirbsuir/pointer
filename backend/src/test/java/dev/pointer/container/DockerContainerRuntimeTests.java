@@ -92,13 +92,14 @@ class DockerContainerRuntimeTests {
     }
 
     private ContainerSpec spec(Map<String, String> environment) {
-        return new ContainerSpec(name, volume, environment, Map.of("dev.pointer.session", "test"));
+        return new ContainerSpec(name, volume, IMAGE, environment, Map.of("dev.pointer.session", "test"));
     }
 
     private static DockerContainerRuntime runtime(long pidsLimit) {
         var properties = new ContainerProperties(
                 true,
                 null,
+                IMAGE,
                 IMAGE,
                 "http://backend:8080",
                 null,

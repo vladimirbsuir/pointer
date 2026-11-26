@@ -31,6 +31,7 @@ public class Device extends BaseEntity {
     private String clientVersion;
     private String kind;
     private String runnerSecretHash;
+    private UUID sessionId;
 
     @JdbcTypeCode(SqlTypes.ARRAY)
     private List<String> capabilities = List.of();
@@ -55,6 +56,11 @@ public class Device extends BaseEntity {
         device.kind = RUNNER;
         device.runnerSecretHash = secretHash;
         return device;
+    }
+
+    void bindToSession(UUID sessionId, Instant now) {
+        this.sessionId = sessionId;
+        this.updatedAt = now;
     }
 
     void rotateRunnerSecret(String secretHash, Instant now) {

@@ -3,6 +3,7 @@ package dev.pointer.device;
 import dev.pointer.common.Ids;
 import dev.pointer.common.crypto.Tokens;
 import java.time.Clock;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -45,6 +46,24 @@ public class DeviceService {
                     device.touch(clock.instant());
                     return device;
                 });
+    }
+
+    @Transactional
+    public void bindToSession(UUID deviceId, UUID sessionId) {
+        devices.findById(deviceId)
+                .filter(Device::isRunner)
+                .ifPresent(device -> device.bindToSession(sessionId, clock.instant()));
+    }
+
+    @Transactional
+    public List<UUID> revokeRunnersOf(UUID sessionId) {
+        var now = clock.instant();
+        return devices.findBySessionIdAndKind(sessionId, Device.RUNNER).stream()
+                .map(device -> {
+                    device.revoke(now);
+                    return device.getId();
+                })
+                .toList();
     }
 
     @Transactional

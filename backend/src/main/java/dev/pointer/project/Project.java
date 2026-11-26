@@ -16,6 +16,7 @@ public class Project extends BaseEntity {
     private UUID userId;
     private String name;
     private String repository;
+    private boolean sandboxEnabled;
     private Instant archivedAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -37,6 +38,11 @@ public class Project extends BaseEntity {
 
     void changeRepository(String repository, Instant now) {
         this.repository = repository;
+        this.updatedAt = now;
+    }
+
+    void enableSandbox(boolean enabled, Instant now) {
+        this.sandboxEnabled = enabled;
         this.updatedAt = now;
     }
 

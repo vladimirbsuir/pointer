@@ -21,13 +21,15 @@ public class ToolRegistry {
         var reported = mcpTools.reportedBy(deviceId);
         var interpreters = execution.interpreters(deviceId);
         var desktop = execution.hasCapability(deviceId, ToolDefinition.DESKTOP_CAPABILITY);
+        var sandbox = !desktop && execution.offersSandbox(userId, projectId, deviceId);
         return tools.findAvailable(userId, projectId).stream()
                 .filter(tool -> !tool.isMcp() || reported.contains(tool.getName()))
                 .filter(tool -> !tool.isCustom()
                         || interpreters
                                 .map(found -> found.contains(tool.getInterpreter()))
                                 .orElse(true))
-                .filter(tool -> !tool.isDesktop() || desktop)
+                .filter(tool -> !tool.isDesktop() || desktop || sandbox)
+                .filter(tool -> !tool.isSandbox() || sandbox)
                 .filter(tool -> execution.isOperationAvailable(tool.getOperation(), projectId))
                 .toList();
     }

@@ -11,9 +11,11 @@ interface RemoteWorkspaceRepository extends JpaRepository<RemoteWorkspace, UUID>
 
     Optional<RemoteWorkspace> findBySessionId(UUID sessionId);
 
+    Optional<RemoteWorkspace> findBySessionIdAndKind(UUID sessionId, String kind);
+
     Optional<RemoteWorkspace> findByDeviceId(UUID deviceId);
 
-    List<RemoteWorkspace> findByUserIdAndSessionIdIn(UUID userId, Collection<UUID> sessionIds);
+    List<RemoteWorkspace> findByUserIdAndKindAndSessionIdIn(UUID userId, String kind, Collection<UUID> sessionIds);
 
     List<RemoteWorkspace> findByStatusAndLastActiveAtBefore(String status, Instant before);
 

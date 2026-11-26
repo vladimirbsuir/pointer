@@ -30,6 +30,7 @@ public class ExecutionService {
     private final DeviceChannel channel;
     private final ObjectProvider<ServerOperation> serverOperations;
     private final ObjectProvider<ExecutorReadiness> readiness;
+    private final ObjectProvider<SandboxProvider> sandboxes;
     private final DeviceService devices;
     private final Map<UUID, PendingCall> pending = new ConcurrentHashMap<>();
 
@@ -38,9 +39,9 @@ public class ExecutionService {
         if (serverOperation.isPresent()) {
             return serverOperation.get().execute(request, cancellation);
         }
-        if (!awaitDevice(request, listener, cancellation)) {
-            return ExecutionResult.failure(
-                    ExecutionResult.CANCELLED, "cancelled", "Cancelled while waiting for the device");
+        var unavailable = awaitDevice(request, listener, cancellation);
+        if (unavailable.isPresent()) {
+            return unavailable.get();
         }
         var callId = Ids.newId();
         var call = new PendingCall(request.deviceId(), listener);
@@ -92,6 +93,19 @@ public class ExecutionService {
         return capabilities(deviceId).contains(capability);
     }
 
+    public boolean offersSandbox(UUID userId, UUID projectId, UUID deviceId) {
+        return deviceId != null
+                && !isManaged(deviceId)
+                && sandboxes.stream().anyMatch(provider -> provider.offers(userId, projectId, deviceId));
+    }
+
+    public Optional<UUID> sandboxFor(UUID userId, UUID sessionId, UUID projectId) {
+        return sandboxes.stream()
+                .map(provider -> provider.sandboxFor(userId, sessionId, projectId))
+                .flatMap(Optional::stream)
+                .findFirst();
+    }
+
     public boolean isOperationAvailable(String operation, UUID projectId) {
         return serverOperation(operation)
                 .map(server -> projectId == null || server.isAvailable(projectId))
@@ -118,23 +132,39 @@ public class ExecutionService {
         }
     }
 
-    private boolean awaitDevice(ExecutionRequest request, ExecutionListener listener, Cancellation cancellation) {
+    private Optional<ExecutionResult> awaitDevice(
+            ExecutionRequest request, ExecutionListener listener, Cancellation cancellation) {
         var waiting = false;
         while (!isReady(request)) {
             if (cancellation.isCancelled()) {
-                return false;
+                return Optional.of(ExecutionResult.failure(
+                        ExecutionResult.CANCELLED, "cancelled", "Cancelled while waiting for the device"));
             }
             if (!waiting) {
                 waiting = true;
                 listener.onWaitingForDevice();
                 readiness.forEach(hook -> hook.wake(request));
+            } else {
+                var failure = failure(request);
+                if (failure.isPresent()) {
+                    listener.onDeviceAvailable();
+                    return Optional.of(
+                            ExecutionResult.failure(ExecutionResult.FAILED, "executor_unavailable", failure.get()));
+                }
             }
             sleep(POLL_INTERVAL);
         }
         if (waiting) {
             listener.onDeviceAvailable();
         }
-        return true;
+        return Optional.empty();
+    }
+
+    private Optional<String> failure(ExecutionRequest request) {
+        return readiness.stream()
+                .map(hook -> hook.failure(request))
+                .flatMap(Optional::stream)
+                .findFirst();
     }
 
     private boolean isReady(ExecutionRequest request) {

@@ -409,3 +409,13 @@ Every fixture fits in the runner's limits (4 GB, 512 processes) with room for a 
 ### What a pass proves (metric 10)
 
 Not measured in stage 1. Running the same `tauri-counter` task against the Windows build needs the desktop tools on the user's machine, which is stage 2 ([stage-2-local-sessions.md](../features/f7-gui-sandbox/stage-2-local-sessions.md)); a pass here shows that the logic and the layout of the Linux build work, as the scope of stage 1 says.
+
+## Stage 2, phase 2.1: sandbox of a local session
+
+Live check of [ADR 0031](../adr/0031-sandbox-for-local-sessions.md) on 2026-11-26 with `infra/bench/desktop/sandbox_check.py`: the bench device ran natively on Windows 11 as the local executor of a project with the sandbox on, the backend ran on the host with `POINTER_CONTAINER_ENABLED=true` and the default sandbox image `pointer-runner:gui`. The task asks the agent to install `x11-apps` in the sandbox, compute 17 × 23 in `xcalc` by clicking and run `cmd /c ver` on the user's computer.
+
+| Model | Result | Tool calls | Screenshots | First sandbox call | Turn |
+|---|---|---|---|---|---|
+| `deepseek-v4.1-flash:free` (TokenHarbor) | Pass: `391` from `xcalc`, `Microsoft Windows [Version 10.0.26200.9974]` from the local `run_command` | 34 (1 `sandbox_run`, 1 `run_command`, 23 clicks) | 24 | 7.5 s, a cold container start plus `apt-get update` and the install | 182 s |
+
+The routing held in both directions: every desktop call and `sandbox_run` reached the sandbox's runner, `run_command` reached the Windows device and answered from Windows. A second run from the desktop client preview with `mimo-v2.6-flash:free`, the preview's browser executor as the local device, wrote a Tk script with `sandbox_run`, launched and clicked it in 5 calls and answered correctly; the Desktop panel showed the sandbox's display live. Deleting either session removed its container and volume and revoked its runner device. The project's own files do not reach the sandbox until phase 2.2, so the task uses only what the agent installs or writes there.

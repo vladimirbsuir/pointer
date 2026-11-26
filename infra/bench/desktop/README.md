@@ -13,6 +13,7 @@ Fixtures and scripts for [F7](../../../docs/features/f7-gui-sandbox/README.md). 
 | `apps/electron-todo/` | Electron 39 window with a todo field, an Add button, a done box per todo, a Hide done check box and a list; the title carries `{"todos", "done", "hideDone", "overlay"}` and the log `electron-todo ready`. With `--whats-new` a full-window "What's new" overlay covers the form 1.5 seconds after the start. Its web content has an accessibility tree only with `--force-renderer-accessibility`. |
 | `apps/grid-targets/app.py` | Full-screen Tk canvas with 48 labelled buttons at seeded random positions and sizes (70–120 by 24–34 pixels) for the click accuracy test; records every click with the button it hit and writes the layout. |
 | `apps/swing-calc/SwingCalc.java` | Java Swing window with two number fields, a Plus button and a result label, run as a single source file (`java SwingCalc.java <state file>`); writes its state and prints `swing-calc ready`. |
+| `sandbox_check.py` | Live check of the sandbox of a local session (F7 stage 2): runs the Windows build of the bench device as the local executor of the project `sandbox-check` with the sandbox on, and asks the agent to install and drive `xcalc` in the sandbox and run a command on the local machine. Records the routing, the time of the first sandbox call (the container's cold start) and success. |
 | `live_check.py` | Live check with real models: runs the bench device inside the `gui` image and gives the agent a task on `tk-counter`, or with `--task notes` on `gtk-notes`, where the accessibility tree is available (phase 1.5). The default task (phase 1.2) sends a second message while the turn runs and records whether the provider accepted the screenshot message after the tool results and two user messages in a row; `--task clicks` (phase 1.3) takes a screenshot per click for the image masking comparison; `--schema-cost` compares the prompt tokens of a one-step turn with and without the desktop tools. |
 | `tasks.py` | The benchmark tasks: three kinds (single action, sequence, trap) on `tk-counter`, `gtk-notes`, `form-web`, `electron-todo` and `tauri-counter`, a sequence on `qt-settings` and `swing-calc`, the click accuracy tasks `grid-<size>-<seed>`, each with its prompt, its check on the application's state and a reference solution. |
 | `reference.py` | Runs inside the `gui` image without a model: starts a display like the runner, solves a task with `xdotool` and the runner's accessibility reader, checks it, and with `--settle` measures how long the screen keeps changing after each input. |
@@ -75,6 +76,16 @@ python infra/bench/desktop/live_check.py --model "Experiential Labs::gpt-6-luna"
 ```
 
 `--task notes` (phase 1.5) asks for two notes, the Pinned box and a cancelled Export dialog in `gtk-notes` without mentioning the tree, and records how many `desktop_tree` calls and clicks by `elementId` the model made. `--model` takes a key or `provider::key` and can be repeated; `--coordinates normalized` switches the models to the 0–1000 grid first. `--task clicks` replaces the message-order task with six separate clicks, one screenshot each, for the image masking runs of phase 1.3: restart the backend with `POINTER_DESKTOP_KEEP_IMAGES` and `POINTER_DESKTOP_IMAGE_MASK_BLOCK` set to the policy under test and pass it as `--label`; `--runs` repeats the task per model. The script turns vision on for the models during the run, restores their settings afterwards and saves the runs in the git-ignored `results/`. The task passes when the application's state file shows two increments and the typed text. Free plans limit requests per minute: a model that needs about ten requests per task can hit a limit of ten per minute, so run such models one at a time.
+
+## Sandbox of a local session (stage 2)
+
+Build the bench device for Windows (`cargo build --release` in `infra/bench/device`), start the backend with `POINTER_CONTAINER_ENABLED=true` and the `pointer-runner:gui` image available, load an account and run:
+
+```sh
+python infra/bench/desktop/sandbox_check.py --model "TokenHarbor::deepseek-v4.1-flash:free"
+```
+
+The script turns the sandbox on for the project `sandbox-check`, turns vision on for the model during the run and deletes each session afterwards, which also removes its sandbox; `--keep` keeps them for inspection.
 
 ## Benchmark (phase 1.6)
 

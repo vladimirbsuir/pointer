@@ -1,6 +1,6 @@
 # F7. Stage 2: sandbox for local sessions
 
-Part of [F7](README.md). Covers GUI-11 and GUI-12. A design sketch: it is not scheduled, it starts only after phase 1.6 shows that stage 1 works well enough to justify it, and its open questions must be answered first.
+Part of [F7](README.md). Covers GUI-11 and GUI-12. Started on 2026-11-26 after phase 1.6; the open questions of the design sketch were answered with the user on that day (see [Decisions](#decisions)).
 
 ## Problem
 
@@ -8,28 +8,57 @@ A local session runs its executor on the user's computer, which is a Windows mac
 
 ## Direction
 
-A **sandbox** is a second executor for a session: a container started from the same image, with the same `pointer-runner` binary and the `desktop` capability, created by the `container` module on demand, with root and the reduced capability set of stage 1 ([container.md](container.md#privileges-gui-13)). The session keeps its local executor for files and commands; the desktop tools are routed to the sandbox. A sandbox has no repository access at all: the code arrives by sync, so neither the GitHub token nor the repository proxy is involved.
+A **sandbox** is a second executor for a session: a container started from the `gui` image, with the same `pointer-runner` binary and the `desktop` capability, created by the `container` module on demand, with root and the reduced capability set of stage 1 ([container.md](container.md#privileges-gui-13)). The session keeps its local executor for files and commands; the desktop tools and the sandbox's own tools are routed to the sandbox. A sandbox has no repository access at all: the code arrives by sync, so neither the GitHub token nor the repository proxy is involved.
 
 ```mermaid
 flowchart LR
     agent[Agent loop] -->|file and command tools| local[Local executor on the user's computer]
     agent -->|desktop_* and sandbox_* tools| sandbox[Sandbox container on the server]
-    local -->|workspace snapshot| sync[Sync]
+    local -->|workspace snapshot| sync[Backend]
     sync --> sandbox
 ```
 
+## Decisions
+
+Taken with the user on 2026-11-26, answering the open questions of the sketch:
+
+1. **The sandbox runs on the backend host.** It reuses the `container` module, the gateway, the live view relay, the container slots and the idle stop of stage 1. The cost: the code is sent to the server, and the sandbox cannot reach services on the user's computer (a local database, a dev server); a project that needs a service starts it inside the sandbox. The user's local Docker stays a possible later device behind the same routing; it is not built.
+2. **The code arrives as an archive snapshot.** The local executor packs the tracked and untracked files, respecting `.gitignore`, and uploads them through the backend. No GitHub repository or token is needed, so any local project can use the sandbox.
+3. **Opt-in per project, approval per sync.** A project setting, off by default, enables the sandbox. The first sync of a session says what is sent where; every sync is a tool call under the usual permission policies (`ask` by default, auto-approvable like any tool). The server keeps no copy of a snapshot beyond the sandbox's own volume, which is removed with the sandbox.
+4. **The sandbox is a closed box.** Only the desktop tools and the `sandbox_*` tools go to the sandbox; `read_file`, `run_command` and the other tools keep working on the user's computer. Output of a build in the sandbox is read through `sandbox_run` (for example `cat`). No tool gets a target argument.
+
+## Design
+
+### Containers and devices
+
+- A sandbox is a row of `remote_workspaces` with `kind = 'sandbox'`; server sessions keep `kind = 'session'`. A sandbox has no repository, branch or pushes, so those columns become nullable. Everything that means "the session runs on the server" (session lists, publishing, pull requests, file suggestions, Telegram's server mark, automations) reads only `kind = 'session'`; the container lifecycle (start, slots, idle stop, recreation of outdated containers, interrupted starts) and the live view work on both kinds.
+- The sandbox's executor is a runner device (`devices.kind = 'runner'`) with its own secret and token, like a server session's. `devices.session_id` links runner devices to their session, so deleting a session revokes the device even though the cascade has already removed the workspace row.
+- The container is `pointer-sandbox-<session id>` with the volume of the same name, started from `pointer.container.sandbox-image` (`POINTER_SANDBOX_IMAGE`, default `pointer-runner:gui`), with the limits of runner containers, the view passwords of phase 1.4 and the workspace `/workspace/project`. It counts against `pointer.container.max-running` together with server sessions. There is no repository step: the sandbox is ready once the container starts and the runner connects.
+- The sandbox exists only when remote execution is enabled and the project has `sandbox_enabled`. It is created on the first call routed to it, so a session that never uses it costs nothing, and it is removed with the session.
+
+### Routing
+
+- `ExecutionService` asks a `SandboxProvider` (implemented by the `container` module) two questions: whether a session on a given device and project is offered a sandbox, and which device is the session's sandbox (creating it on the first call). A sandbox is offered to sessions whose executor is not a managed runner, in projects with the sandbox enabled.
+- `ToolRegistry` offers the desktop tools when the session's device reports `desktop` or a sandbox is offered, and the `sandbox_*` tools only when a sandbox is offered.
+- `ToolCallHandler` sends a call of a sandbox-bound tool (the desktop tools on a device without `desktop`, and the `sandbox_*` tools) to the sandbox device without the session's worktree, which is a path on the user's computer. While the sandbox starts, the session shows `waiting_for_executor` like a server session whose container starts.
+- The description of `desktop_start` gets a sentence in sandboxed sessions: the display is in a Linux sandbox on the server, not on the user's computer; commands there run with `sandbox_run`, while `run_command` runs on the user's computer.
+
+### Tools
+
+| Tool | Executor operation | Phase | Description |
+|---|---|---|---|
+| `sandbox_run` | `run_command` on the sandbox | 2.1 | A shell command in the sandbox workspace, as root, for builds, installs and starting services. The arguments and limits of `run_command`. |
+| `sandbox_sync` | `pointer.workspace_snapshot` on the local executor, then an extraction in the sandbox | 2.2 | Sends the current project files to the sandbox workspace. |
+
 ## Sub-phases
 
-1. **2.1 Sandbox device.** A device kind `sandbox` next to `runner`: created per local session on the first `sandbox_open`, with its own runner secret, token and idle stop, reusing the lifecycle of [ADR 0016](../../adr/0016-remote-execution-in-containers.md). `ExecutionService` learns that a session can have two executor devices and routes an operation to the device that offers its capability. Cost: the single-executor assumption of the execution module and of the `waiting_for_executor` status.
-2. **2.2 Getting the code in.** `sandbox_sync` uploads a snapshot of the project (the tracked and untracked files, respecting `.gitignore`) from the local executor to the sandbox as an archive through the backend, and extracts it into the sandbox workspace. Edits stay local; the sandbox is for running and observing, and a changed file reaches it with the next sync. Size, file count and secret-looking files (`.env`, key files) are bounded and reported to the agent before upload.
-3. **2.3 Running and observing.** The stage 1 tools, unchanged, against the sandbox, plus `sandbox_run` (a command in the sandbox workspace, for builds and installs) because `run_command` goes to the local executor. Build output and screenshots come back through the same channels as in stage 1.
-4. **2.4 Consent and UI.** A notice at first use that the project files are sent to the server's container, an approval for each sync by default, a visible state of the sandbox in the session header, a Desktop panel as in stage 1.
-5. **2.5 Lifecycle and limits.** Idle stop and removal, a cap on sandboxes per user, and a switch per project to forbid the sandbox.
+1. **2.1 Sandbox device and routing (GUI-11).** Migration: `remote_workspaces.kind`, nullable repository columns, `devices.session_id`, `projects.sandbox_enabled`, the `sandbox_run` row. The sandbox image property, the `SandboxProvider` and the routing above, the removal with the session, the project switch in the client's project settings, the Desktop panel for local sessions with a sandbox. After this phase an agent in a local session can start the display, install and run things in the sandbox and look at them; the project's own code does not reach the sandbox yet. Checked live with the bench device as the local executor on Windows.
+   **Done (2026-11-26).** [ADR 0031](../../adr/0031-sandbox-for-local-sessions.md) records the design; migration V38. `deepseek-v4.1-flash:free` installed `x11-apps` with `sandbox_run`, computed 17 × 23 in `xcalc` with 23 clicks and ran `cmd /c ver` on the Windows bench device in one turn; the first sandbox call, a cold container start included, took 7.5 seconds. From the desktop client preview `mimo-v2.6-flash:free` wrote, launched and clicked a Tk script in the sandbox while the Desktop panel showed it live. Deleting a session removed its container and volume and revoked its device ([desktop.md](../../benchmarks/desktop.md#stage-2-phase-21-sandbox-of-a-local-session)). A container that cannot start now fails the call with `executor_unavailable` instead of waiting, for server sessions too. The deployment sets `POINTER_SANDBOX_IMAGE` only for the `gui` runner, so the production host, which runs `full`, offers no sandbox.
+2. **2.2 Getting the code in (GUI-12).** `sandbox_sync`: the local executor packs the project (tracked and untracked files, respecting `.gitignore`, without `.git`), bounded in size and file count, and leaves out secret-looking files (`.env*`, key and certificate files), naming what it left out; the archive goes through the backend to the sandbox, which replaces the previous snapshot while keeping ignored build output it produced itself (such as `node_modules` or `target`). Edits stay local, and a changed file reaches the sandbox with the next sync. The first sync of a session names what is sent where.
+3. **2.3 Consent and UI.** The state of the sandbox in the session header (starting, ready, stopped, failed), the sync's approval preview (file count, size, left-out files), the notice of the first sync in the conversation.
+4. **2.4 Lifecycle, limits and the measurement.** A cap on sandboxes per user, removal of sandboxes idle for a long time, and metric 10 of [tests-and-metrics.md](tests-and-metrics.md): a GUI task on a Tauri project of a Windows session, run in the sandbox.
 
 ## Open questions
 
-- **Where the sandbox runs.** On the backend host, as designed above, or in the user's local Docker. The host option reuses the existing `container` module but sends the code to the server and cannot reach services on the user's computer (a local database, a dev server). The local option keeps the code on the machine and reaches local services through the Docker network, but makes Docker a dependency of the client, and on Windows Home Docker Desktop runs Linux containers only through WSL 2. Both can coexist behind one device abstraction; the first version should pick one.
-- **Privacy.** The code already goes to the model provider, but a container on the server adds a second copy and a place where dependencies are installed from the network. Whether that needs an explicit opt-in per project, and how long snapshots live.
-- **Sync method.** An archive upload is simple and independent of git. The alternative is to use the project's GitHub repository ([ADR 0016](../../adr/0016-remote-execution-in-containers.md)) plus a patch for uncommitted changes, which is smaller but needs the repository and the user's token.
-- **Services.** A project that needs a database or a broker has to start them inside the sandbox in both options unless the local Docker option is chosen and the services run on the machine.
-- **Two executors.** Whether other tools should be allowed to target the sandbox (for example `read_file` of a build output), or the sandbox stays a closed box with its own small set of tools.
+- **Services.** A project that needs a database or a broker starts it inside the sandbox with `sandbox_run`. Whether a compose file of the project should be honoured is left until a test project needs it.
+- **Mirror semantics of a sync.** Whether files deleted locally are deleted in the sandbox on the next sync (planned: yes, except ignored paths), decided in phase 2.2.

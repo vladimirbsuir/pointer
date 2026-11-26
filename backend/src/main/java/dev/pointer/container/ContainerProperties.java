@@ -9,6 +9,7 @@ record ContainerProperties(
         boolean enabled,
         String dockerHost,
         String image,
+        String sandboxImage,
         String apiUrl,
         String network,
         double cpus,

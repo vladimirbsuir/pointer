@@ -149,7 +149,7 @@ public class RepositoryProxy {
         var repository = owner + "/" + name;
         var workspace = workspaces
                 .findByDeviceId(deviceId)
-                .filter(candidate -> candidate.getRepository().equalsIgnoreCase(repository))
+                .filter(candidate -> repository.equalsIgnoreCase(candidate.getRepository()))
                 .filter(candidate -> devices.isActiveRunner(deviceId))
                 .orElseThrow(() -> ApiException.notFound("repository_not_found", "Repository not found"));
         var credentials = users.gitHubCredentials(workspace.getUserId())

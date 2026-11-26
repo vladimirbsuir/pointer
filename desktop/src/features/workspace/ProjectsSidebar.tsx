@@ -15,6 +15,7 @@ import {
   GitBranchIcon,
   LinkIcon,
   Loader2Icon,
+  MonitorIcon,
   PlusIcon,
 } from "lucide-react";
 import { api, unwrap } from "@/shared/api/client";
@@ -43,6 +44,7 @@ import { ProjectMemoryDialog } from "@/features/memory/ProjectMemoryDialog";
 import { createRemoteSession, createSession } from "./create-session";
 import { ProjectRepositoryDialog } from "./ProjectRepositoryDialog";
 import { ProjectIndexDialog } from "./ProjectIndexDialog";
+import { ProjectSandboxDialog } from "./ProjectSandboxDialog";
 import { useWorkspace } from "./workspace-store";
 
 function folderName(path: string) {
@@ -143,6 +145,7 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
   const [repositoryOpen, setRepositoryOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [automationOpen, setAutomationOpen] = useState(false);
+  const [sandboxOpen, setSandboxOpen] = useState(false);
   const { data: suggestedMemories } = useMemories(project.id, "suggested");
   const { data: sessions } = useSessions(project.id);
   const { data: remote } = useRemoteStatus();
@@ -252,6 +255,10 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
                 ? t("repository.menuWithName", { repository: project.repository })
                 : t("repository.menu")}
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setSandboxOpen(true)}>
+              <MonitorIcon />
+              {project.sandboxEnabled ? t("sandbox.menuEnabled") : t("sandbox.menu")}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setAutomationOpen(true)}>
               <BotIcon />
               {t("automation.menu")}
@@ -285,6 +292,7 @@ function ProjectNode({ project, path }: { project: Project; path: string | null 
         onOpenChange={setIndexOpen}
       />
       <ProjectMemoryDialog project={project} open={memoryOpen} onOpenChange={setMemoryOpen} />
+      <ProjectSandboxDialog project={project} open={sandboxOpen} onOpenChange={setSandboxOpen} />
       <ProjectAutomationDialog
         project={project}
         open={automationOpen}

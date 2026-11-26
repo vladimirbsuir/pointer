@@ -51,6 +51,7 @@ pointer:
     enabled: ${POINTER_CONTAINER_ENABLED:false}
     docker-host: ${POINTER_DOCKER_HOST:}
     image: ${POINTER_RUNNER_IMAGE:pointer-runner:latest}
+    sandbox-image: ${POINTER_SANDBOX_IMAGE:pointer-runner:gui}
     api-url: ${POINTER_RUNNER_API_URL:http://host.docker.internal:8080}
     network: ${POINTER_RUNNER_NETWORK:}
     cpus: ${POINTER_RUNNER_CPUS:2}

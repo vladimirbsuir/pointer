@@ -123,7 +123,7 @@ class DockerContainerRuntime implements ContainerRuntime {
         if (!label.equals(specHash(spec))) {
             return true;
         }
-        var image = call(DockerHttpClient.Request.Method.GET, "/images/" + encode(properties.image()) + "/json", null);
+        var image = call(DockerHttpClient.Request.Method.GET, "/images/" + encode(spec.image()) + "/json", null);
         if (image.status() == NOT_FOUND) {
             return false;
         }
@@ -162,7 +162,7 @@ class DockerContainerRuntime implements ContainerRuntime {
     String specHash(ContainerSpec spec) {
         var canonical = String.join(
                 ";",
-                "image=" + properties.image(),
+                "image=" + spec.image(),
                 "user=" + ROOT,
                 "capAdd=" + String.join(",", CAPABILITIES),
                 "capDrop=ALL",
@@ -222,7 +222,7 @@ class DockerContainerRuntime implements ContainerRuntime {
         if (isPublished()) {
             body.put("ExposedPorts", Map.of(STREAM_PORT_KEY, Map.of()));
         }
-        body.put("Image", properties.image());
+        body.put("Image", spec.image());
         body.put("User", ROOT);
         body.put("Env", environment);
         body.put("Labels", labels);
@@ -231,7 +231,7 @@ class DockerContainerRuntime implements ContainerRuntime {
         var created =
                 call(DockerHttpClient.Request.Method.POST, "/containers/create?name=" + encode(spec.name()), body);
         if (created.status() == NOT_FOUND) {
-            throw new ContainerException("The runner image " + properties.image() + " is not available");
+            throw new ContainerException("The runner image " + spec.image() + " is not available");
         }
         created.ensureSuccess("create the container");
     }

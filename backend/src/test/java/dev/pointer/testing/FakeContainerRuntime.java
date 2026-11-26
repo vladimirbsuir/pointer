@@ -1,5 +1,6 @@
 package dev.pointer.testing;
 
+import dev.pointer.container.ContainerException;
 import dev.pointer.container.ContainerRuntime;
 import dev.pointer.container.ContainerSpec;
 import java.net.URI;
@@ -24,6 +25,7 @@ public class FakeContainerRuntime implements ContainerRuntime {
     private final List<String> removed = new CopyOnWriteArrayList<>();
     private final Set<String> outdated = ConcurrentHashMap.newKeySet();
     private final List<String> removedContainers = new CopyOnWriteArrayList<>();
+    private final Map<String, String> createFailures = new ConcurrentHashMap<>();
     private volatile URI streamAddress;
 
     @Override
@@ -38,6 +40,10 @@ public class FakeContainerRuntime implements ContainerRuntime {
 
     @Override
     public void create(ContainerSpec spec) {
+        var failure = createFailures.get(spec.name());
+        if (failure != null) {
+            throw new ContainerException(failure);
+        }
         containers.put(spec.name(), spec);
         created.add(spec);
     }
@@ -80,6 +86,10 @@ public class FakeContainerRuntime implements ContainerRuntime {
 
     public void useStreamAddress(URI address) {
         this.streamAddress = address;
+    }
+
+    public void failCreatesOf(String name, String message) {
+        createFailures.put(name, message);
     }
 
     public void markOutdated(String name) {

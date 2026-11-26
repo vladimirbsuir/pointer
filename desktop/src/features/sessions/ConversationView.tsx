@@ -8,7 +8,13 @@ import { FileDiffIcon, FoldVerticalIcon, MonitorIcon, SquareTerminalIcon } from 
 import { AutomationBadge } from "@/features/automation/AutomationBadge";
 import { useWorkspace } from "@/features/workspace/workspace-store";
 import { api, unwrap } from "@/shared/api/client";
-import { enabledModels, useProviders, useRemoteSessions, useSettings } from "@/shared/api/queries";
+import {
+  enabledModels,
+  useProjects,
+  useProviders,
+  useRemoteSessions,
+  useSettings,
+} from "@/shared/api/queries";
 import {
   toAppError,
   type ContextStrategy,
@@ -49,9 +55,14 @@ export function ConversationView({ sessionId }: { sessionId: string }) {
   const running = session ? BUSY_STATUSES.includes(session.status) : false;
   const { data: remoteSessions } = useRemoteSessions(session?.projectId ?? "", Boolean(session));
   const remote = remoteSessions?.some((workspace) => workspace.sessionId === sessionId) ?? false;
+  const { data: projects } = useProjects();
+  const sandboxed =
+    !remote &&
+    (projects?.some((project) => project.id === session?.projectId && project.sandboxEnabled) ??
+      false);
   const displayStarts = displayStartsOf(state.items);
-  const { data: desktopStatus } = useDesktopStatus(sessionId, remote, displayStarts);
-  const desktopAvailable = remote && (desktopStatus?.available ?? false);
+  const { data: desktopStatus } = useDesktopStatus(sessionId, remote || sandboxed, displayStarts);
+  const desktopAvailable = (remote || sandboxed) && (desktopStatus?.available ?? false);
 
   useEffect(() => {
     if (!running) {
