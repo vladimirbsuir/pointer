@@ -59,7 +59,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <DialogTitle>{t("settings.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("settings.title")}</DialogDescription>
         </DialogHeader>
-        <Tabs defaultValue="account">
+        <Tabs defaultValue="account" className="min-w-0">
           <TabsList className="flex-wrap justify-start group-data-horizontal/tabs:h-auto [&>[data-slot=tabs-trigger]]:h-7 [&>[data-slot=tabs-trigger]]:flex-none">
             <TabsTrigger value="account">{t("settings.account")}</TabsTrigger>
             <TabsTrigger value="devices">{t("settings.devices")}</TabsTrigger>
