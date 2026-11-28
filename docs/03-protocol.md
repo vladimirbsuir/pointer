@@ -531,7 +531,7 @@ The backend converts the bounds of `desktop_tree` to the model's coordinate spac
 }
 ```
 
-The client rejects the request with `relay.error` code `host_not_allowed` unless the host is a loopback address or approved by the user on this device.
+The client rejects the request with `relay.error` code `host_not_allowed` unless the host is a loopback address (`localhost`, `127.0.0.0/8`, `::1`).
 
 ### 8.2 Response messages (client в†’ server)
 

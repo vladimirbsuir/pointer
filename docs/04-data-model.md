@@ -25,7 +25,6 @@ erDiagram
     users ||--o{ providers : configures
     providers ||--o{ models : offers
     users ||--o{ projects : owns
-    projects ||--|| project_settings : has
     users ||--o{ permission_policies : defines
     users ||--o{ command_rules : defines
     tools ||--o{ permission_policies : "governed by"
@@ -205,15 +204,6 @@ Primary key: (`model_id`, `position`). Unique: (`model_id`, `fallback_model_id`)
 | `created_at`, `updated_at` | timestamptz | |
 
 Local paths are stored only on devices.
-
-### `project_settings`
-
-| Column | Type | Notes |
-|---|---|---|
-| `project_id` | uuid | PK, FK `projects` |
-| `default_model_id` | uuid | FK `models`, nullable |
-| `preferences` | jsonb | |
-| `updated_at` | timestamptz | |
 
 ### `tools`
 

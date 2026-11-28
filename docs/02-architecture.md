@@ -245,7 +245,7 @@ classDiagram
 | `connection` | WebSocket client: handshake, heartbeat, reconnect with backoff, per-session `seq` tracking, routing of incoming messages. |
 | `executor` | Implementations of executor operations, including `web_fetch`, the tree-sitter chunking behind `pointer.index_scan` and `pointer.index_chunks`, and the `pointer.worktree_*` operations that run the system `git`. Path guard limiting access to the session root: the project folder or the session worktree ([ADR 0011](adr/0011-session-worktrees.md)). |
 | `process` | Running commands in PowerShell, streaming output, killing the whole process tree on cancel (Windows job objects). |
-| `relay` | HTTP requests to local LLM runtimes, streaming responses back. Allows only loopback hosts and hosts the user approved on this device. |
+| `relay` | HTTP requests to local LLM runtimes, streaming responses back. Allows only loopback hosts (`localhost`, `127.0.0.0/8`, `::1`). |
 | `projects` | Local mapping `projectId → path`, stored in the app data directory. |
 | `mcp` | MCP client for the servers configured on this device (stdio and streamable HTTP), reporting their tools to the backend and serving `mcp.call` ([ADR 0010](adr/0010-mcp-servers-on-the-device.md)). |
 | `terminal` | Interactive PowerShell sessions in the project folder for the terminal panel (UI-6), through a pseudo console (ConPTY via `portable-pty`). Purely local: terminal input and output never reach the backend. |
@@ -343,7 +343,7 @@ sequenceDiagram
 | Secrets | Provider keys encrypted with AES-GCM, master key from the environment. Keys never leave the backend after saving. |
 | Local execution | The core executes only operations from its authenticated backend connection, for projects mapped on this device, inside the project root. |
 | Destructive actions | Permission policies and approvals. Process trees are killed on cancel. |
-| Relay abuse | The relay accepts only loopback hosts and hosts the user approved on the device. |
+| Relay abuse | The relay accepts only loopback hosts and rejects every other target with `host_not_allowed`. |
 | Data isolation | Every query is scoped by user id. Session subscriptions check ownership. |
 
 ## 8. Deployment
